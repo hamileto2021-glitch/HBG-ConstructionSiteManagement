@@ -1,0 +1,489 @@
+import 'package:flutter/material.dart';
+
+import '../../data/models/phases/project_phase.dart';
+import '../../data/repositories/project_phase_repository.dart';
+import 'project_phase_edit_screen.dart';
+
+class ProjectPhaseDetailsScreen extends StatefulWidget {
+  const ProjectPhaseDetailsScreen({
+    super.key,
+    required this.phase,
+    required this.repository,
+  });
+
+  final ProjectPhase phase;
+  final ProjectPhaseRepository repository;
+
+  @override
+  State<ProjectPhaseDetailsScreen> createState() =>
+      _ProjectPhaseDetailsScreenState();
+}
+
+class _ProjectPhaseDetailsScreenState
+    extends State<ProjectPhaseDetailsScreen> {
+  late ProjectPhase _phase;
+  bool _isLoading = true;
+  String? _errorMessage;
+  bool _isChangingStatus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _phase = widget.phase;
+    _loadPhase();
+  }
+
+  Future<void> _loadPhase() async {
+    try {
+      final phase = await widget.repository.getById(
+        widget.phase.id,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _phase = phase;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  Future<void> _openEditPhase() async {
+    final updatedPhase =
+        await Navigator.of(context).push<ProjectPhase>(
+      MaterialPageRoute(
+        builder: (_) => ProjectPhaseEditScreen(
+          phase: _phase,
+          repository: widget.repository,
+        ),
+      ),
+    );
+
+    if (updatedPhase != null && mounted) {
+      setState(() {
+        _phase = updatedPhase;
+      });
+
+      await _loadPhase();
+    }
+  }
+  List<ProjectPhaseStatus> _allowedNextStatuses(
+    ProjectPhaseStatus current,
+  ) {
+    switch (current) {
+      case ProjectPhaseStatus.notStarted:
+        return [
+          ProjectPhaseStatus.inProgress,
+          ProjectPhaseStatus.cancelled,
+        ];
+
+      case ProjectPhaseStatus.inProgress:
+        return [
+          ProjectPhaseStatus.onHold,
+          ProjectPhaseStatus.completed,
+          ProjectPhaseStatus.cancelled,
+        ];
+
+      case ProjectPhaseStatus.onHold:
+        return [
+          ProjectPhaseStatus.inProgress,
+          ProjectPhaseStatus.completed,
+          ProjectPhaseStatus.cancelled,
+        ];
+
+      case ProjectPhaseStatus.completed:
+      case ProjectPhaseStatus.cancelled:
+        return [];
+    }
+  }
+
+  Future<void> _changePhaseStatus(
+    ProjectPhaseStatus status,
+  ) async {
+    setState(() {
+      _isChangingStatus = true;
+    });
+
+    try {
+      final updatedPhase =
+          await widget.repository.changeStatus(
+        phaseId: _phase.id,
+        status: status,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _phase = updatedPhase;
+        _isChangingStatus = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Phase status changed to ${_statusLabel(status)}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isChangingStatus = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showStatusDialog(
+    List<ProjectPhaseStatus> allowedStatuses,
+  ) async {
+    final selectedStatus =
+        await showDialog<ProjectPhaseStatus>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: const Text('Change Phase Status'),
+          children: allowedStatuses
+              .map(
+                (status) => SimpleDialogOption(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(status);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      _statusLabel(status),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+
+    if (selectedStatus != null && mounted) {
+      await _changePhaseStatus(selectedStatus);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_phase.name),
+        actions: [
+          IconButton(
+            tooltip: 'Edit Phase',
+            icon: const Icon(Icons.edit),
+            onPressed: _openEditPhase,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadPhase,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (_errorMessage != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Unable to refresh phase details.\n\n'
+                    '$_errorMessage',
+                  ),
+                ),
+              ),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: LinearProgressIndicator(),
+              ),
+            _buildHeader(context),
+            const SizedBox(height: 16),
+            _buildProgressCard(context),
+            const SizedBox(height: 16),
+            _buildStatusManagementCard(context),
+            const SizedBox(height: 16),
+            _buildInformationCard(context),
+            const SizedBox(height: 16),
+            _buildDatesCard(context),
+          ],
+        ),
+      ),
+    );
+
+  }
+
+   Widget _buildStatusManagementCard(BuildContext context) {
+      final allowedStatuses =
+          _allowedNextStatuses(_phase.status);
+
+      if (allowedStatuses.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Phase Status',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Current status: ${_statusLabel(_phase.status)}',
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _isChangingStatus
+                    ? null
+                    : () => _showStatusDialog(
+                        allowedStatuses,
+                      ),
+                icon: const Icon(Icons.sync_alt),
+                label: const Text('Change Status'),
+              ),
+              if (_isChangingStatus) ...[
+                const SizedBox(height: 16),
+                const LinearProgressIndicator(),
+              ],
+            ],
+          ),
+        ),
+       );
+     }
+
+     Widget _buildHeader(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sequence ${_phase.sequence}',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _phase.name,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ],
+              ),
+            ),
+            Chip(
+              label: Text(_statusLabel(_phase.status)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressCard(BuildContext context) {
+    final progress =
+        (_phase.progressPercentage / 100).clamp(0.0, 1.0);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Progress',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 10,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  '${_phase.progressPercentage.toStringAsFixed(1)}%',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInformationCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Phase Information',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            _InfoRow(
+              label: 'Phase name',
+              value: _phase.name,
+            ),
+            _InfoRow(
+              label: 'Sequence',
+              value: _phase.sequence.toString(),
+            ),
+            _InfoRow(
+              label: 'Status',
+              value: _statusLabel(_phase.status),
+            ),
+            if (_phase.description != null &&
+                _phase.description!.trim().isNotEmpty)
+              _InfoRow(
+                label: 'Description',
+                value: _phase.description!,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatesCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Phase Dates',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            _InfoRow(
+              label: 'Planned start',
+              value: _formatDate(_phase.plannedStartDate),
+            ),
+            _InfoRow(
+              label: 'Planned end',
+              value: _formatDate(_phase.plannedEndDate),
+            ),
+            _InfoRow(
+              label: 'Actual start',
+              value: _formatDate(_phase.actualStartDate),
+            ),
+            _InfoRow(
+              label: 'Actual end',
+              value: _formatDate(_phase.actualEndDate),
+            ),
+            _InfoRow(
+              label: 'Created',
+              value: _formatDateTime(_phase.createdAtUtc),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime? date) {
+    if (date == null) {
+      return 'Not set';
+    }
+
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _formatDateTime(DateTime date) {
+    return '${_formatDate(date)} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  static String _statusLabel(ProjectPhaseStatus status) {
+    switch (status) {
+      case ProjectPhaseStatus.notStarted:
+        return 'Not Started';
+      case ProjectPhaseStatus.inProgress:
+        return 'In Progress';
+      case ProjectPhaseStatus.onHold:
+        return 'On Hold';
+      case ProjectPhaseStatus.completed:
+        return 'Completed';
+      case ProjectPhaseStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(label),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

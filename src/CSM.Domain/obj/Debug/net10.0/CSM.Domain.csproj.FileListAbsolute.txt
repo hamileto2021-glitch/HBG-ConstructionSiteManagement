@@ -1,0 +1,11 @@
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\bin\Debug\net10.0\CSM.Domain.deps.json
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\bin\Debug\net10.0\CSM.Domain.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\bin\Debug\net10.0\CSM.Domain.pdb
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.AssemblyInfoInputs.cache
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.AssemblyInfo.cs
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.csproj.CoreCompileInputs.cache
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\refint\CSM.Domain.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\CSM.Domain.pdb
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Domain\obj\Debug\net10.0\ref\CSM.Domain.dll

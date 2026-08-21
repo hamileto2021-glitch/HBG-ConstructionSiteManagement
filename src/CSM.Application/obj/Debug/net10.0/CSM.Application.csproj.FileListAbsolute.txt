@@ -1,0 +1,15 @@
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\bin\Debug\net10.0\CSM.Application.deps.json
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\bin\Debug\net10.0\CSM.Application.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\bin\Debug\net10.0\CSM.Application.pdb
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\bin\Debug\net10.0\CSM.Domain.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\bin\Debug\net10.0\CSM.Domain.pdb
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.csproj.AssemblyReference.cache
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.AssemblyInfoInputs.cache
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.AssemblyInfo.cs
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.csproj.CoreCompileInputs.cache
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Appl.DDED3025.Up2Date
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\refint\CSM.Application.dll
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\CSM.Application.pdb
+C:\Users\Mohammed\Desktop\HBG Constr Sites\ConstructionSiteManagement\src\CSM.Application\obj\Debug\net10.0\ref\CSM.Application.dll
