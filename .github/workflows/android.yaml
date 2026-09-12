@@ -11,9 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.9.2'
+      - - uses: subosito/flutter-action@v2
+  with:
+    channel: stable
+    flutter-version: 3.35.4
 
       - run: flutter pub get
         working-directory: mobile/csm_app
