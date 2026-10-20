@@ -28,8 +28,39 @@ public sealed class CostCodeService : ICostCodeService
 
         EnsureCanRead(actor);
 
+        IQueryable<CostCode> query = _dbContext.CostCodes
+            .Include(x => x.ParentCostCode)
+            .AsNoTracking();
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(
+                x => x.CompanyId == GetActorCompanyId(actor));
+        }
+
+        var costCodes = await query
+            .OrderBy(x => x.Code)
+            .ToListAsync(cancellationToken);
+
+        return costCodes
+            .Select(Map)
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyCollection<CostCodeResponse>> GetActiveAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanRead(actor);
+
         IQueryable<CostCode> query =
-            _dbContext.CostCodes.AsNoTracking();
+            _dbContext.CostCodes
+                .AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted);
 
         if (!IsSuperAdmin(actor))
         {
@@ -247,7 +278,8 @@ public sealed class CostCodeService : ICostCodeService
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }
@@ -371,6 +403,67 @@ public sealed class CostCodeService : ICostCodeService
         }
     }
 
+    public async Task<List<CostCodeResponse>> GetBySiteAsync(
+        Guid siteId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.CostCodes
+            .Where(x =>
+                (x.ConstructionSiteId == null ||
+                 x.ConstructionSiteId == siteId) &&
+                !x.IsDeleted)
+            .OrderBy(x => x.Code)
+            .Select(x => new CostCodeResponse(
+                x.Id,
+                x.CompanyId,
+                x.ConstructionSiteId,
+                x.ParentCostCode != null ? x.ParentCostCode.Code : null,
+                x.ParentCostCode != null ? x.ParentCostCode.Name : null,
+                x.Code,
+                x.Name,
+                x.Description,
+                x.ParentCostCodeId,
+                x.IsActive,
+                x.CreatedAtUtc,
+                x.UpdatedAtUtc
+            ))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        Guid currentUserId,
+        Guid costCodeId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanModify(actor);
+
+        var costCode = await _dbContext.CostCodes
+            .SingleOrDefaultAsync(x =>
+                x.Id == costCodeId &&
+                !x.IsDeleted,
+                cancellationToken)
+            ?? throw new CostCodeManagementException("Cost code not found.");
+
+        EnsureCompanyAccess(actor, costCode.CompanyId);
+
+        var inUse = await _dbContext.BudgetLines.AnyAsync(
+            x => x.CostCodeId == costCodeId && !x.IsDeleted,
+            cancellationToken);
+
+        if (inUse)
+        {
+            throw new CostCodeManagementException(
+                "This cost code is already used by one or more budget lines and cannot be deleted.");
+        }
+
+        costCode.IsDeleted = true;
+        costCode.DeletedAtUtc = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     private static string CleanRequired(
         string? value,
         string fieldName)
@@ -410,12 +503,14 @@ public sealed class CostCodeService : ICostCodeService
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static CostCodeResponse Map(
-        CostCode costCode)
+    private static CostCodeResponse Map(CostCode costCode)
     {
         return new CostCodeResponse(
             costCode.Id,
             costCode.CompanyId,
+            costCode.ConstructionSiteId,
+            costCode.ParentCostCode?.Code,
+            costCode.ParentCostCode?.Name,
             costCode.Code,
             costCode.Name,
             costCode.Description,

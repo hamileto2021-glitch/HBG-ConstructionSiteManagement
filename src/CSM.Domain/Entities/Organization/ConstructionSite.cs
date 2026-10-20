@@ -5,6 +5,7 @@ using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Finance;
 using CSM.Domain.Entities.Procurement;
 using CSM.Domain.Entities.Compliance;
+using ProjectEquipmentAssignment = CSM.Domain.Entities.Projects.EquipmentAssignment;
 
 namespace CSM.Domain.Entities.Organization;
 
@@ -69,8 +70,8 @@ public ICollection<PurchaseOrder> PurchaseOrders { get; set; }
 public ICollection<GoodsReceipt> GoodsReceipts { get; set; }
     = new List<GoodsReceipt>();
 
-public ICollection<EquipmentAssignment> EquipmentAssignments { get; set; }
-    = new List<EquipmentAssignment>();
+public ICollection<ProjectEquipmentAssignment> EquipmentAssignments { get; set; }
+    = new List<ProjectEquipmentAssignment>();
 
 public ICollection<EquipmentDowntime> EquipmentDowntimeRecords { get; set; }
     = new List<EquipmentDowntime>();
@@ -90,5 +91,8 @@ public ICollection<Expense> Expenses { get; set; }
     = new List<Expense>();
 
 public ICollection<Invoice> Invoices { get; set; }
-    = new List<Invoice>();    
+    = new List<Invoice>();
+
+public ICollection<CostCode> CostCodes { get; set; }
+    = new List<CostCode>();
 }

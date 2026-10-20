@@ -33,19 +33,41 @@ class _UserCreateScreenState
   final List<String> _roles = [];
 
   final List<String> _availableRoles = const [
-    'SuperAdmin',
-    'CompanyAdmin',
-    'SiteManager',
-    'Accountant',
-    'HROfficer',
-    'Supervisor',
-    'Employee',
+    'Administrator',
+    'ProjectManager',
+    'SiteEngineer',
+    'Storekeeper',
+    'ProcurementOfficer',
+    'FinanceOfficer',
+    'HrOfficer',
+    'EquipmentManager',
+    'SafetyOfficer',
   ];
 
   @override
   void initState() {
     super.initState();
     _loadCompany();
+  }
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'ProjectManager':
+        return 'Project Manager';
+      case 'SiteEngineer':
+        return 'Site Engineer';
+      case 'ProcurementOfficer':
+        return 'Procurement Officer';
+      case 'FinanceOfficer':
+        return 'Finance Officer';
+      case 'HrOfficer':
+        return 'HR Officer';
+      case 'EquipmentManager':
+        return 'Equipment Manager';
+      case 'SafetyOfficer':
+        return 'Safety Officer';
+      default:
+        return role;
+    }
   }
 
   Future<void> _loadCompany() async {
@@ -195,7 +217,7 @@ class _UserCreateScreenState
             ..._availableRoles.map(
                   (role) => CheckboxListTile(
                 value: _roles.contains(role),
-                title: Text(role),
+                title: Text(_roleLabel(role)),
                 onChanged: (selected) {
                   setState(() {
                     if (selected == true) {

@@ -11,7 +11,7 @@ public class DailyMaterialUsage : TenantEntity
 
     public Guid MaterialId { get; set; }
 
-    public Guid DailyProgressLogId { get; set; }
+    public Guid? DailyProgressLogId { get; set; }
 
     public Guid LoggedByUserId { get; set; }
 
@@ -33,7 +33,7 @@ public class DailyMaterialUsage : TenantEntity
 
     public Material Material { get; set; } = null!;
 
-    public DailyProgressLog DailyProgressLog { get; set; } = null!;
+    public DailyProgressLog? DailyProgressLog { get; set; }
 
     public User LoggedByUser { get; set; } = null!;
 }

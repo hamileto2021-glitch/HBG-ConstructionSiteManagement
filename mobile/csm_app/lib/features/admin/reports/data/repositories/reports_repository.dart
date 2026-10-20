@@ -9,8 +9,9 @@ class ReportsRepository {
   final ApiClient _apiClient;
 
   Future<ExecutiveDashboard> getExecutiveDashboard() async {
-    final response =
-    await _apiClient.get('/Reports/executive-dashboard');
+    final response = await _apiClient.get(
+      '/dashboard/executive',
+    );
 
     return ExecutiveDashboard.fromJson(response);
   }

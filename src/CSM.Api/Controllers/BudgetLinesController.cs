@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class BudgetLinesController : ControllerBase
 {
     private readonly IBudgetLineService _budgetLineService;
@@ -22,6 +22,7 @@ public sealed class BudgetLinesController : ControllerBase
     }
 
     [HttpGet("budget/{budgetId:guid}")]
+    [Authorize(Policy = "Finance.Budget.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<BudgetLineResponse>>> GetByBudget(
         Guid budgetId,
@@ -43,6 +44,7 @@ public sealed class BudgetLinesController : ControllerBase
     }
 
     [HttpGet("{budgetLineId:guid}")]
+    [Authorize(Policy = "Finance.Budget.View")]
     public async Task<ActionResult<BudgetLineResponse>> GetById(
         Guid budgetLineId,
         CancellationToken cancellationToken)
@@ -63,6 +65,7 @@ public sealed class BudgetLinesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Finance.Budget.Manage")]
     public async Task<ActionResult<BudgetLineResponse>> Create(
         CreateBudgetLineRequest request,
         CancellationToken cancellationToken)
@@ -86,6 +89,7 @@ public sealed class BudgetLinesController : ControllerBase
     }
 
     [HttpPut("{budgetLineId:guid}")]
+    [Authorize(Policy = "Finance.Budget.Manage")]
     public async Task<ActionResult<BudgetLineResponse>> Update(
         Guid budgetLineId,
         UpdateBudgetLineRequest request,
@@ -100,6 +104,27 @@ public sealed class BudgetLinesController : ControllerBase
                 cancellationToken);
 
             return Ok(line);
+        }
+        catch (BudgetLineManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("{budgetLineId:guid}")]
+    [Authorize(Policy = "Finance.Budget.Manage")]
+    public async Task<IActionResult> Delete(
+        Guid budgetLineId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _budgetLineService.DeleteAsync(
+                GetCurrentUserId(),
+                budgetLineId,
+                cancellationToken);
+
+            return NoContent();
         }
         catch (BudgetLineManagementException ex)
         {

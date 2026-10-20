@@ -10,7 +10,7 @@ class EquipmentAssignmentListScreen extends StatefulWidget {
     super.key,
     EquipmentAssignmentRepository? repository,
   }) : repository =
-            repository ?? EquipmentAssignmentRepository();
+      repository ?? EquipmentAssignmentRepository();
 
   final EquipmentAssignmentRepository repository;
 
@@ -25,6 +25,21 @@ class _EquipmentAssignmentListScreenState
   bool _isLoading = true;
   bool? _activeOnly;
   String? _errorMessage;
+
+  int get _total => _assignments.length;
+
+  int get _active =>
+      _assignments.where((e) => e.isActive).length;
+
+  int get _released =>
+      _assignments.where((e) => !e.isActive).length;
+
+  int get _projects =>
+      _assignments
+          .where((e) => e.projectId != null)
+          .map((e) => e.projectId)
+          .toSet()
+          .length;
 
   @override
   void initState() {
@@ -160,6 +175,13 @@ class _EquipmentAssignmentListScreenState
               ),
               const SizedBox(height: 16),
               Text(
+                'Unable to load assignments',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
               ),
@@ -179,7 +201,8 @@ class _EquipmentAssignmentListScreenState
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics:
+          const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(height: 120),
             Icon(
@@ -199,34 +222,86 @@ class _EquipmentAssignmentListScreenState
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(
           16,
           8,
           16,
           24,
         ),
-        itemCount: _assignments.length,
-        itemBuilder: (context, index) {
-          return _AssignmentCard(
-            assignment: _assignments[index],
-            onTap: () async {
-              final updated = await Navigator.of(context).push<bool>(
-                MaterialPageRoute(
-                  builder: (_) => EquipmentAssignmentDetailScreen(
-                    assignment: _assignments[index],
-                    repository: widget.repository,
-                  ),
-                ),
-              );
+        children: [
+          _buildSummaryCards(),
+          const SizedBox(height: 16),
 
-              if (updated == true && mounted) {
-                await _load();
-              }
-            },
-          );
-        },
+          ..._assignments.map(
+                (assignment) => Padding(
+              padding:
+              const EdgeInsets.only(bottom: 12),
+              child: _AssignmentCard(
+                assignment: assignment,
+                onTap: () async {
+                  final updated =
+                  await Navigator.of(context)
+                      .push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          EquipmentAssignmentDetailScreen(
+                            assignment: assignment,
+                            repository:
+                            widget.repository,
+                          ),
+                    ),
+                  );
+
+                  if (updated == true &&
+                      mounted) {
+                    await _load();
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.55,
+      shrinkWrap: true,
+      physics:
+      const NeverScrollableScrollPhysics(),
+      children: [
+        _SummaryCard(
+          title: 'Total',
+          value: '$_total',
+          icon: Icons.assignment,
+          color: Colors.blue,
+        ),
+        _SummaryCard(
+          title: 'Active',
+          value: '$_active',
+          icon: Icons.check_circle,
+          color: Colors.green,
+        ),
+        _SummaryCard(
+          title: 'Released',
+          value: '$_released',
+          icon:
+          Icons.assignment_turned_in,
+          color: Colors.orange,
+        ),
+        _SummaryCard(
+          title: 'Projects',
+          value: '$_projects',
+          icon: Icons.business,
+          color: Colors.purple,
+        ),
+      ],
     );
   }
 }
@@ -254,7 +329,9 @@ class _AssignmentCard extends StatelessWidget {
     if (value == null) return '—';
 
     return value.toStringAsFixed(
-      value.truncateToDouble() == value ? 0 : 2,
+      value.truncateToDouble() == value
+          ? 0
+          : 2,
     );
   }
 
@@ -270,22 +347,24 @@ class _AssignmentCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color:
-                      theme.colorScheme.primaryContainer,
+                      borderRadius:
+                      BorderRadius.circular(12),
+                      color: theme.colorScheme
+                          .primaryContainer,
                     ),
                     child: Icon(
-                      Icons.assignment_outlined,
-                      color:
-                      theme.colorScheme.onPrimaryContainer,
+                      Icons.assignment,
+                      color: theme.colorScheme
+                          .onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -296,42 +375,65 @@ class _AssignmentCard extends StatelessWidget {
                       children: [
                         Text(
                           assignment.assignmentNumber,
-                          style: theme.textTheme.labelLarge,
+                          style: theme
+                              .textTheme.labelLarge,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           assignment.equipmentCode,
-                          style: theme.textTheme.titleMedium
+                          style: theme
+                              .textTheme.titleMedium
                               ?.copyWith(
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                            FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Chip(
+                    backgroundColor:
+                    assignment.isActive
+                        ? Colors.green
+                        .withValues(
+                      alpha: .12,
+                    )
+                        : Colors.orange
+                        .withValues(
+                      alpha: .12,
+                    ),
                     label: Text(
                       assignment.isActive
                           ? 'Active'
                           : 'Released',
+                      style: TextStyle(
+                        color: assignment.isActive
+                            ? Colors.green
+                            : Colors.orange,
+                        fontWeight:
+                        FontWeight.bold,
+                      ),
                     ),
-                    visualDensity:
-                    VisualDensity.compact,
                   ),
                 ],
               ),
+
               const Divider(height: 24),
+
               _InfoRow(
                 label: 'Equipment',
                 value: assignment.equipmentName,
               ),
               _InfoRow(
                 label: 'Site',
-                value: assignment.constructionSiteName,
+                value: assignment
+                    .constructionSiteName,
               ),
               _InfoRow(
                 label: 'Project',
-                value: assignment.projectName ?? '—',
+                value:
+                assignment.projectName ??
+                    '—',
               ),
               _InfoRow(
                 label: 'Assigned',
@@ -341,32 +443,76 @@ class _AssignmentCard extends StatelessWidget {
               ),
               _InfoRow(
                 label: 'Released',
-                value: assignment.releasedAtUtc == null
+                value: assignment
+                    .releasedAtUtc ==
+                    null
                     ? '—'
                     : _formatDate(
-                  assignment.releasedAtUtc!,
+                  assignment
+                      .releasedAtUtc!,
                 ),
               ),
               _InfoRow(
-                label: 'Meter at Assignment',
+                label: 'Meter Start',
                 value: _formatMeter(
-                  assignment.meterReadingAtAssignment,
+                  assignment
+                      .meterReadingAtAssignment,
                 ),
               ),
               _InfoRow(
-                label: 'Meter at Release',
+                label: 'Meter End',
                 value: _formatMeter(
-                  assignment.meterReadingAtRelease,
+                  assignment
+                      .meterReadingAtRelease,
                 ),
               ),
               if (assignment.remarks != null &&
-                  assignment.remarks!.trim().isNotEmpty)
+                  assignment.remarks!
+                      .trim()
+                      .isNotEmpty)
                 _InfoRow(
                   label: 'Remarks',
                   value: assignment.remarks!,
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme.headlineSmall,
+            ),
+            Text(title),
+          ],
         ),
       ),
     );
@@ -385,19 +531,25 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding:
+      const EdgeInsets.only(bottom: 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 145,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.labelMedium,
+              style: Theme.of(context)
+                  .textTheme.labelMedium,
             ),
           ),
           Expanded(
-            child: Text(value),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),

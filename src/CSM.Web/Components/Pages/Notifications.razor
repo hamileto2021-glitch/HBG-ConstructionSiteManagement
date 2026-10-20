@@ -1,0 +1,201 @@
+@page "/notifications"
+@using CSM.Web.Models.Notifications
+@inject CSM.Web.Services.INotificationApiService NotificationService
+@inject NavigationManager Navigation
+
+<PageTitle>Notifications</PageTitle>
+
+<h3>Notifications</h3>
+
+@if (_loading)
+{
+    <p>Loading notifications...</p>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_notifications.Count == 0)
+{
+    <div class="alert alert-info">
+        No notifications found.
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @_actionError
+            <button type="button"
+                    class="btn-close"
+                    @onclick="() => _actionError = null"></button>
+        </div>
+    }
+
+    <div class="list-group">
+        @foreach (var notification in _notifications)
+        {
+            var link = GetLink(notification);
+
+            <div class="list-group-item @GetItemClass(notification)">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">
+                            @notification.Title
+                        </h5>
+
+                        <p class="mb-1">
+                            @notification.Message
+                        </p>
+
+                        <small class="text-muted">
+                            @notification.CreatedAtUtc.ToLocalTime()
+                        </small>
+                    </div>
+
+                    <span class="@GetSeverityClass(notification.Severity)">
+                        @notification.Severity
+                    </span>
+                </div>
+
+                @if (link is not null || !notification.IsRead)
+                {
+                    <div class="mt-2 d-flex gap-2">
+                        @if (link is not null)
+                        {
+                            <button
+                                class="btn btn-sm btn-primary"
+                                @onclick="() => OpenAsync(notification)">
+                                Open
+                            </button>
+                        }
+
+                        @if (!notification.IsRead)
+                        {
+                            <button
+                                class="btn btn-sm btn-outline-primary"
+                                @onclick="() => MarkAsReadAsync(notification.Id)">
+                                Mark as read
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<NotificationResponse> _notifications = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _actionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var result = await NotificationService.GetAsync();
+
+            _notifications = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task MarkAsReadAsync(Guid notificationId)
+    {
+        _actionError = null;
+
+        try
+        {
+            await NotificationService.MarkReadAsync(notificationId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            // Keep the list on screen; only show the problem above it.
+            _actionError = ex.Message;
+        }
+    }
+
+    // Where a notification leads. Returns null when the type has no page,
+    // so the Open button is hidden.
+    private static string? GetLink(NotificationResponse notification)
+    {
+        if (notification.SourceEntityId is not Guid id)
+        {
+            return null;
+        }
+
+        return notification.SourceEntityType switch
+        {
+            "Expense" => $"/finance/company/expenses/{id}",
+            "LeaveRequest" => "/hr/leave",
+            "Attendance" => "/hr/attendance",
+            "MissedCheckIn" => "/hr/attendance",
+            "Budget" => "/finance/company/budgets",
+            _ => null
+        };
+    }
+
+    private async Task OpenAsync(NotificationResponse notification)
+    {
+        var link = GetLink(notification);
+
+        if (link is null)
+        {
+            return;
+        }
+
+        _actionError = null;
+
+        if (!notification.IsRead)
+        {
+            try
+            {
+                await NotificationService.MarkReadAsync(notification.Id);
+            }
+            catch (Exception ex)
+            {
+                // Still open the record; the notification just stays unread.
+                _actionError = ex.Message;
+            }
+        }
+
+        Navigation.NavigateTo(link);
+    }
+
+    private static string GetItemClass(NotificationResponse notification)
+    {
+        return notification.IsRead
+            ? "list-group-item"
+            : "list-group-item fw-semibold";
+    }
+
+    private static string GetSeverityClass(string severity)
+    {
+        return severity switch
+        {
+            "Critical" => "badge bg-danger",
+            "Warning" => "badge bg-warning text-dark",
+            "Info" => "badge bg-info text-dark",
+            _ => "badge bg-secondary"
+        };
+    }
+}

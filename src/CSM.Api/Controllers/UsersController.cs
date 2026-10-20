@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.UserManagement)]
+[Authorize]
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -21,6 +21,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Users.View")]
     public async Task<ActionResult<IReadOnlyCollection<UserResponse>>> GetAll(
         CancellationToken cancellationToken)
     {
@@ -59,6 +60,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Users.Create")]
     public async Task<ActionResult<UserResponse>> Create(
         CreateUserRequest request,
         CancellationToken cancellationToken)
@@ -82,6 +84,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{userId:guid}")]
+    [Authorize(Policy = "Users.Edit")]
     public async Task<ActionResult<UserResponse>> Update(
         Guid userId,
         UpdateUserRequest request,
@@ -112,6 +115,28 @@ public sealed class UsersController : ControllerBase
         try
         {
             await _userService.SetRolesAsync(
+                GetCurrentUserId(),
+                userId,
+                request,
+                cancellationToken);
+
+            return NoContent();
+        }
+        catch (UserManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{userId:guid}/sites")]
+    public async Task<IActionResult> SetSites(
+        Guid userId,
+        SetUserSitesRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _userService.SetSitesAsync(
                 GetCurrentUserId(),
                 userId,
                 request,
@@ -165,6 +190,46 @@ public sealed class UsersController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpDelete("{userId:guid}")]
+    [Authorize(Policy = "Users.Delete")]
+    public async Task<IActionResult> Delete(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        await _userService.DeleteAsync(
+            currentUserId,
+            userId,
+            cancellationToken);
+
+        return NoContent();
+    }
+
+    [HttpGet("{userId:guid}/profile")]
+    public async Task<ActionResult<UserProfileResponse>> GetProfile(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        return Ok(await _userService.GetProfileAsync(
+            currentUserId,
+            userId,
+            cancellationToken));
+    }
+
+    [HttpGet("audit")]
+    public async Task<ActionResult<IReadOnlyCollection<UserAuditResponse>>> GetAudit(
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        return Ok(await _userService.GetAuditAsync(
+            currentUserId,
+            cancellationToken));
     }
 
     private Guid GetCurrentUserId()

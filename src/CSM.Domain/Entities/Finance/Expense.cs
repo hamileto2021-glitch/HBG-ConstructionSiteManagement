@@ -7,7 +7,7 @@ namespace CSM.Domain.Entities.Finance;
 
 public class Expense : TenantEntity
 {
-    public Guid ConstructionSiteId { get; set; }
+    public Guid? ConstructionSiteId { get; set; }
 
     public Guid? ProjectId { get; set; }
 
@@ -35,11 +35,13 @@ public class Expense : TenantEntity
 
     public ExpenseStatus Status { get; set; } = ExpenseStatus.Draft;
 
+    public Guid? SubmittedByUserId { get; set; }
+
     public Guid? ApprovedBy { get; set; }
 
     public DateTime? ApprovedAtUtc { get; set; }
 
-    public ConstructionSite ConstructionSite { get; set; } = null!;
+    public ConstructionSite? ConstructionSite { get; set; }
 
     public Project? Project { get; set; }
 

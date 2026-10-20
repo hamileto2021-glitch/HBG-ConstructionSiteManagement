@@ -21,17 +21,82 @@ public sealed partial class StockTransferService
         _dbContext = dbContext;
     }
 
+    public async Task<List<StockTransferResponse>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var transfers = await _dbContext.StockMovements
+            .AsNoTracking()
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Where(x =>
+                x.ReferenceType == "StockTransfer" &&
+                x.MovementType == StockMovementType.TransferOut)
+            .OrderByDescending(x => x.MovementDateUtc)
+            .ToListAsync(cancellationToken);
+
+        var results = new List<StockTransferResponse>();
+
+        foreach (var movement in transfers)
+        {
+            var destination = await _dbContext.StockMovements
+                .AsNoTracking()
+                .Include(x => x.StockItem)
+                    .ThenInclude(x => x.ConstructionSite)
+                .FirstOrDefaultAsync(x =>
+                    x.ReferenceType == "StockTransfer" &&
+                    x.ReferenceNumber == movement.ReferenceNumber &&
+                    x.MovementType == StockMovementType.TransferIn,
+                    cancellationToken);
+
+            results.Add(new StockTransferResponse
+            {
+                TransferOutMovementId = movement.Id,
+                TransferInMovementId = destination?.Id ?? Guid.Empty,
+
+                MaterialId = movement.StockItem.MaterialId,
+                MaterialCode = movement.StockItem.Material.MaterialCode,
+                MaterialName = movement.StockItem.Material.Name,
+                UnitOfMeasure = movement.StockItem.Material.UnitOfMeasure,
+
+                SourceConstructionSiteId = movement.StockItem.ConstructionSiteId,
+                SourceSiteName = movement.StockItem.ConstructionSite.Name,
+
+                DestinationConstructionSiteId = destination?.StockItem.ConstructionSiteId ?? Guid.Empty,
+                DestinationSiteName = destination?.StockItem.ConstructionSite.Name ?? "",
+
+                FromSiteId = movement.StockItem.ConstructionSiteId,
+                ToSiteId = destination?.StockItem.ConstructionSiteId ?? Guid.Empty,
+
+                FromSiteName = movement.StockItem.ConstructionSite.Name,
+                ToSiteName = destination?.StockItem.ConstructionSite.Name ?? "",
+
+                Quantity = movement.Quantity,
+                UnitCost = movement.UnitCost ?? 0m,
+
+                SourceQuantityBefore = 0,
+                SourceQuantityAfter = 0,
+                DestinationQuantityBefore = 0,
+                DestinationQuantityAfter = 0,
+
+                TransferDateUtc = movement.MovementDateUtc,
+                TransferNumber = movement.ReferenceNumber ?? "",
+
+                Remarks = movement.Remarks
+            });
+        }
+
+        return results;
+    }
+
     public async Task<StockTransferResponse> CreateAsync(
-        Guid currentUserId,
+        Guid companyId,
         CreateStockTransferRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor =
-            await GetActorAsync(
-                currentUserId,
-                cancellationToken);
 
-        EnsureCanManage(actor);
+        // Company scope is provided by the authenticated API caller.
 
         ValidateRequest(request);
 
@@ -88,9 +153,11 @@ public sealed partial class StockTransferService
                         ?? throw new StockTransferManagementException(
                             "Source stock item was not found.");
 
-                    EnsureCompanyAccess(
-                        actor,
-                        sourceStock.CompanyId);
+                    if (sourceStock.CompanyId != companyId)
+                    {
+                        throw new StockTransferManagementException(
+                            "You are not authorized to access this company.");
+                    }
 
                     var duplicateTransfer =
                         await _dbContext.StockMovements
@@ -212,36 +279,22 @@ public sealed partial class StockTransferService
 
                                     unitOfMeasure =
                                         sourceStock.Material.UnitOfMeasure;
-                                    var transferOut =
-                                        new StockMovement
-                                        {
-                                            CompanyId =
-                                                sourceStock.CompanyId,
+                                    var transferOut = new StockMovement
+                                    {
+                                        CompanyId = sourceStock.CompanyId,
+                                        StockItemId = sourceStock.Id,
+                                        MovementType = StockMovementType.TransferOut,
+                                        MovementDateUtc = request.TransferDateUtc,
+                                        Quantity = request.Quantity,
 
-                                            StockItemId =
-                                                sourceStock.Id,
+                                        StockBalanceBefore = sourceQuantityBefore,
+                                        StockBalanceAfter = sourceQuantityAfter,
 
-                                            MovementType =
-                                                StockMovementType.TransferOut,
-
-                                            MovementDateUtc =
-                                                request.TransferDateUtc,
-
-                                            Quantity =
-                                                request.Quantity,
-
-                                            UnitCost =
-                                                unitCost,
-
-                                            ReferenceType =
-                                                "StockTransfer",
-
-                                            ReferenceNumber =
-                                                normalizedTransferNumber,
-
-                                            Remarks =
-                                                BuildRemarks(request)
-                                        };
+                                        UnitCost = unitCost,
+                                        ReferenceType = "StockTransfer",
+                                        ReferenceNumber = normalizedTransferNumber,
+                                        Remarks = BuildRemarks(request)
+                                    };
 
                                     _dbContext.StockMovements.Add(
                                         transferOut);
@@ -249,39 +302,27 @@ public sealed partial class StockTransferService
                                     await _dbContext.SaveChangesAsync(
                                         cancellationToken);
 
-                                    var transferIn =
-                                        new StockMovement
-                                        {
-                                            CompanyId =
-                                                destinationStock.CompanyId,
+                                    var transferIn = new StockMovement
+                                    {
+                                        CompanyId = destinationStock.CompanyId,
+                                        StockItemId = destinationStock.Id,
 
-                                            StockItemId =
-                                                destinationStock.Id,
+                                        MovementType = StockMovementType.TransferIn,
+                                        MovementDateUtc = request.TransferDateUtc,
 
-                                            MovementType =
-                                                StockMovementType.TransferIn,
+                                        Quantity = request.Quantity,
 
-                                            MovementDateUtc =
-                                                request.TransferDateUtc,
+                                        StockBalanceBefore = destinationQuantityBefore,
+                                        StockBalanceAfter = destinationQuantityAfter,
 
-                                            Quantity =
-                                                request.Quantity,
+                                        UnitCost = unitCost,
 
-                                            UnitCost =
-                                                unitCost,
+                                        ReferenceType = "StockTransfer",
+                                        ReferenceId = transferOut.Id,
+                                        ReferenceNumber = normalizedTransferNumber,
 
-                                            ReferenceType =
-                                                "StockTransfer",
-
-                                            ReferenceId =
-                                                transferOut.Id,
-
-                                            ReferenceNumber =
-                                                normalizedTransferNumber,
-
-                                            Remarks =
-                                                BuildRemarks(request)
-                                        };
+                                        Remarks = BuildRemarks(request)
+                                    };
 
                                     _dbContext.StockMovements.Add(
                                         transferIn);
@@ -309,68 +350,46 @@ public sealed partial class StockTransferService
 
         return new StockTransferResponse
         {
-            TransferOutMovementId =
-                transferOutMovementId,
+            Id = transferOutMovementId,
 
-            TransferInMovementId =
-                transferInMovementId,
+            TransferOutMovementId = transferOutMovementId,
+            TransferInMovementId = transferInMovementId,
 
-            MaterialId =
-                materialId,
+            SourceConstructionSiteId = request.SourceConstructionSiteId,
+            DestinationConstructionSiteId = request.DestinationConstructionSiteId,
 
-            MaterialCode =
-                materialCode,
+            FromSiteId = request.SourceConstructionSiteId,
+            ToSiteId = request.DestinationConstructionSiteId,
 
-            MaterialName =
-                materialName,
+            SourceSiteName = sourceSiteName,
+            DestinationSiteName = destinationSiteName,
 
-            UnitOfMeasure =
-                unitOfMeasure,
+            FromSiteName = sourceSiteName,
+            ToSiteName = destinationSiteName,
 
-            SourceConstructionSiteId =
-                request.SourceConstructionSiteId,
+            MaterialId = materialId,
+            MaterialCode = materialCode,
+            MaterialName = materialName,
+            UnitOfMeasure = unitOfMeasure,
 
-            DestinationConstructionSiteId =
-                request.DestinationConstructionSiteId,
+            Quantity = request.Quantity,
+            UnitCost = unitCost,
 
-            SourceSiteName =
-                sourceSiteName,
+            SourceQuantityBefore = sourceQuantityBefore,
+            SourceQuantityAfter = sourceQuantityAfter,
 
-            DestinationSiteName =
-                destinationSiteName,
+            DestinationQuantityBefore = destinationQuantityBefore,
+            DestinationQuantityAfter = destinationQuantityAfter,
 
-            Quantity =
-                request.Quantity,
 
-            UnitCost =
-                unitCost,
 
-            SourceQuantityBefore =
-                sourceQuantityBefore,
+            TransferDateUtc = request.TransferDateUtc,
 
-            SourceQuantityAfter =
-                sourceQuantityAfter,
+            TransferNumber = normalizedTransferNumber,
+            ReferenceNumber = normalizedTransferNumber,
 
-            DestinationQuantityBefore =
-                destinationQuantityBefore,
-
-            DestinationQuantityAfter =
-                destinationQuantityAfter,
-
-            TransferDateUtc =
-                request.TransferDateUtc,
-
-            TransferNumber =
-                normalizedTransferNumber,
-
-            RequestedBy =
-                Clean(request.RequestedBy),
-
-            ApprovedBy =
-                Clean(request.ApprovedBy),
-
-            Remarks =
-                Clean(request.Remarks)
+            Status = "Completed",
+            Remarks = request.Remarks
         };
     }
     private async Task<User> GetActorAsync(
@@ -434,12 +453,11 @@ public sealed partial class StockTransferService
         }
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanManage(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasRole(actor, AppRoles.Administrator) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer))
         {
             return;
         }
@@ -467,7 +485,7 @@ public sealed partial class StockTransferService
     private static bool IsSuperAdmin(
         User actor)
     {
-        return HasRole(actor, AppRoles.SuperAdmin);
+        return HasRole(actor, AppRoles.Administrator);
     }
 
     private static bool HasRole(

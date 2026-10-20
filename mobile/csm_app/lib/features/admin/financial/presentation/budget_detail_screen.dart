@@ -63,6 +63,8 @@ class _BudgetDetailScreenState
 
     _effectiveFrom = _budget.effectiveFrom;
     _effectiveTo = _budget.effectiveTo;
+
+    _refresh();
   }
 
   @override
@@ -321,6 +323,25 @@ class _BudgetDetailScreenState
 
     return result == true;
   }
+  Future<void> _refresh() async {
+    try {
+      final latest = await widget.repository.getById(_budget.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _budget = latest;
+        _effectiveFrom = latest.effectiveFrom;
+        _effectiveTo = latest.effectiveTo;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
 
   String _statusLabel(BudgetStatus status) {
     switch (status) {
@@ -434,13 +455,12 @@ class _BudgetDetailScreenState
             const SizedBox(height: 16),
             _ReadOnlyField(
               label: 'Construction Site',
-              value: _budget.constructionSiteId,
+              value: _budget.constructionSiteName,
             ),
             const SizedBox(height: 16),
             _ReadOnlyField(
               label: 'Project',
-              value:
-                  _budget.projectId ?? 'No Project',
+              value: _budget.projectName ?? 'No Project',
             ),
             const SizedBox(height: 16),
             TextFormField(

@@ -10,6 +10,9 @@ public sealed class PermitResponse
 
     public Guid ConstructionSiteId { get; set; }
 
+    // NEW
+    public string ConstructionSiteName { get; set; } = string.Empty;
+
     public Guid? ProjectId { get; set; }
 
     public string PermitNumber { get; set; } = string.Empty;

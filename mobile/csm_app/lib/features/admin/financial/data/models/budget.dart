@@ -13,6 +13,8 @@ class Budget {
     required this.companyId,
     required this.constructionSiteId,
     this.projectId,
+    required this.constructionSiteName,
+    required this.projectName,
     required this.budgetNumber,
     required this.name,
     this.description,
@@ -31,6 +33,8 @@ class Budget {
   final String companyId;
   final String constructionSiteId;
   final String? projectId;
+  final String constructionSiteName;
+  final String? projectName;
   final String budgetNumber;
   final String name;
   final String? description;
@@ -44,76 +48,49 @@ class Budget {
   final DateTime createdAtUtc;
   final DateTime? updatedAtUtc;
 
-  factory Budget.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory Budget.fromJson(Map<String, dynamic> json) {
     return Budget(
-      id: json['id'] as String,
-      companyId: json['companyId'] as String,
-      constructionSiteId:
-          json['constructionSiteId'] as String,
-      projectId: json['projectId'] as String?,
-      budgetNumber:
-          json['budgetNumber'] as String,
-      name: json['name'] as String,
-      description:
-          json['description'] as String?,
+      id: json['id'],
+      companyId: json['companyId'],
+
+      constructionSiteId: json['constructionSiteId'],
+      constructionSiteName:
+      json['constructionSiteName'] ?? '',
+
+      projectId: json['projectId'],
+      projectName: json['projectName'],
+
+      budgetNumber: json['budgetNumber'],
+      name: json['name'],
+      description: json['description'],
       totalAmount:
-          (json['totalAmount'] as num).toDouble(),
-      currencyCode:
-          json['currencyCode'] as String,
+      (json['totalAmount'] as num).toDouble(),
+      currencyCode: json['currencyCode'],
+
       effectiveFrom:
-          _parseDate(json['effectiveFrom']),
-      effectiveTo:
-          _parseDate(json['effectiveTo']),
-      status: _parseStatus(json['status']),
-      approvedBy:
-          json['approvedBy'] as String?,
-      approvedAtUtc:
-          _parseDate(json['approvedAtUtc']),
-      createdAtUtc:
-          DateTime.parse(
-            json['createdAtUtc'] as String,
-          ),
-      updatedAtUtc:
-          _parseDate(json['updatedAtUtc']),
+      DateTime.parse(json['effectiveFrom']),
+      effectiveTo: json['effectiveTo'] == null
+          ? null
+          : DateTime.parse(json['effectiveTo']),
+
+      status: BudgetStatus.values.firstWhere(
+            (e) =>
+        e.name.toLowerCase() ==
+            json['status'].toString().toLowerCase(),
+      ),
+
+      approvedBy: json['approvedBy'],
+      approvedAtUtc: json['approvedAtUtc'] == null
+          ? null
+          : DateTime.parse(json['approvedAtUtc']),
+      createdAtUtc: DateTime.parse(json['createdAtUtc']),
+      updatedAtUtc: json['updatedAtUtc'] == null
+          ? null
+          : DateTime.parse(json['updatedAtUtc']),
     );
   }
 
-  static DateTime? _parseDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
 
-    return DateTime.tryParse(
-      value.toString(),
-    );
-  }
 
-  static BudgetStatus _parseStatus(dynamic value) {
-    final normalized =
-        value.toString().toLowerCase();
 
-    switch (normalized) {
-      case 'draft':
-        return BudgetStatus.draft;
-      case 'pendingapproval':
-      case 'pending_approval':
-      case 'pending approval':
-        return BudgetStatus.pendingApproval;
-      case 'approved':
-        return BudgetStatus.approved;
-      case 'active':
-        return BudgetStatus.active;
-      case 'closed':
-        return BudgetStatus.closed;
-      case 'cancelled':
-      case 'canceled':
-        return BudgetStatus.cancelled;
-      default:
-        throw FormatException(
-          'Unknown budget status: $value',
-        );
-    }
-  }
 }

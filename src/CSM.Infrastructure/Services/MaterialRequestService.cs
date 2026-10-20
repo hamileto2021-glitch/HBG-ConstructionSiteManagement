@@ -13,12 +13,16 @@ namespace CSM.Infrastructure.Services;
 public sealed class MaterialRequestService : IMaterialRequestService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly NotificationHelper _notificationHelper;
 
     public MaterialRequestService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        NotificationHelper notificationHelper)
     {
         _dbContext = dbContext;
+        _notificationHelper = notificationHelper;
     }
+
 
     public async Task<IReadOnlyCollection<MaterialRequestResponse>> GetAllAsync(
         Guid currentUserId,
@@ -31,12 +35,14 @@ public sealed class MaterialRequestService : IMaterialRequestService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.MaterialRequests
             .AsNoTracking()
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+            .Include(x => x.RequestedByUser)
+
             .Include(x => x.Lines)
                 .ThenInclude(x => x.Material)
             .AsQueryable();
@@ -85,7 +91,7 @@ public sealed class MaterialRequestService : IMaterialRequestService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var record = await GetMaterialRequestAsync(
             materialRequestId,
@@ -188,9 +194,62 @@ public sealed class MaterialRequestService : IMaterialRequestService
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
+        await _notificationHelper.SendAsync(
+            senderUserId: currentUserId,
+            recipientUserId: currentUserId,
+            title: "Material Request Created",
+            message:
+                $"Material Request {record.RequestNumber} has been created successfully.",
+            severity: NotificationSeverity.Info,
+            sourceEntityType: "MaterialRequest",
+            sourceEntityId: record.Id,
+            ct: cancellationToken);
+
         return await GetResponseAsync(
             record.Id,
             cancellationToken);
+    }
+
+    public async Task<MaterialRequestResponse> MakeDraftAsync(
+        Guid currentUserId,
+        Guid materialRequestId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanManage(actor);
+
+        var record = await _dbContext.MaterialRequests
+            .SingleOrDefaultAsync(
+                x => x.Id == materialRequestId,
+                cancellationToken)
+            ?? throw new MaterialRequestManagementException(
+                "Material request was not found.");
+
+        EnsureCompanyAccess(actor, record.CompanyId);
+
+        if (record.Status != MaterialRequestStatus.Rejected)
+        {
+            throw new MaterialRequestManagementException(
+                "Only Rejected material requests can be returned to Draft.");
+        }
+
+        record.Status = MaterialRequestStatus.Draft;
+        record.ApprovedBy = null;
+        record.ApprovedAtUtc = null;
+        record.ApprovalRemarks = null;
+
+        foreach (var line in record.Lines)
+        {
+            line.ApprovedQuantity = 0m;
+            line.DeliveredQuantity = 0m;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return await GetResponseAsync(record.Id, cancellationToken);
     }
 
     public async Task<MaterialRequestResponse> UpdateAsync(
@@ -458,11 +517,36 @@ public sealed class MaterialRequestService : IMaterialRequestService
                 "A material request must contain at least one line before submission.");
         }
 
-        record.Status =
-            MaterialRequestStatus.Submitted;
+        record.Status = MaterialRequestStatus.Submitted;
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Notify all Company Admins in the same company
+        var companyAdmins = await _dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Where(x =>
+                x.CompanyId == record.CompanyId &&
+                x.IsActive &&
+                x.UserRoles.Any(r =>
+                    !r.IsDeleted &&
+                    !r.Role.IsDeleted &&
+                    r.Role.Name == AppRoles.CompanyAdmin))
+            .ToListAsync(cancellationToken);
+
+        foreach (var admin in companyAdmins)
+        {
+            await _notificationHelper.SendAsync(
+                senderUserId: currentUserId,
+                recipientUserId: admin.Id,
+                title: "Material Request Submitted",
+                message:
+                    $"Material Request {record.RequestNumber} is awaiting approval.",
+                severity: NotificationSeverity.Info,
+                sourceEntityType: "MaterialRequest",
+                sourceEntityId: record.Id,
+                ct: cancellationToken);
+        }
 
         return Map(record);
     }
@@ -562,6 +646,17 @@ public sealed class MaterialRequestService : IMaterialRequestService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        await _notificationHelper.SendAsync(
+            senderUserId: currentUserId,
+            recipientUserId: record.RequestedBy,
+            title: "Material Request Approved",
+            message:
+                $"Your Material Request {record.RequestNumber} has been approved.",
+            severity: NotificationSeverity.Info,
+            sourceEntityType: "MaterialRequest",
+            sourceEntityId: record.Id,
+            ct: cancellationToken);
 
         return Map(record);
     }
@@ -698,6 +793,7 @@ public sealed class MaterialRequestService : IMaterialRequestService
         return await _dbContext.MaterialRequests
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+            .Include(x => x.RequestedByUser)
             .Include(x => x.Lines)
                 .ThenInclude(x => x.Material)
             .SingleOrDefaultAsync(
@@ -715,6 +811,7 @@ public sealed class MaterialRequestService : IMaterialRequestService
             .AsNoTracking()
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+            .Include(x => x.RequestedByUser)
             .Include(x => x.Lines)
                 .ThenInclude(x => x.Material)
             .SingleAsync(
@@ -829,6 +926,20 @@ public sealed class MaterialRequestService : IMaterialRequestService
         }
     }
 
+    private static void EnsureCanView(User actor)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
+        {
+            return;
+        }
+
+        throw new MaterialRequestManagementException(
+            "You are not authorized to view material requests.");
+    }
+
     private static void EnsureCanManage(
         User actor)
     {
@@ -915,70 +1026,54 @@ public sealed class MaterialRequestService : IMaterialRequestService
             : value.Trim();
     }
 
-    private static MaterialRequestResponse Map(
-        MaterialRequest record)
-    {
-        return new MaterialRequestResponse
-        {
-            Id = record.Id,
-            CompanyId = record.CompanyId,
-            ConstructionSiteId =
-                record.ConstructionSiteId,
-            SiteName =
-                record.ConstructionSite.Name,
-            ProjectId = record.ProjectId,
-            ProjectCode =
-                record.Project?.ProjectCode,
-            ProjectName =
-                record.Project?.Name,
-            RequestNumber =
-                record.RequestNumber,
-            RequestDate =
-                record.RequestDate,
-            RequiredByDate =
-                record.RequiredByDate,
-            Purpose =
-                record.Purpose,
-            Priority =
-                record.Priority,
-            Status =
-                record.Status,
-            RequestedBy =
-                record.RequestedBy,
-            ApprovedBy =
-                record.ApprovedBy,
-            ApprovedAtUtc =
-                record.ApprovedAtUtc,
-            ApprovalRemarks =
-                record.ApprovalRemarks,
-            CreatedAtUtc =
-                record.CreatedAtUtc,
-            UpdatedAtUtc =
-                record.UpdatedAtUtc,
-            Lines = record.Lines
-                .OrderBy(x => x.Material.MaterialCode)
-                .Select(
-                    x => new MaterialRequestLineResponse
-                    {
-                        Id = x.Id,
-                        MaterialId = x.MaterialId,
-                        MaterialCode =
-                            x.Material.MaterialCode,
-                        MaterialName =
-                            x.Material.Name,
-                        UnitOfMeasure =
-                            x.Material.UnitOfMeasure,
-                        RequestedQuantity =
-                            x.RequestedQuantity,
-                        ApprovedQuantity =
-                            x.ApprovedQuantity,
-                        DeliveredQuantity =
-                            x.DeliveredQuantity,
-                        Remarks =
-                            x.Remarks
-                    })
-                .ToList()
-        };
-    }
+   private static MaterialRequestResponse Map(MaterialRequest record)
+   {
+       return new MaterialRequestResponse
+       {
+           Id = record.Id,
+           CompanyId = record.CompanyId,
+
+           ConstructionSiteId = record.ConstructionSiteId,
+           SiteName = record.ConstructionSite?.Name ?? string.Empty,
+
+           RequestedByName =
+               record.RequestedByUser is null
+                   ? string.Empty
+                   : $"{record.RequestedByUser.FirstName} {record.RequestedByUser.LastName}".Trim(),
+
+           ProjectId = record.ProjectId,
+           ProjectCode = record.Project?.ProjectCode,
+           ProjectName = record.Project?.Name,
+
+           RequestNumber = record.RequestNumber,
+           RequestDate = record.RequestDate,
+           RequiredByDate = record.RequiredByDate,
+
+           Purpose = record.Purpose,
+           Priority = record.Priority,
+           Status = record.Status,
+
+           RequestedBy = record.RequestedBy,
+           ApprovedBy = record.ApprovedBy,
+           ApprovedAtUtc = record.ApprovedAtUtc,
+           ApprovalRemarks = record.ApprovalRemarks,
+
+           CreatedAtUtc = record.CreatedAtUtc,
+           UpdatedAtUtc = record.UpdatedAtUtc,
+
+           Lines = record.Lines.Select(line => new MaterialRequestLineResponse
+           {
+               Id = line.Id,
+               MaterialId = line.MaterialId,
+               MaterialCode = line.Material?.MaterialCode ?? string.Empty,
+               MaterialName = line.Material?.Name ?? string.Empty,
+               UnitOfMeasure = line.Material?.UnitOfMeasure ?? string.Empty,
+               RequestedQuantity = line.RequestedQuantity,
+               ApprovedQuantity = line.ApprovedQuantity,
+               DeliveredQuantity = line.DeliveredQuantity,
+               Remarks = line.Remarks
+           }).ToList()
+       };
+   }
 }
 

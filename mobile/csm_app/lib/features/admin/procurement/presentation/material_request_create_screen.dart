@@ -542,12 +542,10 @@ class _MaterialRequestCreateScreenState
 
 class _RequestLineDraft {
   String? materialId;
+  String unitOfMeasure = '';
 
-  final quantityController =
-      TextEditingController();
-
-  final remarksController =
-      TextEditingController();
+  final quantityController = TextEditingController();
+  final remarksController = TextEditingController();
 
   void dispose() {
     quantityController.dispose();
@@ -555,7 +553,7 @@ class _RequestLineDraft {
   }
 }
 
-class _LineCard extends StatelessWidget {
+class _LineCard extends StatefulWidget {
   const _LineCard({
     required this.index,
     required this.line,
@@ -573,101 +571,149 @@ class _LineCard extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
+  State<_LineCard> createState() => _LineCardState();
+}
+
+class _LineCardState extends State<_LineCard> {
+  @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    'Line ${index + 1}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium,
+                    'Line ${widget.index + 1}',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
                 IconButton(
                   tooltip: 'Remove line',
-                  onPressed:
-                      canRemove && enabled
-                          ? onRemove
-                          : null,
-                  icon: const Icon(
-                    Icons.delete_outline,
-                  ),
+                  onPressed: widget.canRemove && widget.enabled
+                      ? widget.onRemove
+                      : null,
+                  icon: const Icon(Icons.delete_outline),
                 ),
               ],
             ),
+
             const SizedBox(height: 8),
+
+            // Material
             DropdownButtonFormField<String>(
-              initialValue: line.materialId,
+              initialValue: widget.line.materialId,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Material',
+                border: OutlineInputBorder(),
               ),
-              items: materials
+              items: widget.materials
                   .map(
-                    (material) => DropdownMenuItem<String>(
-                  value: material.id,
+                    (m) => DropdownMenuItem<String>(
+                  value: m.id,
                   child: Text(
-                    '${material.materialCode} — ${material.name}',
+                    '${m.materialCode} — ${m.name}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               )
                   .toList(),
-              onChanged: enabled
+              onChanged: widget.enabled
                   ? (value) {
-                      line.materialId = value;
-                    }
+                if (value == null) return;
+
+                final material = widget.materials.firstWhere(
+                      (m) => m.id == value,
+                );
+
+                setState(() {
+                  widget.line.materialId = material.id;
+                  widget.line.unitOfMeasure =
+                      material.unitOfMeasure;
+                });
+              }
                   : null,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Material is required.';
                 }
-
                 return null;
               },
             ),
+
             const SizedBox(height: 12),
-            TextFormField(
-              controller:
-                  line.quantityController,
-              enabled: enabled,
+
+            // Unit of Measure Dropdown (Read Only)
+            DropdownButtonFormField<String>(
+              initialValue: widget.line.unitOfMeasure.isEmpty
+                  ? null
+                  : widget.line.unitOfMeasure,
+              isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Requested Quantity',
+                labelText: 'Unit of Measure',
+                border: OutlineInputBorder(),
               ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(
+              items: widget.materials
+                  .map((m) => m.unitOfMeasure)
+                  .toSet()
+                  .map(
+                    (uom) => DropdownMenuItem<String>(
+                  value: uom,
+                  child: Text(uom),
+                ),
+              )
+                  .toList(),
+              onChanged: widget.enabled
+                  ? (value) {
+                if (value == null) return;
+
+                setState(() {
+                  widget.line.unitOfMeasure = value;
+                });
+              }
+                  : null,
+            ),
+
+            const SizedBox(height: 12),
+
+            // Quantity
+            TextFormField(
+              controller: widget.line.quantityController,
+              enabled: widget.enabled,
+              decoration: InputDecoration(
+                labelText: widget.line.unitOfMeasure.isEmpty
+                    ? 'Requested Quantity'
+                    : 'Requested Quantity (${widget.line.unitOfMeasure})',
+                border: const OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               validator: (value) {
-                final quantity = double.tryParse(
-                  value?.trim() ?? '',
-                );
+                final qty = double.tryParse(value?.trim() ?? '');
 
-                if (quantity == null ||
-                    quantity <= 0) {
+                if (qty == null || qty <= 0) {
                   return 'Enter a quantity greater than zero.';
                 }
-
                 return null;
               },
             ),
+
             const SizedBox(height: 12),
+
+            // Remarks
             TextFormField(
-              controller:
-                  line.remarksController,
-              enabled: enabled,
+              controller: widget.line.remarksController,
+              enabled: widget.enabled,
               decoration: const InputDecoration(
                 labelText: 'Remarks',
+                border: OutlineInputBorder(),
               ),
               maxLines: 2,
             ),

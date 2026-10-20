@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Shifts;
 using CSM.Application.HRM.Shifts.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class ShiftsController : ControllerBase
 {
     private readonly IShiftService _shiftService;
@@ -20,6 +19,7 @@ public sealed class ShiftsController : ControllerBase
         _shiftService = shiftService;
     }
 
+    [Authorize(Policy = "HRM.Shift.View")]
     [HttpGet]
     public async Task<
         ActionResult<IReadOnlyCollection<ShiftResponse>>> GetAll(
@@ -39,6 +39,7 @@ public sealed class ShiftsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Shift.View")]
     [HttpGet("{shiftId:guid}")]
     public async Task<ActionResult<ShiftResponse>> GetById(
         Guid shiftId,
@@ -59,6 +60,7 @@ public sealed class ShiftsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Shift.Submit")]
     [HttpPost]
     public async Task<ActionResult<ShiftResponse>> Create(
         CreateShiftRequest request,
@@ -82,6 +84,7 @@ public sealed class ShiftsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Shift.Submit")]
     [HttpPut("{shiftId:guid}")]
     public async Task<ActionResult<ShiftResponse>> Update(
         Guid shiftId,
@@ -104,6 +107,7 @@ public sealed class ShiftsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Shift.Submit")]
     [HttpPut("{shiftId:guid}/active-status")]
     public async Task<ActionResult<ShiftResponse>> ChangeActiveStatus(
         Guid shiftId,

@@ -4,6 +4,8 @@ using CSM.Application.Companies;
 using CSM.Application.Companies.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Application.CompanySettings;
+using CSM.Application.CompanySettings.Dtos;
 
 namespace CSM.Api.Controllers;
 
@@ -13,13 +15,15 @@ namespace CSM.Api.Controllers;
 public sealed class CompaniesController : ControllerBase
 {
     private readonly ICompanyService _companyService;
+    private readonly ICompanySettingsService _companySettingsService;
 
     public CompaniesController(
-        ICompanyService companyService)
+        ICompanyService companyService,
+        ICompanySettingsService companySettingsService)
     {
         _companyService = companyService;
+        _companySettingsService = companySettingsService;
     }
-
     [HttpGet]
     public async Task<ActionResult<IReadOnlyCollection<CompanyResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -36,6 +40,16 @@ public sealed class CompaniesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpGet("lookup")]
+    public async Task<ActionResult<IReadOnlyList<CompanyLookupDto>>> GetLookup(
+        CancellationToken cancellationToken)
+    {
+        var companies = await _companySettingsService
+            .GetCompaniesAsync(cancellationToken);
+
+        return Ok(companies);
     }
 
     [HttpGet("{companyId:guid}")]

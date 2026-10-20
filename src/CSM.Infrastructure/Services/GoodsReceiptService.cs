@@ -626,7 +626,9 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             .Include(x => x.PurchaseOrder)
             .Include(x => x.ConstructionSite)
             .Include(x => x.Lines)
-                .ThenInclude(x => x.Material);
+                .ThenInclude(x => x.Material)
+            .Include(x => x.Lines)
+                .ThenInclude(x => x.PurchaseOrderLine);
     }
 
     private async Task<GoodsReceipt> GetGoodsReceiptAsync(
@@ -807,12 +809,14 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                                     x.Material.MaterialCode,
                                 MaterialName =
                                     x.Material.Name,
-                                ReceivedQuantity =
-                                    x.ReceivedQuantity,
-                                AcceptedQuantity =
-                                    x.AcceptedQuantity,
-                                RejectedQuantity =
-                                    x.RejectedQuantity,
+                                ReceivedQuantity = x.ReceivedQuantity,
+                                OrderedQuantity = x.PurchaseOrderLine.OrderedQuantity,
+                                RemainingQuantity =
+                                    x.PurchaseOrderLine.OrderedQuantity -
+                                    x.PurchaseOrderLine.ReceivedQuantity,
+
+                                AcceptedQuantity = x.AcceptedQuantity,
+                                RejectedQuantity = x.RejectedQuantity,
                                 StockBalanceBefore =
                                     movement?.StockBalanceBefore,
                                 StockBalanceAfter =

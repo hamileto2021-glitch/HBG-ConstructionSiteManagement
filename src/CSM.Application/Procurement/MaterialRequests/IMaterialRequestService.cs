@@ -22,6 +22,11 @@ public interface IMaterialRequestService
         CreateMaterialRequestRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<MaterialRequestResponse> MakeDraftAsync(
+        Guid currentUserId,
+        Guid materialRequestId,
+        CancellationToken cancellationToken = default);
+
     Task<MaterialRequestResponse> UpdateAsync(
         Guid currentUserId,
         Guid materialRequestId,

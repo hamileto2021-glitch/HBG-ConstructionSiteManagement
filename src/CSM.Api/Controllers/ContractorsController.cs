@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Contractors;
 using CSM.Application.HRM.Contractors.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class ContractorsController : ControllerBase
 {
     private readonly IContractorService _contractorService;
@@ -21,6 +20,7 @@ public sealed class ContractorsController : ControllerBase
         _contractorService = contractorService;
     }
 
+    [Authorize(Policy = "HRM.Contractor.View")]
     [HttpGet]
     public async Task<
         ActionResult<IReadOnlyCollection<ContractorResponse>>> GetAll(
@@ -43,6 +43,7 @@ public sealed class ContractorsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Contractor.View")]
     [HttpGet("{contractorId:guid}")]
     public async Task<ActionResult<ContractorResponse>> GetById(
         Guid contractorId,
@@ -64,6 +65,7 @@ public sealed class ContractorsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Contractor.Manage")]
     [HttpPost]
     public async Task<ActionResult<ContractorResponse>> Create(
         CreateContractorRequest request,
@@ -91,6 +93,7 @@ public sealed class ContractorsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Contractor.Manage")]
     [HttpPut("{contractorId:guid}")]
     public async Task<ActionResult<ContractorResponse>> Update(
         Guid contractorId,

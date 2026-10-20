@@ -7,16 +7,21 @@ using CSM.Domain.Entities.Identity;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CSM.Infrastructure.Security;
 
 namespace CSM.Infrastructure.Services;
 
 public sealed class BudgetService : IBudgetService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
-    public BudgetService(ApplicationDbContext dbContext)
+    public BudgetService(
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<BudgetResponse>> GetAllAsync(
@@ -27,7 +32,9 @@ public sealed class BudgetService : IBudgetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanRead(actor);
+        await EnsureCanRead(
+            actor,
+            cancellationToken);
 
         IQueryable<Budget> query =
             _dbContext.Budgets.AsNoTracking();
@@ -47,6 +54,38 @@ public sealed class BudgetService : IBudgetService
             .ToArray();
     }
 
+    public async Task<IReadOnlyCollection<BudgetResponse>> GetBySiteAsync(
+        Guid currentUserId,
+        Guid siteId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        await EnsureCanRead(
+            actor,
+            cancellationToken);
+
+        var companyId = GetActorCompanyId(actor);
+
+        await EnsureSiteAccess(
+            actor,
+            siteId,
+            cancellationToken);
+
+        var budgets = await _dbContext.Budgets
+            .AsNoTracking()
+            .Include(x => x.ConstructionSite)
+            .Include(x => x.Project)
+            .Where(x =>
+                x.CompanyId == companyId &&
+                x.ConstructionSiteId == siteId &&
+                !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return budgets.Select(Map).ToArray();
+    }
+
     public async Task<BudgetResponse> GetByIdAsync(
         Guid currentUserId,
         Guid budgetId,
@@ -56,7 +95,9 @@ public sealed class BudgetService : IBudgetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanRead(actor);
+        await EnsureCanRead(
+            actor,
+            cancellationToken);
 
         var budget = await GetBudgetAsync(
             budgetId,
@@ -78,7 +119,9 @@ public sealed class BudgetService : IBudgetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanModify(actor);
+        await EnsureCanModify(
+            actor,
+            cancellationToken);
 
         var companyId = GetActorCompanyId(actor);
 
@@ -122,16 +165,23 @@ public sealed class BudgetService : IBudgetService
                 $"Budget number '{budgetNumber}' already exists.");
         }
 
-        await EnsureSiteAccess(
-            companyId,
-            request.ConstructionSiteId,
-            cancellationToken);
-
-        await EnsureProjectAccess(
-            companyId,
-            request.ConstructionSiteId,
-            request.ProjectId,
-            cancellationToken);
+        if (request.ConstructionSiteId.HasValue)
+        {
+            await EnsureSiteAccess(
+                actor,
+                request.ConstructionSiteId,
+                cancellationToken);
+            await EnsureProjectAccess(
+                companyId,
+                request.ConstructionSiteId.Value,
+                request.ProjectId,
+                cancellationToken);
+        }
+        else if (request.ProjectId.HasValue)
+        {
+            throw new BudgetManagementException(
+                "A company-level budget cannot be assigned to a project.");
+        }
 
         var budget = new Budget
         {
@@ -167,15 +217,22 @@ public sealed class BudgetService : IBudgetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanModify(actor);
+        await EnsureCanModify(
+            actor,
+            cancellationToken);
 
-        var budget = await GetBudgetAsync(
+        var budget = await GetBudgetForUpdateAsync(
             budgetId,
             cancellationToken);
 
         EnsureCompanyAccess(
             actor,
             budget.CompanyId);
+
+        await EnsureSiteAccess(
+            actor,
+            budget.ConstructionSiteId,
+            cancellationToken);
 
         EnsureEditable(budget);
 
@@ -225,15 +282,22 @@ public sealed class BudgetService : IBudgetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanModify(actor);
+        await EnsureCanModify(
+            actor,
+            cancellationToken);
 
-        var budget = await GetBudgetAsync(
+        var budget = await GetBudgetForUpdateAsync(
             budgetId,
             cancellationToken);
 
         EnsureCompanyAccess(
             actor,
             budget.CompanyId);
+
+        await EnsureSiteAccess(
+            actor,
+            budget.ConstructionSiteId,
+            cancellationToken);
 
         ValidateStatusTransition(
             budget.Status,
@@ -267,30 +331,36 @@ public sealed class BudgetService : IBudgetService
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanRead(User actor)
+    private async Task EnsureCanRead(
+        User actor,
+        CancellationToken cancellationToken)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
-        {
-            return;
-        }
+        var hasPermission = await _permissionEvaluator.HasPermissionAsync(
+            actor.Id,
+            GranularPermission.Finance_Budget_View.ToString(),
+            cancellationToken);
 
-        throw new BudgetManagementException(
-            "You are not authorized to view budgets.");
+        if (!hasPermission)
+        {
+            throw new BudgetManagementException(
+                "You are not authorized to view budgets.");
+        }
     }
 
-    private static void EnsureCanModify(User actor)
+    private async Task EnsureCanModify(
+        User actor,
+        CancellationToken cancellationToken)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
-        {
-            return;
-        }
+        var hasPermission = await _permissionEvaluator.HasPermissionAsync(
+            actor.Id,
+            GranularPermission.Finance_Budget_Manage.ToString(),
+            cancellationToken);
 
-        throw new BudgetManagementException(
-            "You are not authorized to manage budgets.");
+        if (!hasPermission)
+        {
+            throw new BudgetManagementException(
+                "You are not authorized to manage budgets.");
+        }
     }
 
     private static void EnsureCompanyAccess(
@@ -325,36 +395,96 @@ public sealed class BudgetService : IBudgetService
         Guid budgetId,
         CancellationToken cancellationToken)
     {
-        return await _dbContext.Budgets
+        var budget = await _dbContext.Budgets
+            .Include(x => x.ConstructionSite)
+            .Include(x => x.Project)
             .SingleOrDefaultAsync(
-                x =>
-                    x.Id == budgetId &&
-                    !x.IsDeleted,
-                cancellationToken)
-            ?? throw new BudgetManagementException(
-                "Budget was not found.");
+                x => x.Id == budgetId && !x.IsDeleted,
+                cancellationToken);
+
+        if (budget is null)
+        {
+            throw new BudgetManagementException("Budget not found.");
+        }
+
+        return budget;
+    }
+
+    private async Task<Budget> GetBudgetForUpdateAsync(
+        Guid budgetId,
+        CancellationToken cancellationToken)
+    {
+        var budget = await _dbContext.Budgets
+            .Include(x => x.ConstructionSite)
+            .Include(x => x.Project)
+            .SingleOrDefaultAsync(
+                x => x.Id == budgetId && !x.IsDeleted,
+                cancellationToken);
+
+        if (budget is null)
+        {
+            throw new BudgetManagementException(
+                "Budget not found.");
+        }
+
+        return budget;
     }
 
     private async Task EnsureSiteAccess(
-        Guid companyId,
-        Guid siteId,
+        User actor,
+        Guid? siteId,
         CancellationToken cancellationToken)
     {
-        var exists = await _dbContext.ConstructionSites
+        if (!siteId.HasValue || IsSuperAdmin(actor))
+        {
+            return;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+
+        var siteExists = await _dbContext.ConstructionSites
             .AnyAsync(
                 x =>
-                    x.Id == siteId &&
+                    x.Id == siteId.Value &&
                     x.CompanyId == companyId &&
                     !x.IsDeleted,
                 cancellationToken);
 
-        if (!exists)
+        if (!siteExists)
         {
             throw new BudgetManagementException(
                 "The selected construction site is invalid or inaccessible.");
         }
-    }
 
+        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            return;
+        }
+
+        var activeSiteIds = await _dbContext.UserSiteAccesses
+            .Where(
+                x =>
+                    x.UserId == actor.Id &&
+                    x.CompanyId == companyId &&
+                    x.IsActive)
+            .Select(x => x.SiteId)
+            .ToListAsync(cancellationToken);
+
+        // Company-level Site Managers can access sites within their company
+        // when they have no active site-specific assignments.
+        if (HasRole(actor, AppRoles.SiteManager) &&
+            activeSiteIds.Count == 0)
+        {
+            return;
+        }
+
+        if (!activeSiteIds.Contains(siteId.Value))
+        {
+            throw new BudgetManagementException(
+                "You are not assigned to this site's budget scope.");
+        }
+    }
     private async Task EnsureProjectAccess(
         Guid companyId,
         Guid siteId,
@@ -499,26 +629,39 @@ public sealed class BudgetService : IBudgetService
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static BudgetResponse Map(
-        Budget budget)
+    private static BudgetResponse Map(Budget budget)
     {
-        return new BudgetResponse(
-            budget.Id,
-            budget.CompanyId,
-            budget.ConstructionSiteId,
-            budget.ProjectId,
-            budget.BudgetNumber,
-            budget.Name,
-            budget.Description,
-            budget.TotalAmount,
-            budget.CurrencyCode,
-            budget.EffectiveFrom,
-            budget.EffectiveTo,
-            budget.Status,
-            budget.ApprovedBy,
-            budget.ApprovedAtUtc,
-            budget.CreatedAtUtc,
-            budget.UpdatedAtUtc);
+        return new BudgetResponse
+        {
+            Id = budget.Id,
+            CompanyId = budget.CompanyId,
+
+            ConstructionSiteId = budget.ConstructionSiteId,
+            ConstructionSiteName = budget.ConstructionSite?.Name ?? string.Empty,
+
+            ProjectId = budget.ProjectId,
+            ProjectName = budget.Project == null
+                ? null
+                : $"{budget.Project.ProjectCode} - {budget.Project.Name}",
+
+            BudgetNumber = budget.BudgetNumber,
+            Name = budget.Name,
+            Description = budget.Description,
+
+            TotalAmount = budget.TotalAmount,
+            CurrencyCode = budget.CurrencyCode,
+
+            EffectiveFrom = budget.EffectiveFrom!.Value,
+            EffectiveTo = budget.EffectiveTo ?? budget.EffectiveFrom,
+
+            Status = budget.Status,
+
+            ApprovedBy = budget.ApprovedBy,
+            ApprovedAtUtc = budget.ApprovedAtUtc,
+
+            CreatedAtUtc = budget.CreatedAtUtc,
+            UpdatedAtUtc = budget.UpdatedAtUtc
+        };
     }
 }
 

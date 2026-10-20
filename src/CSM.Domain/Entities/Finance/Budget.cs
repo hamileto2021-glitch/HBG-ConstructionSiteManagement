@@ -7,7 +7,7 @@ namespace CSM.Domain.Entities.Finance;
 
 public class Budget : TenantEntity
 {
-    public Guid ConstructionSiteId { get; set; }
+    public Guid? ConstructionSiteId { get; set; }
 
     public Guid? ProjectId { get; set; }
 

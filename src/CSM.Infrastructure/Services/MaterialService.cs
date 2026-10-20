@@ -7,6 +7,7 @@ using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Procurement;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CSM.Domain.Enums;
 
 namespace CSM.Infrastructure.Services;
 
@@ -259,6 +260,51 @@ public sealed class MaterialService : IMaterialService
                 cancellationToken)
             ?? throw new MaterialManagementException(
                 "Current user was not found or is inactive.");
+    }
+    public Task<IReadOnlyList<MaterialLookupDto>> GetCategoriesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var categories = new[]
+        {
+            new MaterialLookupDto("Cement", "Cement"),
+            new MaterialLookupDto("Steel", "Steel"),
+            new MaterialLookupDto("Concrete", "Concrete"),
+            new MaterialLookupDto("Rebar", "Rebar"),
+            new MaterialLookupDto("Aggregate", "Aggregate"),
+            new MaterialLookupDto("Finishing", "Finishing"),
+        };
+
+        return Task.FromResult<IReadOnlyList<MaterialLookupDto>>(categories);
+    }
+
+    public Task<IReadOnlyList<MaterialLookupDto>> GetUnitsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var units = new[]
+        {
+            new MaterialLookupDto("Bag", "Bag"),
+            new MaterialLookupDto("Piece", "Piece"),
+            new MaterialLookupDto("Kilogram", "Kilogram"),
+            new MaterialLookupDto("Ton", "Ton"),
+            new MaterialLookupDto("Meter", "Meter"),
+            new MaterialLookupDto("Meter Cube", "Meter Cube"),
+            new MaterialLookupDto("Liter", "Liter"),
+            new MaterialLookupDto("Roll", "Roll"),
+        };
+
+        return Task.FromResult<IReadOnlyList<MaterialLookupDto>>(units);
+    }
+
+    public Task<IReadOnlyList<MaterialLookupDto>> GetMaterialTypesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var types = Enum.GetValues<MaterialType>()
+            .Select(x => new MaterialLookupDto(
+                x.ToString(),
+                x.ToString()))
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<MaterialLookupDto>>(types);
     }
 
     private async Task<Material> GetMaterialAsync(

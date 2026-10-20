@@ -37,4 +37,9 @@ public class DailyProgressLog : TenantEntity
     public string? Remarks { get; set; }
 
     public Project Project { get; set; } = null!;
+
+    public ICollection<DailyProgressTaskEntry> DailyProgressTaskEntries { get; set; }
+                = new List<DailyProgressTaskEntry>();
+
+
 }

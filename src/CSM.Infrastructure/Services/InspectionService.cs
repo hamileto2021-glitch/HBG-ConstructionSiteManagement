@@ -31,6 +31,7 @@ public sealed class InspectionService : IInspectionService
 
         var query = _dbContext.Inspections
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .Include(x => x.ChecklistItems)
             .Where(x => !x.IsDeleted);
 
@@ -62,6 +63,7 @@ public sealed class InspectionService : IInspectionService
 
         var inspection = await _dbContext.Inspections
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .Include(x => x.ChecklistItems)
             .SingleOrDefaultAsync(
                 x =>
@@ -714,6 +716,8 @@ public sealed class InspectionService : IInspectionService
             CompanyId = inspection.CompanyId,
             ConstructionSiteId =
                 inspection.ConstructionSiteId,
+            ConstructionSiteName =
+                inspection.ConstructionSite?.Name ?? string.Empty,
             ProjectId = inspection.ProjectId,
             InspectionNumber =
                 inspection.InspectionNumber,

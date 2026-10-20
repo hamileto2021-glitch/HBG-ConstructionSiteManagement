@@ -63,6 +63,32 @@ public sealed class DocumentVersionsController : ControllerBase
         }
     }
 
+    [HttpGet("{versionId:guid}/download")]
+    public async Task<IActionResult> Download(
+        Guid documentId,
+        Guid versionId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _service.DownloadAsync(
+                GetCurrentUserId(),
+                documentId,
+                versionId,
+                cancellationToken);
+
+            return File(
+                result.Stream,
+                result.ContentType ?? "application/octet-stream",
+                result.FileName,
+                enableRangeProcessing: true);
+        }
+        catch (DocumentManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private Guid GetCurrentUserId()
     {
         var value = User.FindFirstValue(ClaimTypes.NameIdentifier);

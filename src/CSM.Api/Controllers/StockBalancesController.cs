@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class StockBalancesController : ControllerBase
 {
     private readonly IStockBalanceService _stockBalanceService;
@@ -22,6 +22,7 @@ public sealed class StockBalancesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<StockBalanceResponse>>> GetAll(
         [FromQuery] Guid? constructionSiteId,
@@ -49,6 +50,7 @@ public sealed class StockBalancesController : ControllerBase
     }
 
     [HttpGet("{stockItemId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<ActionResult<StockBalanceResponse>> GetById(
         Guid stockItemId,
         CancellationToken cancellationToken)

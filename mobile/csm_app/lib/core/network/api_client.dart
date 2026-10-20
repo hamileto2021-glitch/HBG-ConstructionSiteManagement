@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../storage/secure_storage_service.dart';
+import 'dart:typed_data';
+import 'dart:io';
+
 
 class ApiException implements Exception {
   const ApiException(
@@ -68,6 +71,43 @@ class ApiClient {
     throw const ApiException(
       'The server returned an unexpected collection response format.',
     );
+  }
+  Future<dynamic> getValue(
+      String path, {
+        bool authenticated = true,
+      }) async {
+    final response = await _sendRaw(
+      'GET',
+      path,
+      authenticated: authenticated,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _buildException(response);
+    }
+
+    if (response.body.trim().isEmpty) {
+      return null;
+    }
+
+    return jsonDecode(response.body);
+  }
+
+  Future<Uint8List> getBytes(
+      String path, {
+        bool authenticated = true,
+      }) async {
+    final response = await _sendRaw(
+      'GET',
+      path,
+      authenticated: authenticated,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _buildException(response);
+    }
+
+    return response.bodyBytes;
   }
 
   Future<Map<String, dynamic>> post(
@@ -274,6 +314,50 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> postMultipart({
+    required String endpoint,
+    required File file,
+    required String fieldName,
+    String? caption,
+    bool authenticated = true,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(ApiConfig.endpoint(endpoint)),
+    );
+
+    request.headers['Accept'] = 'application/json';
+
+    if (authenticated) {
+      final token = await _storage.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    if (caption != null && caption.isNotEmpty) {
+      request.fields['caption'] = caption;
+    }
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        fieldName,
+        file.path,
+      ),
+    );
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw _buildException(response);
+  }
+
+
+
   Future<bool> _refreshAccessToken() async {
     final refreshToken = await _storage.getRefreshToken();
 
@@ -347,13 +431,9 @@ class ApiClient {
         final decoded = jsonDecode(response.body);
 
         if (decoded is Map<String, dynamic>) {
-          if (decoded['message'] is String) {
-            message = decoded['message'] as String;
-          } else if (decoded['title'] is String) {
-            message = decoded['title'] as String;
-          } else if (decoded['errors'] is Map<String, dynamic>) {
+          // Show validation errors FIRST
+          if (decoded['errors'] is Map<String, dynamic>) {
             final errors = decoded['errors'] as Map<String, dynamic>;
-
             final buffer = StringBuffer();
 
             errors.forEach((field, value) {
@@ -367,6 +447,10 @@ class ApiClient {
             });
 
             message = buffer.toString().trim();
+          } else if (decoded['message'] is String) {
+            message = decoded['message'] as String;
+          } else if (decoded['title'] is String) {
+            message = decoded['title'] as String;
           } else {
             message = response.body;
           }

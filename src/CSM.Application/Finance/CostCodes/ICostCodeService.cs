@@ -8,6 +8,10 @@ public interface ICostCodeService
         Guid currentUserId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<CostCodeResponse>> GetActiveAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default);
+
     Task<CostCodeResponse> GetByIdAsync(
         Guid currentUserId,
         Guid costCodeId,
@@ -29,4 +33,15 @@ public interface ICostCodeService
         Guid costCodeId,
         ChangeCostCodeActiveStatusRequest request,
         CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        Guid currentUserId,
+        Guid costCodeId,
+        CancellationToken cancellationToken = default);
+
+    Task<List<CostCodeResponse>> GetBySiteAsync(
+         Guid siteId,
+         CancellationToken cancellationToken = default);
+
+
 }

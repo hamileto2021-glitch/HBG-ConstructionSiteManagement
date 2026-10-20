@@ -6,7 +6,7 @@ public sealed class CreateDailyMaterialUsageRequest
 
     public Guid MaterialId { get; set; }
 
-    public Guid DailyProgressLogId { get; set; }
+    public Guid? DailyProgressLogId { get; set; }
 
     public DateOnly Date { get; set; }
 

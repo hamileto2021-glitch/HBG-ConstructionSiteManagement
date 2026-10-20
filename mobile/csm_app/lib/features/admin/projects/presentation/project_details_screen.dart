@@ -1,15 +1,25 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
+import '../../../../core/utils/currency_formatter.dart';
 import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import '../data/repositories/project_phase_repository.dart';
 import 'project_edit_screen.dart';
 import 'phases/project_phase_list_screen.dart';
-import '../data/models/phases/project_phase.dart';
-import '../data/models/milestones/milestone.dart';
+
+import 'diary/daily_site_diary_list_screen.dart';
+
+import 'daily_progress_list_screen.dart';
+import '../data/repositories/daily_progress_repository.dart';
+import 'project_delay_list_screen.dart';
+import 'progress/project_progress_dashboard_screen.dart';
+import 'tasks/gantt_timeline_screen.dart';
 import '../data/models/work_task.dart';
-import '../data/repositories/milestone_repository.dart';
 import '../data/repositories/work_task_repository.dart';
+
+
+
+
 
 class ProjectDetailsScreen extends StatefulWidget {
   const ProjectDetailsScreen({
@@ -21,34 +31,50 @@ class ProjectDetailsScreen extends StatefulWidget {
   final Project project;
   final ProjectRepository repository;
 
+
+
+
   @override
   State<ProjectDetailsScreen> createState() => _ProjectDetailsScreenState();
 }
 
 class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
-  late Project _project;
-  bool _isLoading = true;
-  String? _errorMessage;
-  bool _isChangingStatus = false;
-  bool _isLoadingPhases = true;
-  String? _phaseErrorMessage;
-  List<ProjectPhase> _phases = [];
 
-  bool _isLoadingMilestones = true;
-  String? _milestoneErrorMessage;
-  List<Milestone> _milestones = [];
+
+  final DailyProgressRepository _dailyRepository =
+  DailyProgressRepository();
+
+  final WorkTaskRepository _workTaskRepository = WorkTaskRepository();
 
   bool _isLoadingWorkTasks = true;
   String? _workTaskErrorMessage;
   List<WorkTask> _workTasks = [];
 
+
+
+
+
+
+
+
+
+  String money(double value) =>
+      CurrencyFormatter.etb(value);
+
+  late Project _project;
+  bool _isLoading = true;
+  String? _errorMessage;
+  bool _isChangingStatus = false;
+
+
+
   @override
   void initState() {
     super.initState();
+
     _project = widget.project;
+
     _loadProject();
-    _loadPhases();
-    _loadMilestones();
     _loadWorkTasks();
   }
 
@@ -78,67 +104,6 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
       });
     }
   }
-  Future<void> _loadPhases() async {
-    setState(() {
-      _isLoadingPhases = true;
-      _phaseErrorMessage = null;
-    });
-
-    try {
-      final phases = await ProjectPhaseRepository().getAll(
-        projectId: _project.id,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _phases = phases;
-        _isLoadingPhases = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isLoadingPhases = false;
-        _phaseErrorMessage = error.toString();
-      });
-    }
-  }
-
-  Future<void> _loadMilestones() async {
-    setState(() {
-      _isLoadingMilestones = true;
-      _milestoneErrorMessage = null;
-    });
-
-    try {
-      final milestones = await MilestoneRepository().getAll(
-        projectId: _project.id,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _milestones = milestones;
-        _isLoadingMilestones = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isLoadingMilestones = false;
-        _milestoneErrorMessage = error.toString();
-      });
-    }
-  }
 
   Future<void> _loadWorkTasks() async {
     setState(() {
@@ -147,29 +112,28 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
     });
 
     try {
-      final tasks = await WorkTaskRepository().getAll(
+      final tasks = await _workTaskRepository.getAll(
         projectId: _project.id,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _workTasks = tasks;
         _isLoadingWorkTasks = false;
       });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
+        _workTaskErrorMessage = e.toString();
         _isLoadingWorkTasks = false;
-        _workTaskErrorMessage = error.toString();
       });
     }
   }
+
+
+
 
   Future<void> _openEditProject() async {
     final updatedProject = await Navigator.of(context).push<Project>(
@@ -306,6 +270,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
     );
   }
 
+
+
   Future<void> _showStatusDialog(
     List<ProjectStatus> allowedStatuses,
   ) async {
@@ -346,6 +312,34 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
         title: Text(_project.projectCode),
         actions: [
           IconButton(
+            tooltip: 'Progress Dashboard',
+            icon: const Icon(Icons.query_stats),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProjectProgressDashboardScreen(
+                    projectId: _project.id,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Gantt Timeline',
+            icon: const Icon(Icons.view_timeline),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GanttTimelineScreen(
+                    tasks: _workTasks,
+                    projectName: _project.name,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'Project Phases',
             icon: const Icon(Icons.account_tree),
             onPressed: () {
@@ -355,6 +349,21 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
                     projectId: _project.id,
                     projectName: _project.name,
                     repository: ProjectPhaseRepository(),
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Daily Site Diary',
+            icon: const Icon(Icons.menu_book),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DailySiteDiaryListScreen(
+                    projectId: _project.id,
+                    projectName: _project.name,
+                    constructionSiteId: _project.constructionSiteId,
                   ),
                 ),
               );
@@ -389,9 +398,13 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
               ),
             _buildHeader(context),
             const SizedBox(height: 16),
-            _buildProgressCard(context),
+            _buildDailyDiaryCard(context),
             const SizedBox(height: 16),
-            _buildExecutionSummaryCard(context),
+            _buildStatusManagementCard(context),
+            const SizedBox(height: 16),
+            _buildProjectInformation(context),
+            const SizedBox(height: 16),
+            _buildDatesCard(context),
             const SizedBox(height: 16),
             _buildStatusManagementCard(context),
             const SizedBox(height: 16),
@@ -434,203 +447,92 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
     );
   }
 
-  Widget _buildProgressCard(BuildContext context) {
-    final progress =
-        (_project.progressPercentage / 100).clamp(0.0, 1.0);
 
+
+
+
+  Widget _buildDailyDiaryCard(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Progress',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 10,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  '${_project.progressPercentage.toStringAsFixed(1)}%',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  Widget _buildExecutionSummaryCard(BuildContext context) {
-    if (_phaseErrorMessage != null ||
-        _milestoneErrorMessage != null ||
-        _workTaskErrorMessage != null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Execution Summary',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              if (_phaseErrorMessage != null)
-                Text(
-                  'Unable to load phases.\n$_phaseErrorMessage',
-                ),
-              if (_milestoneErrorMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Unable to load milestones.\n'
-                      '$_milestoneErrorMessage',
-                ),
-              ],
-              if (_workTaskErrorMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Unable to load work tasks.\n'
-                      '$_workTaskErrorMessage',
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_isLoadingPhases ||
-        _isLoadingMilestones ||
-        _isLoadingWorkTasks) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Execution Summary',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final phaseCount = _phases.length;
-
-    final completedPhases = _phases
-        .where(
-          (phase) =>
-      phase.status == ProjectPhaseStatus.completed,
-    )
-        .length;
-
-    final milestoneCount = _milestones.length;
-
-    final completedMilestones = _milestones
-        .where((milestone) => milestone.isCompleted)
-        .length;
-
-    final taskCount = _workTasks.length;
-
-    final completedTasks = _workTasks
-        .where(
-          (task) => task.status == WorkTaskStatus.completed,
-    )
-        .length;
-
-    final taskProgress = taskCount == 0
-        ? 0.0
-        : _workTasks
-        .map((task) => task.progressPercentage)
-        .reduce((a, b) => a + b) /
-        taskCount;
-
-    final milestoneProgress = milestoneCount == 0
-        ? 0.0
-        : completedMilestones / milestoneCount * 100;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Execution Summary',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _InfoRow(
-              label: 'Phases',
-              value:
-              '$phaseCount total • $completedPhases completed',
-            ),
-            _InfoRow(
-              label: 'Milestones',
-              value:
-              '$milestoneCount total • '
-                  '$completedMilestones completed',
-            ),
-            _InfoRow(
-              label: 'Work tasks',
-              value:
-              '$taskCount total • $completedTasks completed',
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Task progress',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value: (taskProgress / 100).clamp(0.0, 1.0),
-                    minHeight: 8,
-                  ),
+                const Icon(
+                  Icons.menu_book,
+                  color: Colors.indigo,
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  '${taskProgress.toStringAsFixed(1)}%',
+                  'Daily Site Diary',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Milestone completion',
-              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Row(
+            const Text(
+              'Record weather, manpower, work completed, safety notes and visitor log.',
+            ),
+            const SizedBox(height: 16),
+            Column(
               children: [
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value:
-                    (milestoneProgress / 100).clamp(0.0, 1.0),
-                    minHeight: 8,
-                  ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.menu_book),
+                  label: const Text('Open Daily Site Diary'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DailySiteDiaryListScreen(
+                          projectId: _project.id,
+                          projectName: _project.name,
+                          constructionSiteId: _project.constructionSiteId,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  '${milestoneProgress.toStringAsFixed(1)}%',
+
+                const SizedBox(height: 12),
+
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.fact_check),
+                  label: const Text('Daily Progress Report'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DailyProgressListScreen(
+                          projectId: _project.id,
+                          projectName: _project.name,
+                          repository: _dailyRepository,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                OutlinedButton.icon(
+                  icon: const Icon(
+                    Icons.warning_amber,
+                    color: Colors.orange,
+                  ),
+                  label: const Text('Project Delays & Issues'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ProjectDelayListScreen(
+                          projectId: widget.project.id,
+                          projectName: widget.project.name,
+                          siteId: widget.project.constructionSiteId,
+                        )
+                      ),
+                    );
+                  },
                 ),
               ],
-            ),
+            )
           ],
         ),
       ),
@@ -654,16 +556,18 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
               value: _project.projectCode,
             ),
             _InfoRow(
-              label: 'Company ID',
-              value: _project.companyId,
+              label: 'Company',
+              value: _project.companyName,
             ),
+
             _InfoRow(
-              label: 'Construction site ID',
-              value: _project.constructionSiteId,
+              label: 'Construction Site',
+              value: _project.constructionSiteName,
             ),
+
             _InfoRow(
-              label: 'Contract value',
-              value: _project.contractValue.toStringAsFixed(2),
+              label: 'Contract Value',
+              value: money(_project.contractValue),
             ),
             _InfoRow(
               label: 'Status',
@@ -823,6 +727,7 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
+
 
 
 

@@ -1,7 +1,7 @@
 namespace CSM.Application.Finance.Expenses.Dtos;
 
 public sealed record UpdateExpenseRequest(
-    Guid ConstructionSiteId,
+    Guid? ConstructionSiteId,
     Guid? ProjectId,
     Guid CostCodeId,
     Guid? VendorId,

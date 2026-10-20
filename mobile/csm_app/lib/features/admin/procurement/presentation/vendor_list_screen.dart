@@ -4,6 +4,10 @@ import '../data/models/vendor.dart';
 import '../data/repositories/vendor_repository.dart';
 import 'vendor_create_screen.dart';
 import 'vendor_detail_screen.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
 
 class VendorListScreen extends StatefulWidget {
   const VendorListScreen({
@@ -202,6 +206,91 @@ class _VendorListScreenState
       );
     }
 
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _VendorKpiCard(
+                  title: 'Vendors',
+                  value: '${_vendors.length}',
+                  icon: Icons.business,
+                  color: Colors.blue,
+                ),
+                _VendorKpiCard(
+                  title: 'Active',
+                  value: '$_activeCount',
+                  icon: Icons.check_circle,
+                  color: Colors.green,
+                ),
+                _VendorKpiCard(
+                  title: 'Cities',
+                  value: '$_cityCount',
+                  icon: Icons.location_city,
+                  color: Colors.orange,
+                ),
+                _VendorKpiCard(
+                  title: 'Countries',
+                  value: '$_countryCount',
+                  icon: Icons.public,
+                  color: Colors.purple,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'Vendor',
+                  value: (r) => r['name'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Code',
+                  value: (r) => r['code'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Contact',
+                  value: (r) => r['contact'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Phone',
+                  value: (r) => r['phone'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Status',
+                  value: (r) => r['status'] as String,
+                ),
+              ],
+              rows: _vendors.map((v) {
+                return {
+                  'item': v,
+                  'name': v.name,
+                  'code': v.vendorCode,
+                  'contact': v.contactPerson ?? '',
+                  'phone': v.phoneNumber ?? '',
+                  'status': v.isActive ? 'Active' : 'Inactive',
+                };
+              }).toList(),
+              onRowTap: (row) {
+                final vendor = row['item'] as Vendor;
+                _openDetailScreen(vendor);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _vendors.length,
@@ -215,6 +304,14 @@ class _VendorListScreenState
       },
     );
   }
+
+  int get _activeCount =>
+      _vendors.where((e) => e.isActive).length;
+
+
+
+  int get _cityCount => 0;
+  int get _countryCount => 0;
 }
 
 class _VendorCard extends StatelessWidget {
@@ -323,6 +420,45 @@ class _InfoRow extends StatelessWidget {
             child: Text(value),
           ),
         ],
+      ),
+    );
+  }
+}
+class _VendorKpiCard extends StatelessWidget {
+  const _VendorKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(title),
+          ],
+        ),
       ),
     );
   }

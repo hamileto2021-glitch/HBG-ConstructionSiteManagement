@@ -8,6 +8,11 @@ public interface IExpenseService
         Guid currentUserId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<ExpenseResponse>> GetBySiteAsync(
+        Guid currentUserId,
+        Guid constructionSiteId,
+        CancellationToken cancellationToken = default);
+
     Task<ExpenseResponse> GetByIdAsync(
         Guid currentUserId,
         Guid expenseId,

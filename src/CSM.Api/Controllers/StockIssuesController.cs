@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class StockIssuesController : ControllerBase
 {
     private readonly IStockIssueService _stockIssueService;
@@ -21,37 +21,85 @@ public sealed class StockIssuesController : ControllerBase
         _stockIssueService = stockIssueService;
     }
 
+    // GET: api/StockIssues
+    [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyCollection<StockIssueResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stockIssueService.GetAllAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (StockIssueManagementException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+    // GET: api/StockIssues/{stockMovementId}
+    [HttpGet("{stockMovementId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<StockIssueResponse>> GetById(
+        Guid stockMovementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stockIssueService.GetByIdAsync(
+                GetCurrentUserId(),
+                stockMovementId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (StockIssueManagementException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
+    // POST: api/StockIssues
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<StockIssueResponse>> Create(
         [FromBody] CreateStockIssueRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
-            var result =
-                await _stockIssueService.CreateAsync(
-                    GetCurrentUserId(),
-                    request,
-                    cancellationToken);
+            var result = await _stockIssueService.CreateAsync(
+                GetCurrentUserId(),
+                request,
+                cancellationToken);
 
             return Ok(result);
         }
         catch (StockIssueManagementException ex)
         {
-            return BadRequest(
-                new { message = ex.Message });
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
         }
     }
 
     private Guid GetCurrentUserId()
     {
-        var value =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
+        var value = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
 
-        if (!Guid.TryParse(
-                value,
-                out var userId))
+        if (!Guid.TryParse(value, out var userId))
         {
             throw new UnauthorizedAccessException(
                 "Authenticated user identifier is invalid.");

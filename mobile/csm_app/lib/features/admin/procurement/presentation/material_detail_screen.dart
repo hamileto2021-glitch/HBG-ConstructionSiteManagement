@@ -2,6 +2,8 @@ import 'package:flutter/material.dart' hide Material, MaterialType;
 
 import '../data/models/material.dart';
 import '../data/repositories/material_repository.dart';
+import '../data/models/material_lookup.dart';
+
 
 class MaterialDetailScreen extends StatefulWidget {
   const MaterialDetailScreen({
@@ -26,7 +28,8 @@ class _MaterialDetailScreenState
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _categoryController = TextEditingController();
-  final _unitOfMeasureController = TextEditingController();
+  String? _selectedUnitOfMeasure;
+  List<MaterialLookup> _unitLookups = <MaterialLookup>[];
   final _defaultCostCodeIdController = TextEditingController();
   final _standardUnitCostController = TextEditingController();
 
@@ -49,7 +52,7 @@ class _MaterialDetailScreenState
     _nameController.dispose();
     _descriptionController.dispose();
     _categoryController.dispose();
-    _unitOfMeasureController.dispose();
+
     _defaultCostCodeIdController.dispose();
     _standardUnitCostController.dispose();
     super.dispose();
@@ -62,10 +65,13 @@ class _MaterialDetailScreenState
     });
 
     try {
-      final material =
-          await widget.repository.getById(
-        widget.materialId,
-      );
+      final results = await Future.wait([
+        widget.repository.getById(widget.materialId),
+        widget.repository.getUnits(),
+      ]);
+
+      final material = results[0] as Material;
+      final units = results[1] as List<MaterialLookup>;
 
       if (!mounted) {
         return;
@@ -78,8 +84,8 @@ class _MaterialDetailScreenState
       _descriptionController.text =
           material.description ?? '';
       _categoryController.text = material.category;
-      _unitOfMeasureController.text =
-          material.unitOfMeasure;
+      _unitLookups = units;
+      _selectedUnitOfMeasure = material.unitOfMeasure;
       _defaultCostCodeIdController.text =
           material.defaultCostCodeId ?? '';
       _standardUnitCostController.text =
@@ -137,8 +143,7 @@ class _MaterialDetailScreenState
                 : _descriptionController.text.trim(),
         category:
             _categoryController.text.trim(),
-        unitOfMeasure:
-            _unitOfMeasureController.text.trim(),
+        unitOfMeasure: _selectedUnitOfMeasure!,
         materialType: _materialType,
         defaultCostCodeId:
             _defaultCostCodeIdController.text
@@ -271,13 +276,31 @@ class _MaterialDetailScreenState
             validator: _requiredValidator,
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _unitOfMeasureController,
+          DropdownButtonFormField<String>(
+            initialValue: _selectedUnitOfMeasure,
             decoration: const InputDecoration(
               labelText: 'Unit of Measure',
               border: OutlineInputBorder(),
             ),
-            validator: _requiredValidator,
+            items: _unitLookups.map((MaterialLookup lookup) {
+              return DropdownMenuItem<String>(
+                value: lookup.name,
+                child: Text(lookup.name),
+              );
+            }).toList(),
+            onChanged: _isSaving
+                ? null
+                : (value) {
+              setState(() {
+                _selectedUnitOfMeasure = value;
+              });
+            },
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Unit of Measure is required.';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 16),
             DropdownButtonFormField<MaterialType>(

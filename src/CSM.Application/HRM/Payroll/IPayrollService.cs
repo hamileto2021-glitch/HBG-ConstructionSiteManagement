@@ -50,4 +50,9 @@ public interface IPayrollService
         Guid payrollRecordId,
         CreatePayrollAdjustmentRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<byte[]> GeneratePayslipAsync(
+        Guid currentUserId,
+        Guid payrollRecordId,
+        CancellationToken cancellationToken = default);
 }

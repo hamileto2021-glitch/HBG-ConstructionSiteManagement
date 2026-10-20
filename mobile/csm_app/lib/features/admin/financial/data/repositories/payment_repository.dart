@@ -1,38 +1,49 @@
 import '../../../../../core/network/api_client.dart';
 import '../models/payment.dart';
+import 'package:flutter/foundation.dart';
 
 class PaymentRepository {
-  PaymentRepository({
-    ApiClient? apiClient,
-  }) : _apiClient = apiClient ?? ApiClient();
+  final ApiClient _api = ApiClient();
 
-  final ApiClient _apiClient;
+
 
   Future<List<Payment>> getAll() async {
-    final response = await _apiClient.getList(
-      '/Payments',
-    );
+    final dynamic response = await _api.getValue('/payments');
 
-    return response
-        .map(
-          (item) => Payment.fromJson(
-        item as Map<String, dynamic>,
-      ),
-    )
-        .toList();
+    debugPrint('===== PAYMENTS API =====');
+    debugPrint('TYPE: ${response.runtimeType}');
+    debugPrint(response.toString());
+    debugPrint('========================');
+
+    if (response is List) {
+      return response
+          .map((e) => Payment.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+
+    if (response is Map<String, dynamic>) {
+      final items = response['data'] ?? response['items'] ?? response['value'];
+
+      if (items is List) {
+        return items
+            .map((e) => Payment.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    }
+
+    throw Exception(
+      'The server returned an unexpected response format.',
+    );
+  }
+  Future<Payment> getById(String id) async {
+    final data = await _api.get('/payments/$id');
+
+    return Payment.fromJson(data);
   }
 
-  Future<Payment> getById(
-      String paymentId,
-      ) async {
-    final response = await _apiClient.get(
-      '/Payments/$paymentId',
-    );
-
-    return Payment.fromJson(response);
-  }
-
-  Future<Payment> create({
+  Future<void> create({
+    required String constructionSiteId,
+    String? projectId,
     String? invoiceId,
     String? vendorId,
     required String paymentNumber,
@@ -45,9 +56,11 @@ class PaymentRepository {
     String? referenceNumber,
     String? notes,
   }) async {
-    final response = await _apiClient.post(
-      '/Payments',
-      body: <String, dynamic>{
+    await _api.post(
+      '/payments',
+      body: {
+        'constructionSiteId': constructionSiteId,
+        'projectId': projectId,
         'invoiceId': invoiceId,
         'vendorId': vendorId,
         'paymentNumber': paymentNumber,
@@ -62,12 +75,12 @@ class PaymentRepository {
         'notes': notes,
       },
     );
-
-    return Payment.fromJson(response);
   }
 
-  Future<Payment> update({
+  Future<void> update({
     required String paymentId,
+    required String constructionSiteId,
+    String? projectId,
     String? invoiceId,
     String? vendorId,
     required DateTime paymentDate,
@@ -79,9 +92,11 @@ class PaymentRepository {
     String? referenceNumber,
     String? notes,
   }) async {
-    final response = await _apiClient.put(
-      '/Payments/$paymentId',
-      body: <String, dynamic>{
+    await _api.put(
+      '/payments/$paymentId',
+      body: {
+        'constructionSiteId': constructionSiteId,
+        'projectId': projectId,
         'invoiceId': invoiceId,
         'vendorId': vendorId,
         'paymentDate':
@@ -95,21 +110,19 @@ class PaymentRepository {
         'notes': notes,
       },
     );
-
-    return Payment.fromJson(response);
   }
 
   Future<Payment> changeStatus({
     required String paymentId,
     required PaymentStatus status,
   }) async {
-    final response = await _apiClient.put(
-      '/Payments/$paymentId/status',
-      body: <String, dynamic>{
+    final data = await _api.patch(
+      '/payments/$paymentId/status',
+      body: {
         'status': status.apiValue,
       },
     );
 
-    return Payment.fromJson(response);
+    return Payment.fromJson(data);
   }
 }

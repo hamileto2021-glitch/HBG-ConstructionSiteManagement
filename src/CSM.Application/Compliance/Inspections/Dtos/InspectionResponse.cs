@@ -18,6 +18,8 @@ public sealed class InspectionResponse
 
     public string Title { get; set; } = string.Empty;
 
+    public string ConstructionSiteName { get; set; } = string.Empty;
+
     public DateTime ScheduledAtUtc { get; set; }
 
     public DateTime? StartedAtUtc { get; set; }

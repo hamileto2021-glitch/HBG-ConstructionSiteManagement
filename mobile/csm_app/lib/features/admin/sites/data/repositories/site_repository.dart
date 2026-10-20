@@ -1,6 +1,7 @@
 import '../../../../../core/network/api_client.dart';
 import '../../../../../core/storage/secure_storage_service.dart';
 import '../models/site.dart';
+import 'package:flutter/foundation.dart';
 
 class SiteRepository {
   SiteRepository({
@@ -14,6 +15,8 @@ class SiteRepository {
 
   Future<List<Site>> getAll() async {
     final response = await _apiClient.getList('/Sites');
+
+    debugPrint('Sites API: $response');
 
     return response
         .map((e) => Site.fromJson(e as Map<String, dynamic>))

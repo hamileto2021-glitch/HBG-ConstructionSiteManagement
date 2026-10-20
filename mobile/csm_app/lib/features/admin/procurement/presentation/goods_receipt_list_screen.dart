@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import '../data/models/goods_receipt.dart';
 import '../data/repositories/goods_receipt_repository.dart';
 import 'goods_receipt_detail_screen.dart';
+import 'goods_receipt_create_screen.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
+
 
 class GoodsReceiptListScreen extends StatefulWidget {
   const GoodsReceiptListScreen({super.key, required this.repository});
@@ -79,6 +85,25 @@ class _GoodsReceiptListScreenState extends State<GoodsReceiptListScreen> {
           ),
         ],
       ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('Create'),
+        onPressed: () async {
+          final created = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => GoodsReceiptCreateScreen(
+                repository: widget.repository,
+              ),
+            ),
+          );
+
+          if (created == true) {
+            _loadReceipts();
+          }
+        },
+      ),
+
       body: RefreshIndicator(
         onRefresh: _loadReceipts,
         child: _buildBody(context),
@@ -132,6 +157,102 @@ class _GoodsReceiptListScreenState extends State<GoodsReceiptListScreen> {
       );
     }
 
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _GoodsReceiptKpiCard(
+                  title: 'Receipts',
+                  value: '${_receipts.length}',
+                  icon: Icons.inventory_2,
+                  color: Colors.blue,
+                ),
+                _GoodsReceiptKpiCard(
+                  title: 'Today',
+                  value: '$_todayCount',
+                  icon: Icons.today,
+                  color: Colors.green,
+                ),
+                _GoodsReceiptKpiCard(
+                  title: 'Pending DN',
+                  value: '$_pendingInspectionCount',
+                  icon: Icons.assignment_late,
+                  color: Colors.orange,
+                ),
+                _GoodsReceiptKpiCard(
+                  title: 'Total Lines',
+                  value: '$_totalLines',
+                  icon: Icons.list_alt,
+                  color: Colors.deepPurple,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'Receipt',
+                  value: (r) => r['receipt'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'PO',
+                  value: (r) => r['po'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Site',
+                  value: (r) => r['site'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Received',
+                  value: (r) => r['received'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Lines',
+                  value: (r) => r['lines'] as String,
+                  numeric: true,
+                ),
+              ],
+              rows: _receipts.map((gr) {
+                return {
+                  'item': gr,
+                  'receipt': gr.receiptNumber,
+                  'po': gr.purchaseOrderNumber,
+                  'site': gr.siteName,
+                  'received': _formatDate(gr.receivedAtUtc),
+                  'lines': gr.lines.length.toString(),
+                };
+              }).toList(),
+              onRowTap: (row) async {
+                final receipt = row['item'] as GoodsReceipt;
+
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GoodsReceiptDetailScreen(
+                      repository: widget.repository,
+                      goodsReceiptId: receipt.id,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _receipts.length,
@@ -142,7 +263,8 @@ class _GoodsReceiptListScreenState extends State<GoodsReceiptListScreen> {
           receipt: receipt,
           receivedAt: _formatDate(receipt.receivedAtUtc),
           onTap: () async {
-            await Navigator.of(context).push(
+            await Navigator.push(
+              context,
               MaterialPageRoute(
                 builder: (_) => GoodsReceiptDetailScreen(
                   repository: widget.repository,
@@ -155,6 +277,27 @@ class _GoodsReceiptListScreenState extends State<GoodsReceiptListScreen> {
       },
     );
   }
+
+  int get _todayCount {
+    final today = DateTime.now();
+
+    return _receipts.where((r) {
+      final d = r.receivedAtUtc.toLocal();
+
+      return d.year == today.year &&
+          d.month == today.month &&
+          d.day == today.day;
+    }).length;
+  }
+
+  int get _pendingInspectionCount => _receipts
+      .where((r) => r.deliveryNoteNumber == null)
+      .length;
+
+  int get _totalLines => _receipts.fold(
+    0,
+        (sum, r) => sum + r.lines.length,
+  );
 }
 
 class _GoodsReceiptCard extends StatelessWidget {
@@ -230,6 +373,46 @@ class _GoodsReceiptCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoodsReceiptKpiCard extends StatelessWidget {
+  const _GoodsReceiptKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(title),
+          ],
         ),
       ),
     );

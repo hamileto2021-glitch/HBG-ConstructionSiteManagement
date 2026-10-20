@@ -1,0 +1,369 @@
+﻿@inject CSM.Web.Services.INotificationApiService NotificationService
+@inject CSM.Web.Services.IAuthService AuthService
+@inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Components.Routing
+@using System.Linq
+@implements IDisposable
+
+<div class="nav-backdrop @(_navOpen ? "show" : "")" @onclick="CloseNav"></div>
+
+<div class="sidebar @(_navOpen ? "nav-open" : "")">
+
+    <!-- Header -->
+    <div class="top-row ps-3 navbar navbar-dark">
+        <div class="container-fluid d-flex align-items-center justify-content-between">
+            <span class="navbar-brand fw-bold">HBG CSM</span>
+
+            <button class="navbar-toggler"
+                    type="button"
+                    @onclick="ToggleNav"
+                    aria-label="Toggle navigation"
+                    aria-expanded="@_navOpen">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Scrollable Menu -->
+    <div class="nav-scrollable" @onclick="CloseNav">
+
+        <nav class="@(_permissionsLoaded ? "" : "nav-loading")">
+
+            <div class="section-title">
+                Construction Management
+            </div>
+
+            <!-- Dashboard -->
+            <div class="nav-item">
+                <NavLink class="nav-link"
+                         href="/dashboard"
+                         Match="NavLinkMatch.All">
+                    <span class="bi bi-speedometer2-nav-menu"></span>
+                    <span>Dashboard</span>
+                </NavLink>
+            </div>
+
+            <!-- Project Tracking -->
+            @if (HasPermission("Projects_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link"
+                             href="/project-tracking"
+                             Match="NavLinkMatch.All">
+                        <span class="bi bi-kanban-nav-menu"></span>
+                        <span>Project Tracking</span>
+                    </NavLink>
+                </div>
+            }
+
+            <!-- Procurement -->
+           @if (!_isSupervisor &&
+                (HasPermission("Procurement_MaterialRequest_View") ||
+                 HasPermission("Procurement_PurchaseOrder_View")))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/procurement">
+                        <span class="bi bi-box-seam-nav-menu"></span>
+                        <span>Procurement</span>
+                    </NavLink>
+                </div>
+            }
+
+            <!-- Inventory -->
+            @if (HasPermission("Procurement_Inventory_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/inventory">
+                        <span class="bi bi-box-seam-nav-menu"></span>
+                        <span>Inventory</span>
+                    </NavLink>
+                </div>
+            }
+
+            <!-- Equipment -->
+           @if (!_isSupervisor &&
+                HasPermission("Procurement_Inventory_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/equipment">
+                        <span class="bi bi-truck-nav-menu"></span>
+                        <span>Equipment</span>
+                    </NavLink>
+                </div>
+            }
+
+            <!-- Administration -->
+            <hr class="my-2" />
+
+            <div class="section-title">
+                Administration
+            </div>
+
+            @if (HasPermission("Users_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/users">
+                        <span class="bi bi-people-nav-menu"></span>
+                        <span>Users</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Users_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/roles">
+                        <span class="bi bi-shield-lock-nav-menu"></span>
+                        <span>Role Permissions</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Users_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/users/audit">
+                        <span class="bi bi-clock-history-nav-menu"></span>
+                        <span>User Audit</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("HRM_Employee_View") ||
+                 HasPermission("HRM_Contractor_View") ||
+                 HasPermission("HRM_Payroll_View") ||
+                 HasPermission("HRM_Attendance_View") ||
+                 HasPermission("HRM_Leave_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/hr">
+                        <span class="bi bi-person-badge-nav-menu"></span>
+                        <span>HR Management</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Finance_Budget_View") ||
+                 HasPermission("Finance_Expense_View") ||
+                 HasPermission("Finance_Invoice_View") ||
+                 HasPermission("Finance_Payment_View") ||
+                 HasPermission("Finance_PettyCash_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link"
+                             href="/finance/sites"
+                             Match="NavLinkMatch.Prefix">
+                        <span class="bi bi-wallet2-nav-menu"></span>
+                        <span>Finance</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Compliance_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/compliance">
+                        <span class="bi bi-shield-check-nav-menu"></span>
+                        <span>Compliance</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Reports_View") ||
+                 HasPermission("Reports_FinancialSummary_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/reports">
+                        <span class="bi bi-bar-chart-nav-menu"></span>
+                        <span>Reports</span>
+                    </NavLink>
+                </div>
+            }
+
+            @if (HasPermission("Notifications_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="/notifications">
+                        <span class="bi bi-bell-nav-menu"></span>
+                        <span>Notifications</span>
+
+                        @if (_unreadNotificationCount > 0)
+                        {
+                            <span class="badge bg-danger ms-2">
+                                @_unreadNotificationCount
+                            </span>
+                        }
+                    </NavLink>
+                </div>
+            }
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/settings">
+                    <span class="bi bi-gear-nav-menu"></span>
+                    <span>Settings & Privacy</span>
+                </NavLink>
+            </div>
+
+        </nav>
+
+    </div>
+
+    <!-- Sign Out -->
+    <div class="signout">
+        <button type="button" class="nav-link signout-btn" @onclick="SignOutAsync" disabled="@_signingOut">
+            <span class="bi bi-box-arrow-right-nav-menu"></span>
+            <span>@(_signingOut ? "Signing out..." : "Sign Out")</span>
+        </button>
+    </div>
+
+</div>
+
+@code
+{
+    private int _unreadNotificationCount;
+    private bool _navOpen;
+    private bool _permissionsLoaded;
+    private bool _roleCheckCompleted;
+    private bool _isSupervisor;
+    private bool _signingOut;
+
+
+    private IReadOnlyCollection<string> _permissions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _unreadNotificationCount =
+                await NotificationService.GetUnreadCountAsync();
+        }
+        catch
+        {
+            _unreadNotificationCount = 0;
+        }
+
+        try
+        {
+            _permissions = await AuthService.GetPermissionsAsync();
+
+        }
+        finally
+        {
+            _permissionsLoaded = true;
+        }
+
+        NavigationManager.LocationChanged += OnLocationChanged;
+        _ = RefreshLoopAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _roleCheckCompleted)
+            return;
+
+        _roleCheckCompleted = true;
+
+        try
+        {
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+
+            _isSupervisor = userScope.Roles.Any(role =>
+                string.Equals(
+                    role,
+                    "Supervisor",
+                    StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            _isSupervisor = false;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Re-check the unread count after every page change, and every 30 seconds
+    // in between, so the bell shows new notifications without a reload.
+    private readonly CancellationTokenSource _cts = new();
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _ = RefreshUnreadCountAsync();
+    }
+
+    private async Task RefreshLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await RefreshUnreadCountAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Menu is going away.
+        }
+    }
+
+    private async Task RefreshUnreadCountAsync()
+    {
+        try
+        {
+            var count = await NotificationService.GetUnreadCountAsync();
+
+            if (count != _unreadNotificationCount)
+            {
+                _unreadNotificationCount = count;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch
+        {
+            // Keep the last known count and try again on the next tick.
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private bool HasPermission(string permission)
+    {
+        return _permissions.Contains(permission);
+    }
+
+    private void ToggleNav()
+    {
+        _navOpen = !_navOpen;
+    }
+
+    private void CloseNav()
+    {
+        _navOpen = false;
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (_signingOut)
+        {
+            return;
+        }
+
+        _signingOut = true;
+
+        try
+        {
+            await AuthService.LogoutAsync();
+        }
+        finally
+        {
+            _signingOut = false;
+            NavigationManager.NavigateTo("/login", forceLoad: true);
+        }
+    }
+}

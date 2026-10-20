@@ -220,12 +220,10 @@ class _ProjectCreateScreenState extends State<ProjectCreateScreen> {
               items: _sites
                   .map(
                     (site) => DropdownMenuItem<Site>(
-                      value: site,
-                      child: Text(
-                        ' — ',
-                      ),
-                    ),
-                  )
+                  value: site,
+                  child: Text(site.name),
+                ),
+              )
                   .toList(),
               onChanged: _isSaving || _isLoadingSites
                   ? null

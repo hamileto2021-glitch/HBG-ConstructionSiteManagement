@@ -1,5 +1,9 @@
 import '../../../../../core/network/api_client.dart';
 import '../models/payroll.dart';
+import '../../../payroll/data/models/payroll_calculation.dart';
+import 'dart:typed_data';
+
+
 
 class PayrollRepository {
   PayrollRepository({
@@ -66,6 +70,28 @@ class PayrollRepository {
     return Payroll.fromJson(response);
   }
 
+  Future<PayrollCalculation> calculatePayroll({
+    required String employeeId,
+    required double overtimeHours,
+    required int workingDays,
+    double? pensionDeduction,
+    double? taxDeduction,
+    double? otherDeduction,
+  }) async {
+    final response = await _apiClient.post(
+      '/payroll/calculations',
+      body: {
+        'employeeId': employeeId,
+        'overtimeHours': overtimeHours,
+        'workingDays': workingDays,
+        'pensionDeduction': pensionDeduction,
+        'taxDeduction': taxDeduction,
+        'otherDeduction': otherDeduction,
+      },
+    );
+
+    return PayrollCalculation.fromJson(response);
+  }
   Future<Payroll> calculate({
     required String payrollId,
     required double overtimeMultiplier,
@@ -77,7 +103,7 @@ class PayrollRepository {
   }) async {
     final response = await _apiClient.put(
       '/Payroll/$payrollId/calculate',
-      body: <String, dynamic>{
+      body: {
         'overtimeMultiplier': overtimeMultiplier,
         'allowances': allowances,
         'bonuses': bonuses,
@@ -139,6 +165,7 @@ class PayrollRepository {
     required double amount,
     required bool isDeduction,
   }) async {
+
     final response = await _apiClient.post(
       '/Payroll/$payrollId/adjustments',
       body: <String, dynamic>{
@@ -151,8 +178,15 @@ class PayrollRepository {
 
     return Payroll.fromJson(response);
   }
+  Future<Uint8List> downloadPayslip(String payrollId) async {
+    return await _apiClient.getBytes(
+      '/Payroll/$payrollId/payslip',
+    );
+  }
 
   String _dateOnly(DateTime date) {
     return date.toIso8601String().split('T').first;
   }
+
+
 }

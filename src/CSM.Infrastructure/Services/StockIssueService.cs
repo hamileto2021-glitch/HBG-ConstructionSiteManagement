@@ -7,17 +7,110 @@ using CSM.Domain.Entities.Procurement;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CSM.Application.Notifications;
 
 namespace CSM.Infrastructure.Services;
 
 public sealed class StockIssueService : IStockIssueService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly ILowStockNotificationService _lowStockNotificationService;
 
     public StockIssueService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        ILowStockNotificationService lowStockNotificationService)
     {
         _dbContext = dbContext;
+        _lowStockNotificationService = lowStockNotificationService;
+    }
+
+    public async Task<IReadOnlyCollection<StockIssueResponse>> GetAllAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanRead(actor);
+
+        var query = _dbContext.StockMovements
+            .AsNoTracking()
+            .Where(x => x.MovementType == StockMovementType.Issue)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .AsQueryable();
+
+        if (!IsSuperAdmin(actor))
+        {
+            var companyId = GetActorCompanyId(actor);
+
+            query = query.Where(x => x.CompanyId == companyId);
+        }
+
+        if (HasRole(actor, AppRoles.SiteManager))
+        {
+            var activeSiteIds = await _dbContext.UserSiteAccesses
+                .Where(access =>
+                    access.UserId == actor.Id &&
+                    access.CompanyId == actor.CompanyId &&
+                    access.IsActive)
+                .Select(access => access.SiteId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (activeSiteIds.Count > 0)
+            {
+                query = query.Where(
+                    x => activeSiteIds.Contains(
+                        x.StockItem.ConstructionSiteId));
+            }
+        }
+
+        var records = await query
+            .OrderByDescending(x => x.MovementDateUtc)
+            .ToListAsync(cancellationToken);
+
+        return records.Select(Map).ToList();
+    }
+
+    public async Task<StockIssueResponse> GetByIdAsync(
+        Guid currentUserId,
+        Guid stockMovementId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanManage(actor);
+
+        var query = _dbContext.StockMovements
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == stockMovementId &&
+                x.MovementType == StockMovementType.Issue)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .AsQueryable();
+
+        if (!IsSuperAdmin(actor))
+        {
+            var companyId = GetActorCompanyId(actor);
+
+            query = query.Where(x => x.CompanyId == companyId);
+        }
+
+        var movement = await query.SingleOrDefaultAsync(cancellationToken)
+            ?? throw new StockIssueManagementException("Stock issue was not found.");
+
+        await EnsureSiteAccessAsync(
+            actor,
+            movement.StockItem.ConstructionSiteId,
+            cancellationToken);
+
+        return Map(movement);
+
     }
 
     public async Task<StockIssueResponse> CreateAsync(
@@ -44,6 +137,11 @@ public sealed class StockIssueService : IStockIssueService
         EnsureCompanyAccess(
             actor,
             site.CompanyId);
+
+        await EnsureSiteAccessAsync(
+            actor,
+            site.Id,
+            cancellationToken);
 
         var material = await _dbContext.Materials
             .AsNoTracking()
@@ -133,48 +231,40 @@ public sealed class StockIssueService : IStockIssueService
                     quantityAfter =
                         stockItem.QuantityOnHand;
 
-                    var movement =
-                        new StockMovement
-                        {
-                            CompanyId =
-                                stockItem.CompanyId,
+                    var movement = new StockMovement
+                    {
+                        CompanyId = stockItem.CompanyId,
+                        StockItemId = stockItem.Id,
 
-                            StockItemId =
-                                stockItem.Id,
+                        MovementType = StockMovementType.Issue,
+                        MovementDateUtc = request.IssueDateUtc,
 
-                            MovementType =
-                                StockMovementType.Issue,
+                        Quantity = request.Quantity,
 
-                            MovementDateUtc =
-                                request.IssueDateUtc,
+                        // Save audit balances
+                        StockBalanceBefore = quantityBefore,
+                        StockBalanceAfter = quantityAfter,
 
-                            Quantity =
-                                request.Quantity,
+                        UnitCost = unitCost,
 
-                            UnitCost =
-                                unitCost,
+                        ReferenceType = "StockIssue",
+                        ReferenceNumber = normalizedReferenceNumber,
 
-                            ReferenceType =
-                                "StockIssue",
+                        Remarks = BuildRemarks(request)
+                    };
 
-                            ReferenceNumber =
-                                normalizedReferenceNumber,
+                    _dbContext.StockMovements.Add(movement);
 
-                            Remarks =
-                                BuildRemarks(request)
-                        };
+                    await _dbContext.SaveChangesAsync(cancellationToken);
 
-                    _dbContext.StockMovements.Add(
-                        movement);
-
-                    await _dbContext.SaveChangesAsync(
+                    await _lowStockNotificationService.NotifyIfLowStockAsync(
+                        stockItem.Id,
+                        currentUserId,
                         cancellationToken);
 
-                    stockMovementId =
-                        movement.Id;
+                    stockMovementId = movement.Id;
 
-                    await transaction.CommitAsync(
-                        cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
                 }
                 catch
                 {
@@ -243,6 +333,53 @@ public sealed class StockIssueService : IStockIssueService
 
             Remarks =
                 Clean(request.Remarks)
+        };
+    }
+
+    private static StockIssueResponse Map(StockMovement movement)
+    {
+        var remarks = movement.Remarks ?? string.Empty;
+
+        string? issuedTo = null;
+        string? purpose = null;
+        string? note = null;
+
+        foreach (var part in remarks.Split(" | ", StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("Issued To: "))
+            {
+                issuedTo = part["Issued To: ".Length..];
+            }
+            else if (part.StartsWith("Purpose: "))
+            {
+                purpose = part["Purpose: ".Length..];
+            }
+            else
+            {
+                note = part;
+            }
+        }
+
+        return new StockIssueResponse
+        {
+            StockMovementId = movement.Id,
+            StockItemId = movement.StockItemId,
+            ConstructionSiteId = movement.StockItem.ConstructionSiteId,
+            SiteName = movement.StockItem.ConstructionSite.Name,
+            MaterialId = movement.StockItem.MaterialId,
+            MaterialCode = movement.StockItem.Material.MaterialCode,
+            MaterialName = movement.StockItem.Material.Name,
+            UnitOfMeasure = movement.StockItem.Material.UnitOfMeasure,
+            QuantityIssued = movement.Quantity,
+            QuantityOnHandBefore = movement.StockBalanceBefore ?? 0m,
+            QuantityOnHandAfter  = movement.StockBalanceAfter ?? 0m,
+            UnitCost = movement.UnitCost ?? 0m,
+            TotalCost = movement.Quantity * (movement.UnitCost ?? 0m),
+            IssueDateUtc = movement.MovementDateUtc,
+            ReferenceNumber = movement.ReferenceNumber ?? string.Empty,
+            IssuedTo = issuedTo,
+            Purpose = purpose,
+            Remarks = note
         };
     }
 
@@ -315,16 +452,29 @@ public sealed class StockIssueService : IStockIssueService
         }
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanRead(User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(
-                actor,
-                AppRoles.CompanyAdmin) ||
-            HasRole(
-                actor,
-                AppRoles.SiteManager))
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.Supervisor))
+        {
+            return;
+        }
+
+        throw new StockIssueManagementException(
+            "You are not authorized to view stock issues.");
+    }
+
+    private static void EnsureCanManage(User actor)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }
@@ -350,6 +500,80 @@ public sealed class StockIssueService : IStockIssueService
         }
     }
 
+    private async Task EnsureSiteAccessAsync(
+        User actor,
+        Guid constructionSiteId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor))
+        {
+            return;
+        }
+
+        if (!actor.CompanyId.HasValue)
+        {
+            throw new StockIssueManagementException(
+                "Current user is not assigned to a company.");
+        }
+
+        var site = await _dbContext.ConstructionSites
+            .AsNoTracking()
+            .Where(x => x.Id == constructionSiteId)
+            .Select(x => new
+            {
+                x.Id,
+                x.CompanyId
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (site == null ||
+            site.CompanyId != actor.CompanyId.Value)
+        {
+            throw new StockIssueManagementException(
+                "You are not authorized to access this construction site.");
+        }
+
+        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            return;
+        }
+
+        if (HasRole(actor, AppRoles.SiteManager))
+        {
+            var hasActiveAssignments =
+                await _dbContext.UserSiteAccesses
+                    .AnyAsync(access =>
+                        access.UserId == actor.Id &&
+                        access.CompanyId == site.CompanyId &&
+                        access.IsActive,
+                        cancellationToken);
+
+            // Match the existing SiteService behavior.
+            if (!hasActiveAssignments)
+            {
+                return;
+            }
+
+            var hasSiteAccess =
+                await _dbContext.UserSiteAccesses
+                    .AnyAsync(access =>
+                        access.UserId == actor.Id &&
+                        access.CompanyId == site.CompanyId &&
+                        access.SiteId == site.Id &&
+                        access.IsActive,
+                        cancellationToken);
+
+            if (hasSiteAccess)
+            {
+                return;
+            }
+        }
+
+        throw new StockIssueManagementException(
+            "You are not assigned to this site.");
+    }
+
     private static Guid GetActorCompanyId(
         User actor)
     {
@@ -367,7 +591,7 @@ public sealed class StockIssueService : IStockIssueService
     {
         return HasRole(
             actor,
-            AppRoles.SuperAdmin);
+            AppRoles.Administrator);
     }
 
     private static bool HasRole(

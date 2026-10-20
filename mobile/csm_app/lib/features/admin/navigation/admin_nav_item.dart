@@ -10,8 +10,9 @@ enum AdminNavPolicy {
   financeManagement,
   procurementManagement,
   inventoryManagement,
-  reportManagement,
+  equipmentManagement,
   complianceManagement,
+  reportManagement,
 }
 
 class AdminNavItem {
@@ -72,6 +73,11 @@ class AdminNavItem {
       policy: AdminNavPolicy.inventoryManagement,
     ),
     AdminNavItem(
+      label: 'Equipment',
+      route: '/admin/equipment',
+      policy: AdminNavPolicy.equipmentManagement,
+    ),
+    AdminNavItem(
       label: 'Compliance',
       route: '/admin/compliance',
       policy: AdminNavPolicy.complianceManagement,
@@ -82,7 +88,6 @@ class AdminNavItem {
       policy: AdminNavPolicy.reportManagement,
     ),
   ];
-
 
   bool isAllowedBy(Set<String> roles) {
     switch (policy) {
@@ -129,20 +134,22 @@ class AdminNavItem {
           AppPolicies.procurementManagementRoles.contains,
         );
 
-      case AdminNavPolicy.reportManagement:
+      case AdminNavPolicy.equipmentManagement:
         return roles.any(
-          AppPolicies.projectManagementRoles.contains,
+          AppPolicies.equipmentManagementRoles.contains,
         );
+
       case AdminNavPolicy.complianceManagement:
         return roles.any(
-          AppPolicies.procurementManagementRoles.contains,
+          AppPolicies.complianceManagementRoles.contains,
         );
+
+      case AdminNavPolicy.reportManagement:
+        return true;
     }
   }
 
   static List<AdminNavItem> forRoles(Set<String> roles) {
-    return all.where(
-      (item) => item.isAllowedBy(roles),
-    ).toList();
+    return all.where((item) => item.isAllowedBy(roles)).toList();
   }
 }

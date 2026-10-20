@@ -8,4 +8,8 @@ public interface IStockAdjustmentService
         Guid currentUserId,
         CreateStockAdjustmentRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<List<StockAdjustmentResponse>> GetAllAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default);
 }

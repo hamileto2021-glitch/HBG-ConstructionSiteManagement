@@ -166,12 +166,19 @@ class _PhaseCard extends StatelessWidget {
 
   final ProjectPhase phase;
   final ProjectPhaseRepository repository;
+  String _dateRange(DateTime? start, DateTime? end) {
+    String format(DateTime? d) {
+      if (d == null) return '--';
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    }
+
+    return '${format(start)} → ${format(end)}';
+  }
 
 
   @override
   Widget build(BuildContext context) {
-    final progress =
-        (phase.progressPercentage / 100).clamp(0.0, 1.0);
+
 
       return Card(
         child: InkWell(
@@ -193,48 +200,77 @@ class _PhaseCard extends StatelessWidget {
             Row(
               children: [
                 CircleAvatar(
+                  radius: 24,
                   child: Text(
                     phase.sequence.toString(),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    phase.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        phase.phaseNumber,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      Text(
+                        phase.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
                   ),
                 ),
                 Chip(
-                  label: Text(
-                    _statusLabel(phase.status),
+                  label: Text(_statusLabel(phase.status)),
+                ),
+              ],
+            ),
+
+            if (phase.description != null &&
+                phase.description!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(phase.description!),
+            ],
+
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _dateRange(
+                      phase.plannedStartDate,
+                      phase.plannedEndDate,
+                    ),
                   ),
                 ),
               ],
             ),
-            if (phase.description != null &&
-                phase.description!.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(phase.description!),
-            ],
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 12),
+
             Row(
               children: [
                 Expanded(
                   child: LinearProgressIndicator(
-                    value: progress,
+                    value: (phase.progressPercentage / 100)
+                        .clamp(0.0, 1.0),
                     minHeight: 8,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Text(
-                  '${phase.progressPercentage.toStringAsFixed(1)}%',
+                  '${phase.progressPercentage.toStringAsFixed(0)}%',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
-                 ],
-               ),
+          ],
+        )
              ),
            ),
          );

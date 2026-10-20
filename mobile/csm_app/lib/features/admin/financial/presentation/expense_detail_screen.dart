@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/expense.dart';
+import '../data/models/cost_code.dart';
 import '../data/repositories/expense_repository.dart';
+import '../data/repositories/cost_code_repository.dart';
+import '../../procurement/data/models/vendor.dart';
+import '../../procurement/data/repositories/vendor_repository.dart';
+import '../../projects/data/models/project.dart';
+import '../../projects/data/repositories/project_repository.dart';
+import '../../sites/data/models/site.dart';
+import '../../sites/data/repositories/site_repository.dart';
 import 'expense_create_screen.dart';
 
 class ExpenseDetailScreen extends StatefulWidget {
@@ -9,10 +17,19 @@ class ExpenseDetailScreen extends StatefulWidget {
     super.key,
     required this.expense,
     required this.repository,
+    this.siteRepository,
+    this.projectRepository,
+    this.costCodeRepository,
+    this.vendorRepository,
   });
 
   final Expense expense;
   final ExpenseRepository repository;
+
+  final SiteRepository? siteRepository;
+  final ProjectRepository? projectRepository;
+  final CostCodeRepository? costCodeRepository;
+  final VendorRepository? vendorRepository;
 
   @override
   State<ExpenseDetailScreen> createState() =>
@@ -22,12 +39,115 @@ class ExpenseDetailScreen extends StatefulWidget {
 class _ExpenseDetailScreenState
     extends State<ExpenseDetailScreen> {
   late Expense _expense;
-  bool _isLoading = false;
+
+  late final SiteRepository _siteRepository;
+  late final ProjectRepository _projectRepository;
+  late final CostCodeRepository _costCodeRepository;
+  late final VendorRepository _vendorRepository;
+
+  Site? _site;
+  Project? _project;
+  CostCode? _costCode;
+  Vendor? _vendor;
+
+  bool _isLoading = true;
+  bool _isChangingStatus = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+
     _expense = widget.expense;
+
+    _siteRepository =
+        widget.siteRepository ?? SiteRepository();
+    _projectRepository =
+        widget.projectRepository ?? ProjectRepository();
+    _costCodeRepository =
+        widget.costCodeRepository ?? CostCodeRepository();
+    _vendorRepository =
+        widget.vendorRepository ?? VendorRepository();
+
+    _loadDetails();
+  }
+
+  Future<void> _loadDetails() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        widget.repository.getById(_expense.id),
+        _siteRepository.getAll(),
+        _projectRepository.getAll(),
+        _costCodeRepository.getAll(),
+        _vendorRepository.getAll(isActive: true),
+      ]);
+
+      final expense = results[0] as Expense;
+      final sites = results[1] as List<Site>;
+      final projects = results[2] as List<Project>;
+      final costCodes = results[3] as List<CostCode>;
+      final vendors = results[4] as List<Vendor>;
+
+      Site? site;
+      Project? project;
+      CostCode? costCode;
+      Vendor? vendor;
+
+      for (final item in sites) {
+        if (item.id == expense.constructionSiteId) {
+          site = item;
+          break;
+        }
+      }
+
+      if (expense.projectId != null) {
+        for (final item in projects) {
+          if (item.id == expense.projectId) {
+            project = item;
+            break;
+          }
+        }
+      }
+
+      for (final item in costCodes) {
+        if (item.id == expense.costCodeId) {
+          costCode = item;
+          break;
+        }
+      }
+
+      if (expense.vendorId != null) {
+        for (final item in vendors) {
+          if (item.id == expense.vendorId) {
+            vendor = item;
+            break;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _expense = expense;
+        _site = site;
+        _project = project;
+        _costCode = costCode;
+        _vendor = vendor;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString();
+      });
+    }
   }
 
   List<ExpenseStatus> _availableTransitions() {
@@ -37,19 +157,25 @@ class _ExpenseDetailScreenState
           ExpenseStatus.submitted,
           ExpenseStatus.cancelled,
         ];
+
       case ExpenseStatus.submitted:
         return [
           ExpenseStatus.approved,
           ExpenseStatus.rejected,
           ExpenseStatus.cancelled,
         ];
+
       case ExpenseStatus.approved:
-        return [ExpenseStatus.paid];
+        return [
+          ExpenseStatus.paid,
+        ];
+
       case ExpenseStatus.rejected:
         return [
           ExpenseStatus.submitted,
           ExpenseStatus.cancelled,
         ];
+
       case ExpenseStatus.paid:
       case ExpenseStatus.cancelled:
         return [];
@@ -57,38 +183,37 @@ class _ExpenseDetailScreenState
   }
 
   Future<void> _refresh() async {
-    final refreshed = await widget.repository.getById(
-      _expense.id,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _expense = refreshed;
-    });
+    await _loadDetails();
   }
 
   Future<void> _changeStatus(
-    ExpenseStatus nextStatus,
-  ) async {
+      ExpenseStatus nextStatus,
+      ) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Change Status'),
           content: Text(
-            'Change expense status to ${nextStatus.displayName}?',
+            'Change expense status to '
+                '${nextStatus.displayName}?',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context, false);
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
               },
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(context, true);
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
               },
               child: const Text('Confirm'),
             ),
@@ -99,7 +224,9 @@ class _ExpenseDetailScreenState
 
     if (confirmed != true) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isChangingStatus = true;
+    });
 
     try {
       await widget.repository.changeStatus(
@@ -114,29 +241,71 @@ class _ExpenseDetailScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Status changed to ${nextStatus.displayName}.',
+            'Status changed to '
+                '${nextStatus.displayName}.',
           ),
         ),
       );
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(error.toString()),
+        ),
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isChangingStatus = false;
+        });
       }
     }
   }
 
-  String _money(double value) =>
-      value.toStringAsFixed(2);
+  String _money(double value) {
+    return value.toStringAsFixed(2);
+  }
+
+  String _siteDisplayName() {
+    if (_site == null) {
+      return '—';
+    }
+
+    return '${_site!.siteCode} - ${_site!.name}';
+  }
+
+  String _projectDisplayName() {
+    if (_project == null) {
+      return '—';
+    }
+
+    return '${_project!.projectCode} - ${_project!.name}';
+  }
+
+  String _costCodeDisplayName() {
+    if (_costCode == null) {
+      return '—';
+    }
+
+    return '${_costCode!.code} - ${_costCode!.name}';
+  }
+
+  String _vendorDisplayName() {
+    if (_expense.vendorId == null) {
+      return 'No Vendor';
+    }
+
+    if (_vendor == null) {
+      return '—';
+    }
+
+    return '${_vendor!.vendorCode} - ${_vendor!.name}';
+  }
 
   bool get _canEdit =>
       _expense.status != ExpenseStatus.paid &&
-      _expense.status != ExpenseStatus.cancelled;
+          _expense.status != ExpenseStatus.cancelled;
 
   @override
   Widget build(BuildContext context) {
@@ -144,148 +313,308 @@ class _ExpenseDetailScreenState
       appBar: AppBar(
         title: Text(_expense.expenseNumber),
         actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _isLoading
+                ? null
+                : _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
           if (_canEdit)
             IconButton(
+              tooltip: 'Edit',
               icon: const Icon(Icons.edit),
               onPressed: () async {
                 final updated =
-                    await Navigator.of(context).push<bool>(
+                await Navigator.of(context)
+                    .push<bool>(
                   MaterialPageRoute(
-                    builder: (_) => ExpenseCreateScreen(
-                      repository: widget.repository,
-                      expense: _expense,
-                    ),
+                    builder: (_) =>
+                        ExpenseCreateScreen(
+                          repository:
+                          widget.repository,
+                          siteRepository:
+                          _siteRepository,
+                          projectRepository:
+                          _projectRepository,
+                          costCodeRepository:
+                          _costCodeRepository,
+                          vendorRepository:
+                          _vendorRepository,
+                          expense: _expense,
+                        ),
                   ),
                 );
 
-                if (updated == true) {
+                if (updated == true && mounted) {
                   await _refresh();
                 }
               },
             ),
         ],
       ),
-      body: Stack(
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics:
+          const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 120),
+            const Icon(
+              Icons.error_outline,
+              size: 56,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: Stack(
         children: [
           ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              32,
+            ),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _expense.expenseNumber,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge,
-                            ),
-                          ),
-                          Chip(
-                            label: Text(
-                              _expense.status.displayName,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      _InfoRow(
-                        label: 'Description',
-                        value: _expense.description,
-                      ),
-                      _InfoRow(
-                        label: 'Date',
-                        value: _expense.expenseDate
-                            .toIso8601String()
-                            .split('T')
-                            .first,
-                      ),
-                      _InfoRow(
-                        label: 'Amount',
-                        value:
-                            '${_money(_expense.amount)} ${_expense.currencyCode}',
-                      ),
-                      _InfoRow(
-                        label: 'Tax',
-                        value:
-                            '${_money(_expense.taxAmount)} ${_expense.currencyCode}',
-                      ),
-                      _InfoRow(
-                        label: 'Exchange',
-                        value: _expense.exchangeRate
-                            .toStringAsFixed(2),
-                      ),
-                      _InfoRow(
-                        label: 'Reference',
-                        value: _expense.referenceNumber ??
-                            '—',
-                      ),
-                      _InfoRow(
-                        label: 'Receipt',
-                        value: _expense
-                                .receiptDocumentUrl ??
-                            '—',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildMainCard(context),
+
               const SizedBox(height: 16),
+
+              _buildReferenceCard(context),
+
+              const SizedBox(height: 16),
+
               if (_availableTransitions().isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Change Status',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _availableTransitions()
-                              .map(
-                                (status) =>
-                                    FilledButton(
-                                  onPressed:
-                                      _isLoading
-                                          ? null
-                                          : () =>
-                                              _changeStatus(
-                                            status,
-                                          ),
-                                  child: Text(
-                                    status.displayName,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildStatusCard(context),
             ],
           ),
-          if (_isLoading)
+
+          if (_isChangingStatus)
             const Center(
               child: CircularProgressIndicator(),
             ),
         ],
       ),
     );
+  }
+
+  Widget _buildMainCard(
+      BuildContext context,
+      ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    _expense.expenseNumber,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall,
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    _expense.status.displayName,
+                  ),
+                ),
+              ],
+            ),
+
+            const Divider(height: 28),
+
+            _InfoRow(
+              label: 'Description',
+              value: _expense.description,
+            ),
+
+            _InfoRow(
+              label: 'Date',
+              value: _formatDate(
+                _expense.expenseDate,
+              ),
+            ),
+
+            _InfoRow(
+              label: 'Amount',
+              value:
+              '${_money(_expense.amount)} '
+                  '${_expense.currencyCode}',
+            ),
+
+            _InfoRow(
+              label: 'Tax',
+              value:
+              '${_money(_expense.taxAmount)} '
+                  '${_expense.currencyCode}',
+            ),
+
+            _InfoRow(
+              label: 'Exchange',
+              value:
+              _expense.exchangeRate
+                  .toStringAsFixed(2),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReferenceCard(
+      BuildContext context,
+      ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Financial Classification',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge,
+            ),
+
+            const SizedBox(height: 16),
+
+            _InfoRow(
+              label: 'Construction Site',
+              value: _siteDisplayName(),
+            ),
+
+            _InfoRow(
+              label: 'Project',
+              value: _projectDisplayName(),
+            ),
+
+            _InfoRow(
+              label: 'Cost Code',
+              value: _costCodeDisplayName(),
+            ),
+
+            _InfoRow(
+              label: 'Vendor',
+              value: _vendorDisplayName(),
+            ),
+
+            const Divider(height: 24),
+
+            _InfoRow(
+              label: 'Reference',
+              value:
+              _expense.referenceNumber ??
+                  '—',
+            ),
+
+            _InfoRow(
+              label: 'Receipt',
+              value:
+              _expense.receiptDocumentUrl ??
+                  '—',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(
+      BuildContext context,
+      ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Change Status',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium,
+            ),
+
+            const SizedBox(height: 12),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+              _availableTransitions()
+                  .map(
+                    (status) =>
+                    FilledButton(
+                      onPressed:
+                      _isChangingStatus
+                          ? null
+                          : () =>
+                          _changeStatus(
+                            status,
+                          ),
+                      child: Text(
+                        status.displayName,
+                      ),
+                    ),
+              )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(
+      DateTime date,
+      ) {
+    final local = date.toLocal();
+
+    String two(int value) =>
+        value.toString().padLeft(2, '0');
+
+    return '${local.year}-'
+        '${two(local.month)}-'
+        '${two(local.day)}';
   }
 }
 
@@ -299,15 +628,18 @@ class _InfoRow extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding:
+      const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 96,
+            width: 125,
             child: Text(
               label,
               style: Theme.of(context)
@@ -315,7 +647,9 @@ class _InfoRow extends StatelessWidget {
                   .labelMedium,
             ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(
+            child: Text(value),
+          ),
         ],
       ),
     );

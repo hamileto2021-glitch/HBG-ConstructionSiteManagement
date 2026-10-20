@@ -4,6 +4,7 @@ using CSM.Application.Inventory.DailyMaterialUsage.Dtos;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Procurement;
+using CSM.Domain.Entities.Projects;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,38 @@ public sealed class DailyMaterialUsageService :
         ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
+    }
+
+    public async Task<IReadOnlyCollection<DailyMaterialUsageResponse>> GetAllAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        var query = _dbContext.DailyMaterialUsages
+            .AsNoTracking()
+            .Include(x => x.ConstructionSite)
+            .Include(x => x.Material)
+            .Include(x => x.DailyProgressLog)
+            .Include(x => x.LoggedByUser)
+            .AsQueryable();
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(x =>
+                x.CompanyId == actor.CompanyId);
+        }
+
+        var records = await query
+            .OrderByDescending(x => x.Date)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return records
+            .Select(Map)
+            .ToArray();
     }
 
     public async Task<DailyMaterialUsageResponse> CreateAsync(
@@ -55,34 +88,35 @@ public sealed class DailyMaterialUsageService :
             ?? throw new DailyMaterialUsageManagementException(
                 "Material was not found for this company.");
 
-        var progressLog =
-            await _dbContext.DailyProgressLogs
+        DailyProgressLog? progressLog = null;
+
+        if (request.DailyProgressLogId.HasValue)
+        {
+            progressLog = await _dbContext.DailyProgressLogs
                 .Include(x => x.Project)
                 .SingleOrDefaultAsync(
-                    x =>
-                        x.Id ==
-                            request.DailyProgressLogId,
+                    x => x.Id == request.DailyProgressLogId.Value,
                     cancellationToken)
-            ?? throw new DailyMaterialUsageManagementException(
-                "Daily progress log was not found.");
+                ?? throw new DailyMaterialUsageManagementException(
+                    "Daily progress log was not found.");
 
-        if (progressLog.Project.ConstructionSiteId !=
-            site.Id)
-        {
-            throw new DailyMaterialUsageManagementException(
-                "Daily progress log does not belong to the selected construction site.");
-        }
+            if (progressLog.Project.ConstructionSiteId != site.Id)
+            {
+                throw new DailyMaterialUsageManagementException(
+                    "Daily progress log does not belong to the selected construction site.");
+            }
 
-        if (progressLog.CompanyId != site.CompanyId)
-        {
-            throw new DailyMaterialUsageManagementException(
-                "Daily progress log does not belong to this company.");
-        }
+            if (progressLog.CompanyId != site.CompanyId)
+            {
+                throw new DailyMaterialUsageManagementException(
+                    "Daily progress log does not belong to this company.");
+            }
 
-        if (request.Date != progressLog.LogDate)
-        {
-            throw new DailyMaterialUsageManagementException(
-                "Usage date must match the daily progress log date.");
+            if (request.Date != progressLog.LogDate)
+            {
+                throw new DailyMaterialUsageManagementException(
+                    "Usage date must match the daily progress log date.");
+            }
         }
 
         var strategy =
@@ -155,7 +189,7 @@ public sealed class DailyMaterialUsageService :
                                 material.Id,
 
                             DailyProgressLogId =
-                                progressLog.Id,
+                                progressLog?.Id,
 
                             LoggedByUserId =
                                 currentUserId,
@@ -402,6 +436,40 @@ public sealed class DailyMaterialUsageService :
         }
 
         return $"DMU-{nextNumber:D6}";
+    }
+
+    private static DailyMaterialUsageResponse Map(
+        DailyMaterialUsage usage)
+    {
+        return new DailyMaterialUsageResponse
+        {
+            Id = usage.Id,
+
+            ConstructionSiteId = usage.ConstructionSiteId,
+            ConstructionSiteName = usage.ConstructionSite.Name,
+
+            MaterialId = usage.MaterialId,
+            MaterialCode = usage.Material.MaterialCode,
+            MaterialName = usage.Material.Name,
+
+            DailyProgressLogId = usage.DailyProgressLogId,
+
+            LoggedByUserId = usage.LoggedByUserId,
+            LoggedByUserName =
+                $"{usage.LoggedByUser.FirstName} {usage.LoggedByUser.LastName}".Trim(),
+
+            Date = usage.Date,
+
+            QuantityIssued = usage.QuantityIssued,
+            QuantityUsed = usage.QuantityUsed,
+            QuantityReturned = usage.QuantityReturned,
+            QuantityVariance = usage.QuantityVariance,
+
+            RequiresSupervisorReview = usage.RequiresSupervisorReview,
+
+            Unit = usage.Unit,
+            Notes = usage.Notes
+        };
     }
 
     private static void ValidateRequest(

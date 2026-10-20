@@ -3,8 +3,6 @@ using CSM.Domain.Enums;
 using CSM.Domain.Entities.Compliance;
 
 
-
-
 namespace CSM.Domain.Entities.HRM;
 
 public class Employee : TenantEntity
@@ -36,6 +34,8 @@ public class Employee : TenantEntity
     public string? Department { get; set; }
 
     public EmployeeType EmployeeType { get; set; }
+
+    public EmployeeScope EmployeeScope { get; set; } = EmployeeScope.Site;
 
     public EmployeeStatus Status { get; set; } = EmployeeStatus.Active;
 

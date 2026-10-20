@@ -8,8 +8,14 @@ public sealed record UserResponse(
     string FirstName,
     string LastName,
     string FullName,
+    string PhoneNumber,
+    string JobTitle,
     bool IsActive,
     bool MustChangePassword,
+    Guid? DefaultSiteId,
     DateTime? LastLoginAtUtc,
     IReadOnlyCollection<string> Roles,
-    DateTime CreatedAtUtc);
+    IReadOnlyCollection<Guid> SiteAccesses,
+    IReadOnlyCollection<string> SiteNames,
+    DateTime CreatedAtUtc
+);

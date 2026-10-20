@@ -119,9 +119,10 @@ public sealed class InvoiceLineService : IInvoiceLineService
             CostCodeId = request.CostCodeId,
             Description = description,
             Quantity = request.Quantity,
+            UnitOfMeasure = request.UnitOfMeasure,
             UnitPrice = request.UnitPrice,
             TaxAmount = request.TaxAmount,
-            LineTotal = lineTotal
+            LineTotal = request.Quantity * request.UnitPrice + request.TaxAmount
         };
 
         _dbContext.InvoiceLines.Add(line);
@@ -178,6 +179,7 @@ public sealed class InvoiceLineService : IInvoiceLineService
             request.Description,
             "Invoice line description");
         line.Quantity = request.Quantity;
+        line.UnitOfMeasure = request.UnitOfMeasure;
         line.UnitPrice = request.UnitPrice;
         line.TaxAmount = request.TaxAmount;
         line.LineTotal =
@@ -473,6 +475,7 @@ public sealed class InvoiceLineService : IInvoiceLineService
             line.CostCodeId,
             line.Description,
             line.Quantity,
+            line.UnitOfMeasure,
             line.UnitPrice,
             line.TaxAmount,
             line.LineTotal,

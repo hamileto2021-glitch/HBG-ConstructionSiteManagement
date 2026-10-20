@@ -16,6 +16,8 @@ public sealed record CreateEmployeeRequest(
     string? JobTitle,
     string? Department,
     EmployeeType EmployeeType,
+    EmployeeScope EmployeeScope,
+    Guid? SiteId,
     WageType WageType,
     decimal BaseWage,
     string CurrencyCode,

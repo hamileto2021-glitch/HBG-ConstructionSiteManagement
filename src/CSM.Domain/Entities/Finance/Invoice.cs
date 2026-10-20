@@ -7,7 +7,9 @@ namespace CSM.Domain.Entities.Finance;
 
 public class Invoice : TenantEntity
 {
-    public Guid ConstructionSiteId { get; set; }
+    public Guid? ConstructionSiteId { get; set; }
+
+    public ConstructionSite? ConstructionSite { get; set; }
 
     public Guid? ProjectId { get; set; }
 
@@ -27,6 +29,8 @@ public class Invoice : TenantEntity
 
     public decimal TotalAmount { get; set; }
 
+    public decimal PaidAmount { get; set; } = 0m;
+
     public string CurrencyCode { get; set; } = "ETB";
 
     public decimal ExchangeRate { get; set; } = 1;
@@ -37,7 +41,7 @@ public class Invoice : TenantEntity
 
     public string? ExternalReference { get; set; }
 
-    public ConstructionSite ConstructionSite { get; set; } = null!;
+
 
     public Project? Project { get; set; }
 

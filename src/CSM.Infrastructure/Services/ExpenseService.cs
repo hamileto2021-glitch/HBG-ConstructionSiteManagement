@@ -1,6 +1,8 @@
 using CSM.Application.Common.Exceptions;
 using CSM.Application.Finance.Expenses;
 using CSM.Application.Finance.Expenses.Dtos;
+using CSM.Application.Finance.Budgets;
+using CSM.Application.Notifications;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Finance;
 using CSM.Domain.Entities.Identity;
@@ -13,10 +15,17 @@ namespace CSM.Infrastructure.Services;
 public sealed class ExpenseService : IExpenseService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly INotificationPublisher _notifications;
+    private readonly IBudgetAlertService _budgetAlerts;
 
-    public ExpenseService(ApplicationDbContext dbContext)
+    public ExpenseService(
+        ApplicationDbContext dbContext,
+        INotificationPublisher notifications,
+        IBudgetAlertService budgetAlerts)
     {
         _dbContext = dbContext;
+        _notifications = notifications;
+        _budgetAlerts = budgetAlerts;
     }
 
     public async Task<IReadOnlyCollection<ExpenseResponse>> GetAllAsync(
@@ -40,13 +49,64 @@ public sealed class ExpenseService : IExpenseService
                 x => x.CompanyId == companyId);
         }
 
+        query = query.Where(
+            x => x.ConstructionSiteId == null);
+
         var expenses = await query
             .OrderByDescending(x => x.ExpenseDate)
             .ThenBy(x => x.ExpenseNumber)
             .ToListAsync(cancellationToken);
 
         return expenses
-            .Select(Map)
+            .Select(x => Map(x))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyCollection<ExpenseResponse>> GetBySiteAsync(
+        Guid currentUserId,
+        Guid constructionSiteId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanRead(actor);
+
+        await EnsureSiteAccess(
+            actor,
+            constructionSiteId,
+            cancellationToken);
+
+        var companyId = GetActorCompanyId(actor);
+
+        var siteExists = await _dbContext.ConstructionSites
+            .AnyAsync(
+                x =>
+                    x.Id == constructionSiteId &&
+                    x.CompanyId == companyId &&
+                    !x.IsDeleted,
+                cancellationToken);
+
+        if (!siteExists)
+        {
+            throw new ExpenseManagementException(
+                "Construction site was not found or does not belong to the current company.");
+        }
+
+        var expenses = await _dbContext.Expenses
+            .AsNoTracking()
+            .Where(
+                x =>
+                    x.CompanyId == companyId &&
+                    x.ConstructionSiteId == constructionSiteId &&
+                    !x.IsDeleted)
+            .OrderByDescending(x => x.ExpenseDate)
+            .ThenBy(x => x.ExpenseNumber)
+            .ToListAsync(cancellationToken);
+
+        return expenses
+            .Select(x => Map(x))
             .ToArray();
     }
 
@@ -69,7 +129,19 @@ public sealed class ExpenseService : IExpenseService
             actor,
             expense.CompanyId);
 
-        return Map(expense);
+        await EnsureSiteAccess(
+            actor,
+            expense.ConstructionSiteId,
+            cancellationToken);
+
+        var approvedByName = expense.ApprovedBy.HasValue
+            ? await _dbContext.Users
+                .Where(x => x.Id == expense.ApprovedBy.Value)
+                .Select(x => x.FirstName + " " + x.LastName)
+                .SingleOrDefaultAsync(cancellationToken)
+            : null;
+
+        return Map(expense, approvedByName);
     }
 
     public async Task<ExpenseResponse> CreateAsync(
@@ -81,9 +153,14 @@ public sealed class ExpenseService : IExpenseService
             currentUserId,
             cancellationToken);
 
-        EnsureCanModify(actor);
+        EnsureCanSubmit(actor);
 
         var companyId = GetActorCompanyId(actor);
+
+        await EnsureSiteAccess(
+            actor,
+            request.ConstructionSiteId,
+            cancellationToken);
 
         var expenseNumber = CleanRequired(
             request.ExpenseNumber,
@@ -161,7 +238,7 @@ public sealed class ExpenseService : IExpenseService
             currentUserId,
             cancellationToken);
 
-        EnsureCanModify(actor);
+        EnsureCanSubmit(actor);
 
         var expense = await GetExpenseAsync(
             expenseId,
@@ -170,6 +247,16 @@ public sealed class ExpenseService : IExpenseService
         EnsureCompanyAccess(
             actor,
             expense.CompanyId);
+
+        await EnsureSiteAccess(
+            actor,
+            expense.ConstructionSiteId,
+            cancellationToken);
+
+        await EnsureSiteAccess(
+            actor,
+            request.ConstructionSiteId,
+            cancellationToken);
 
         EnsureEditable(expense);
 
@@ -242,6 +329,11 @@ public sealed class ExpenseService : IExpenseService
             actor,
             expense.CompanyId);
 
+        await EnsureSiteAccess(
+            actor,
+            expense.ConstructionSiteId,
+            cancellationToken);
+
         EnsureValidTransition(
             expense.Status,
             request.Status);
@@ -253,6 +345,63 @@ public sealed class ExpenseService : IExpenseService
         }
 
         expense.Status = request.Status;
+
+        // Submitted: remember who submitted it, and tell the people who can
+        // approve it. Staged on the same DbContext, so it is saved with the
+        // status change below.
+        if (request.Status == ExpenseStatus.Submitted)
+        {
+            expense.SubmittedByUserId = currentUserId;
+
+            await _notifications.StageForPermissionHoldersAsync(
+                expense.CompanyId,
+                expense.ConstructionSiteId,
+                GranularPermission.Finance_Expense_Approve,
+                currentUserId,
+                "Expense awaiting approval",
+                $"{expense.ExpenseNumber} - " +
+                $"{expense.CurrencyCode} {expense.Amount:N2}",
+                NotificationSeverity.Info,
+                "Expense",
+                expense.Id,
+                cancellationToken);
+        }
+
+        // Approved: warn if this pushes a budget past 80% or 100%. Staged
+        // on the same DbContext, so it is saved with the approval.
+        if (request.Status == ExpenseStatus.Approved)
+        {
+            await _budgetAlerts.StageForApprovedExpenseAsync(
+                expense,
+                cancellationToken);
+        }
+
+        // Decision: tell the person who submitted it (unless they did it).
+        if (expense.SubmittedByUserId is Guid submitter &&
+            submitter != currentUserId)
+        {
+            var decision = request.Status switch
+            {
+                ExpenseStatus.Approved => ("Expense approved", NotificationSeverity.Info),
+                ExpenseStatus.Rejected => ("Expense rejected", NotificationSeverity.Warning),
+                ExpenseStatus.Paid => ("Expense paid", NotificationSeverity.Info),
+                ExpenseStatus.Cancelled => ("Expense cancelled", NotificationSeverity.Warning),
+                _ => (null, NotificationSeverity.Info)
+            };
+
+            if (decision.Item1 is not null)
+            {
+                _notifications.StageForUser(
+                    expense.CompanyId,
+                    submitter,
+                    decision.Item1,
+                    $"{expense.ExpenseNumber} - " +
+                    $"{expense.CurrencyCode} {expense.Amount:N2}",
+                    decision.Item2,
+                    "Expense",
+                    expense.Id);
+            }
+        }
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -278,7 +427,8 @@ public sealed class ExpenseService : IExpenseService
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }
@@ -291,13 +441,28 @@ public sealed class ExpenseService : IExpenseService
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }
 
         throw new ExpenseManagementException(
             "You are not authorized to manage expenses.");
+    }
+
+    private static void EnsureCanSubmit(User actor)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
+        {
+            return;
+        }
+
+        throw new ExpenseManagementException(
+            "You are not authorized to submit expenses.");
     }
 
     private static void EnsureCompanyAccess(
@@ -316,6 +481,59 @@ public sealed class ExpenseService : IExpenseService
                 "You are not authorized to access this expense.");
         }
     }
+
+    private async Task EnsureSiteAccess(
+        User actor,
+        Guid? siteId,
+        CancellationToken cancellationToken)
+    {
+        // Company-level expense
+        // SiteManager cannot access company-level expenses.
+        if (!siteId.HasValue)
+        {
+            if (HasRole(actor, AppRoles.SiteManager))
+            {
+                throw new ExpenseManagementException(
+                    "You are not authorized to access this expense.");
+            }
+
+            return;
+        }
+
+        // SuperAdmin has unrestricted access.
+        if (IsSuperAdmin(actor))
+        {
+            return;
+        }
+
+        // CompanyAdmin and Accountant have company-wide finance access.
+        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            return;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+
+        var activeSiteIds = await _dbContext.UserSiteAccesses
+            .Where(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive)
+            .Select(x => x.SiteId)
+            .ToListAsync(cancellationToken);
+
+        // Company-level Site Managers can access sites within their company
+        // when they have no active site assignments.
+        if (activeSiteIds.Count > 0 &&
+            !activeSiteIds.Contains(siteId.Value))
+        {
+            throw new ExpenseManagementException(
+                "You are not assigned to this site's expense scope.");
+        }
+    }
+
+
 
     private static Guid GetActorCompanyId(
         User actor)
@@ -345,24 +563,33 @@ public sealed class ExpenseService : IExpenseService
 
     private async Task EnsureReferencesBelongToCompanyAsync(
         Guid companyId,
-        Guid constructionSiteId,
+        Guid? constructionSiteId,
         Guid? projectId,
         Guid costCodeId,
         Guid? vendorId,
         CancellationToken cancellationToken)
     {
-        var siteExists = await _dbContext.ConstructionSites
-            .AnyAsync(
-                x =>
-                    x.Id == constructionSiteId &&
-                    x.CompanyId == companyId &&
-                    !x.IsDeleted,
-                cancellationToken);
-
-        if (!siteExists)
+        if (projectId.HasValue && !constructionSiteId.HasValue)
         {
             throw new ExpenseManagementException(
-                "Construction site was not found or does not belong to the current company.");
+                "A project cannot be selected without a construction site.");
+        }
+
+        if (constructionSiteId.HasValue)
+        {
+            var siteExists = await _dbContext.ConstructionSites
+                .AnyAsync(
+                    x =>
+                        x.Id == constructionSiteId.Value &&
+                        x.CompanyId == companyId &&
+                        !x.IsDeleted,
+                    cancellationToken);
+
+            if (!siteExists)
+            {
+                throw new ExpenseManagementException(
+                    "Construction site was not found or does not belong to the current company.");
+            }
         }
 
         var costCodeExists = await _dbContext.CostCodes
@@ -381,18 +608,25 @@ public sealed class ExpenseService : IExpenseService
 
         if (projectId.HasValue)
         {
+            if (!constructionSiteId.HasValue)
+            {
+                throw new ExpenseManagementException(
+                    "A project cannot be selected without a construction site.");
+            }
+
             var projectExists = await _dbContext.Projects
                 .AnyAsync(
                     x =>
                         x.Id == projectId.Value &&
                         x.CompanyId == companyId &&
-                        !x.IsDeleted,
+                        !x.IsDeleted &&
+                        x.ConstructionSiteId == constructionSiteId.Value,
                     cancellationToken);
 
             if (!projectExists)
             {
                 throw new ExpenseManagementException(
-                    "Project was not found or does not belong to the current company.");
+                    "Project was not found, does not belong to the selected construction site, or does not belong to the current company.");
             }
         }
 
@@ -413,6 +647,7 @@ public sealed class ExpenseService : IExpenseService
             }
         }
     }
+
 
     private static void EnsureEditable(
         Expense expense)
@@ -550,7 +785,8 @@ public sealed class ExpenseService : IExpenseService
     }
 
     private static ExpenseResponse Map(
-        Expense expense)
+        Expense expense,
+        string? approvedByName = null)
     {
         return new ExpenseResponse(
             expense.Id,
@@ -570,6 +806,7 @@ public sealed class ExpenseService : IExpenseService
             expense.ReceiptDocumentUrl,
             expense.Status,
             expense.ApprovedBy,
+            approvedByName,
             expense.ApprovedAtUtc,
             expense.CreatedAtUtc,
             expense.UpdatedAtUtc);

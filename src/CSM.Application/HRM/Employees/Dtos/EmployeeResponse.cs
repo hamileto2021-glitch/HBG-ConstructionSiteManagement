@@ -19,6 +19,7 @@ public sealed record EmployeeResponse(
     string? JobTitle,
     string? Department,
     EmployeeType EmployeeType,
+    EmployeeScope EmployeeScope,
     EmployeeStatus Status,
     WageType WageType,
     decimal BaseWage,

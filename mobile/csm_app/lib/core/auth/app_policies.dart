@@ -10,45 +10,65 @@ class AppPolicies {
   static const String procurementManagement = 'ProcurementManagement';
   static const String companyManagement = 'CompanyManagement';
   static const String projectManagement = 'ProjectManagement';
+  static const String equipmentManagement = 'EquipmentManagement';
+  static const String complianceManagement = 'ComplianceManagement';
+  static const String reportManagement = 'ReportManagement';
 
   static const List<String> projectManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
-    AppRoles.siteManager,
-    AppRoles.supervisor,
+    AppRoles.administrator,
+    AppRoles.projectManager,
+    AppRoles.siteEngineer,
   ];
 
   static const List<String> companyManagementRoles = [
-    AppRoles.superAdmin,
+    AppRoles.administrator,
   ];
 
   static const List<String> userManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
+    AppRoles.administrator,
   ];
 
   static const List<String> siteManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
-    AppRoles.siteManager,
-    AppRoles.supervisor,
+    AppRoles.administrator,
+    AppRoles.projectManager,
+    AppRoles.siteEngineer,
   ];
 
   static const List<String> hrManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
+    AppRoles.administrator,
     AppRoles.hrOfficer,
   ];
 
   static const List<String> financeManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
-    AppRoles.accountant,
+    AppRoles.administrator,
+    AppRoles.financeOfficer,
   ];
 
   static const List<String> procurementManagementRoles = [
-    AppRoles.superAdmin,
-    AppRoles.companyAdmin,
-    AppRoles.siteManager,
+    AppRoles.administrator,
+    AppRoles.procurementOfficer,
+    AppRoles.storekeeper,
+  ];
+
+  static const List<String> equipmentManagementRoles = [
+    AppRoles.administrator,
+    AppRoles.equipmentManager,
+  ];
+
+  static const List<String> complianceManagementRoles = [
+    AppRoles.administrator,
+    AppRoles.safetyOfficer,
+  ];
+
+  static const List<String> reportManagementRoles = [
+    AppRoles.administrator,
+    AppRoles.projectManager,
+    AppRoles.siteEngineer,
+    AppRoles.storekeeper,
+    AppRoles.procurementOfficer,
+    AppRoles.financeOfficer,
+    AppRoles.hrOfficer,
+    AppRoles.equipmentManager,
+    AppRoles.safetyOfficer,
   ];
 }

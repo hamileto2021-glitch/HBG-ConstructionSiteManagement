@@ -1,26 +1,24 @@
-import 'dart:async';
-
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 class ConnectivityService {
-  ConnectivityService({
-    Connectivity? connectivity,
-  }) : _connectivity = connectivity ?? Connectivity();
-
-  final Connectivity _connectivity;
+  final Connectivity _connectivity = Connectivity();
 
   Stream<List<ConnectivityResult>> get onConnectivityChanged =>
       _connectivity.onConnectivityChanged;
 
-  Future<List<ConnectivityResult>> getCurrentConnectivity() {
-    return _connectivity.checkConnectivity();
-  }
+  Future<bool> isOnline() async {
+    final results = await _connectivity.checkConnectivity();
 
-  Future<bool> get isOnline async {
-    final results = await getCurrentConnectivity();
+    if (results.contains(ConnectivityResult.none)) {
+      return false;
+    }
 
-    return results.any(
-      (result) => result != ConnectivityResult.none,
-    );
+    try {
+      final lookup = await InternetAddress.lookup('api.nuget.org');
+      return lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 }

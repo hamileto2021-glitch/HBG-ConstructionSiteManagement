@@ -11,7 +11,7 @@ class FakeQueue implements SyncQueueStore {
   final List<String> removedIds = [];
   final Map<String, String> retryErrors = {};
 
-  @override
+
   Future<String> enqueue({
     required String entityType,
     required String entityId,

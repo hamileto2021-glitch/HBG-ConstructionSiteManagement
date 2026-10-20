@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize(Policy = "Equipment.View")]
 public sealed class EquipmentMaintenanceController : ControllerBase
 {
     private readonly IEquipmentMaintenanceService
@@ -68,6 +68,7 @@ public sealed class EquipmentMaintenanceController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "Equipment.Manage")]
     [HttpPost]
     public async Task<ActionResult<EquipmentMaintenanceResponse>> Create(
         [FromBody] CreateEquipmentMaintenanceRequest request,
@@ -95,6 +96,7 @@ public sealed class EquipmentMaintenanceController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "Equipment.Manage")]
     [HttpPut("{maintenanceId:guid}")]
     public async Task<ActionResult<EquipmentMaintenanceResponse>> Update(
         Guid maintenanceId,

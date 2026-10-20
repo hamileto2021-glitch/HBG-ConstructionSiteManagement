@@ -102,26 +102,29 @@ public sealed class ProjectPhaseService : IProjectPhaseService
             throw new ProjectPhaseManagementException(
                 "A phase with this sequence already exists in the project.");
         }
+if (await _dbContext.ProjectPhases.AnyAsync(x =>
+        x.CompanyId == project.CompanyId &&
+        x.ProjectId == project.Id &&
+        x.PhaseNumber == request.PhaseNumber,
+        cancellationToken))
+{
+    throw new ProjectPhaseManagementException(
+        "A phase with this phase number already exists.");
+}
 
-        var phaseNumber =
-            await GetNextPhaseNumberAsync(
-                project.CompanyId,
-                cancellationToken);
-
-        var phase = new ProjectPhase
-        {
-            CompanyId = project.CompanyId,
-            PhaseNumber = phaseNumber,
-            ProjectId = project.Id,
-            Name = request.Name.Trim(),
-            Description = Clean(request.Description),
-            Sequence = request.Sequence,
-            PlannedStartDate = request.PlannedStartDate,
-            PlannedEndDate = request.PlannedEndDate,
-            ProgressPercentage = 0m,
-            Status = ProjectPhaseStatus.NotStarted
-        };
-
+var phase = new ProjectPhase
+{
+    CompanyId = project.CompanyId,
+    PhaseNumber = request.PhaseNumber,
+    ProjectId = project.Id,
+    Name = request.Name.Trim(),
+    Description = Clean(request.Description),
+    Sequence = request.Sequence,
+    PlannedStartDate = request.PlannedStartDate,
+    PlannedEndDate = request.PlannedEndDate,
+    ProgressPercentage = 0m,
+    Status = ProjectPhaseStatus.NotStarted
+};
         var executionStrategy =
             _dbContext.Database.CreateExecutionStrategy();
 

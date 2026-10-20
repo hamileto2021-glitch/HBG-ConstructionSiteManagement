@@ -1,5 +1,8 @@
 using CSM.Domain.Common;
 using CSM.Domain.Entities.Procurement;
+
+using ProcurementEquipment = CSM.Domain.Entities.Procurement.Equipment;
+
 namespace CSM.Domain.Entities.Finance;
 
 public class Vendor : TenantEntity
@@ -27,10 +30,10 @@ public class Vendor : TenantEntity
     public bool IsActive { get; set; } = true;
 
     public ICollection<PurchaseOrder> PurchaseOrders { get; set; }
-    = new List<PurchaseOrder>();
+        = new List<PurchaseOrder>();
 
-public ICollection<Equipment> Equipment { get; set; }
-    = new List<Equipment>();
+    public ICollection<ProcurementEquipment> Equipments { get; set; }
+        = new List<ProcurementEquipment>();
 
     public ICollection<Expense> Expenses { get; set; }
         = new List<Expense>();

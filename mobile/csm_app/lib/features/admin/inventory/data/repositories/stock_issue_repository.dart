@@ -9,6 +9,24 @@ class StockIssueRepository {
 
   final ApiClient _apiClient;
 
+  Future<List<StockIssue>> getAll() async {
+    final response = await _apiClient.getList('/StockIssues');
+
+    return response
+        .map(
+          (e) => StockIssue.fromJson(
+        e as Map<String, dynamic>,
+      ),
+    )
+        .toList();
+  }
+
+  Future<StockIssue> getById(String id) async {
+    final response = await _apiClient.get('/StockIssues/$id');
+
+    return StockIssue.fromJson(response);
+  }
+
   Future<StockIssue> create(
       CreateStockIssueRequest request,
       ) async {

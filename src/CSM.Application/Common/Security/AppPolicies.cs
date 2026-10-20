@@ -11,52 +11,84 @@ public static class AppPolicies
     public const string ProcurementManagement = "ProcurementManagement";
     public const string CompanyManagement = "CompanyManagement";
     public const string ProjectManagement = "ProjectManagement";
+    public const string EquipmentManagement = "EquipmentManagement";
+    public const string ComplianceManagement = "ComplianceManagement";
+    public const string ReportManagement = "ReportManagement";
 
     public static readonly string[] ProjectManagementRoles =
-    [
-        AppRoles.SuperAdmin,
+    {
+        AppRoles.Administrator,
         AppRoles.CompanyAdmin,
-        AppRoles.SiteManager,
-        AppRoles.Supervisor
-    ];
+        AppRoles.SuperAdmin,
+        AppRoles.ProjectManager,
+        AppRoles.SiteEngineer,
+        AppRoles.SiteManager
+    };
 
     public static readonly string[] CompanyManagementRoles =
-    [
+    {
+        AppRoles.Administrator,
+        AppRoles.CompanyAdmin,
         AppRoles.SuperAdmin
-    ];
+    };
 
     public static readonly string[] UserManagementRoles =
-    [
-        AppRoles.SuperAdmin,
-        AppRoles.CompanyAdmin
-    ];
+    {
+        AppRoles.Administrator,
+        AppRoles.CompanyAdmin,
+        AppRoles.SuperAdmin
+    };
 
     public static readonly string[] SiteManagementRoles =
-    [
-        AppRoles.SuperAdmin,
-        AppRoles.CompanyAdmin,
-        AppRoles.SiteManager,
-        AppRoles.Supervisor
-    ];
+    {
+        AppRoles.Administrator,
+        AppRoles.ProjectManager,
+        AppRoles.SiteEngineer,
+        AppRoles.SiteManager
+    };
 
     public static readonly string[] HRManagementRoles =
-    [
-        AppRoles.SuperAdmin,
-        AppRoles.CompanyAdmin,
+    {
+        AppRoles.Administrator,
+        AppRoles.HrOfficer,
         AppRoles.HROfficer
-    ];
+    };
 
     public static readonly string[] FinanceManagementRoles =
-    [
-        AppRoles.SuperAdmin,
-        AppRoles.CompanyAdmin,
-        AppRoles.Accountant
-    ];
+    {
+        AppRoles.Administrator,
+        AppRoles.FinanceOfficer
+    };
 
     public static readonly string[] ProcurementManagementRoles =
-    [
-        AppRoles.SuperAdmin,
-        AppRoles.CompanyAdmin,
-        AppRoles.SiteManager
-    ];
+    {
+        AppRoles.Administrator,
+        AppRoles.ProcurementOfficer,
+        AppRoles.Storekeeper
+    };
+
+    public static readonly string[] EquipmentManagementRoles =
+    {
+        AppRoles.Administrator,
+        AppRoles.EquipmentManager
+    };
+
+    public static readonly string[] ComplianceManagementRoles =
+    {
+        AppRoles.Administrator,
+        AppRoles.SafetyOfficer
+    };
+
+    public static readonly string[] ReportManagementRoles =
+    {
+        AppRoles.Administrator,
+        AppRoles.ProjectManager,
+        AppRoles.SiteEngineer,
+        AppRoles.Storekeeper,
+        AppRoles.ProcurementOfficer,
+        AppRoles.FinanceOfficer,
+        AppRoles.HrOfficer,
+        AppRoles.EquipmentManager,
+        AppRoles.SafetyOfficer
+    };
 }

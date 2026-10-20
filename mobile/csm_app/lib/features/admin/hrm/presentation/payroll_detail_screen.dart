@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import '../data/models/payroll.dart';
 import '../data/repositories/payroll_repository.dart';
 
+import 'dart:io';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+
+
+
 class PayrollDetailScreen extends StatefulWidget {
   const PayrollDetailScreen({
     super.key,
@@ -23,6 +29,8 @@ class _PayrollDetailScreenState
   late Payroll _payroll;
   bool _isLoading = false;
   String? _error;
+
+
 
   @override
   void initState() {
@@ -190,6 +198,41 @@ class _PayrollDetailScreenState
       });
     }
   }
+  Future<void> _downloadPayslip() async {
+    try {
+      final bytes = await widget.repository.downloadPayslip(_payroll.id);
+
+      final directory = await getApplicationDocumentsDirectory();
+
+      final file = File(
+        '${directory.path}/Payslip_${_payroll.employeeNumber}.pdf',
+      );
+
+      await file.writeAsBytes(bytes, flush: true);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved to ${file.path}'),
+          action: SnackBarAction(
+            label: 'OPEN',
+            onPressed: () => OpenFilex.open(file.path),
+          ),
+        ),
+      );
+
+      await OpenFilex.open(file.path);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download payslip: $e')),
+      );
+    }
+  }
+
+
 
   Future<String?> _remarksDialog({
     required String title,
@@ -271,6 +314,7 @@ class _PayrollDetailScreenState
               },
               child: const Text('Mark Paid'),
             ),
+
           ],
         );
       },
@@ -281,6 +325,7 @@ class _PayrollDetailScreenState
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payroll Details'),
@@ -297,6 +342,19 @@ class _PayrollDetailScreenState
             _buildDeductionSection(context),
             const SizedBox(height: 20),
             _buildStatusSection(context),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _downloadPayslip,
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('Download Payslip'),
+            ),
+          ),
+
+
             if (_payroll.adjustments.isNotEmpty) ...[
               const SizedBox(height: 20),
               _buildAdjustmentsSection(context),
@@ -309,7 +367,7 @@ class _PayrollDetailScreenState
               ),
             ],
             const SizedBox(height: 24),
-            _buildActions(context),
+            _buildActions(context)
           ],
         ),
       ),
@@ -581,9 +639,7 @@ class _PayrollDetailScreenState
       return SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
-          onPressed: _isLoading
-              ? null
-              : _approvePayroll,
+          onPressed: _isLoading ? null : _approvePayroll,
           icon: const Icon(Icons.check),
           label: const Text('Approve Payroll'),
         ),
@@ -591,16 +647,21 @@ class _PayrollDetailScreenState
     }
 
     if (_payroll.status == PayrollStatus.approved) {
-      return SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed:
-              _isLoading ? null : _markPaid,
-          icon: const Icon(
-            Icons.payments_outlined,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.icon(
+            onPressed: _isLoading ? null : _markPaid,
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Mark Payroll Paid'),
           ),
-          label: const Text('Mark Payroll Paid'),
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _downloadPayslip,
+            icon: const Icon(Icons.picture_as_pdf),
+            label: const Text('Download Payslip'),
+          ),
+        ],
       );
     }
 
@@ -609,8 +670,7 @@ class _PayrollDetailScreenState
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
-          onPressed:
-              _isLoading ? null : _cancelPayroll,
+          onPressed: _isLoading ? null : _cancelPayroll,
           icon: const Icon(Icons.cancel_outlined),
           label: const Text('Cancel Payroll'),
         ),

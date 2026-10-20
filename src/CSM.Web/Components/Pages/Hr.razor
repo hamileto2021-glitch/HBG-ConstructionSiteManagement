@@ -1,0 +1,311 @@
+@page "/hr"
+@rendermode InteractiveServer
+
+@using CSM.Web.Services
+
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+@inject IContractorService ContractorService
+
+<PageTitle>HR Management</PageTitle>
+
+@if (_ready)
+{
+    <div class="container-fluid py-3">
+
+        <h2>Human Resource Management</h2>
+
+        <div class="row g-3 mt-3">
+
+            @if (_canViewEmployees)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm">
+                        <div class="card-body">
+                            <h6>Employees</h6>
+                            <h2>@_employeeCount</h2>
+
+                            <div class="d-grid gap-2 mt-2">
+                                @if (_showCompanyEmployeesButton)
+                                {
+                                    <button class="btn btn-primary"
+                                            @onclick="OpenCompanyEmployees">
+                                        Company
+                                    </button>
+                                }
+
+                                <button class="btn btn-outline-primary"
+                                        @onclick="OpenSiteEmployees">
+                                    Site
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_canViewSiteAssignments)
+                {
+                    <div class="col-lg-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h6>Site Assignments</h6>
+                                <h2>0</h2>
+
+                                <button class="btn btn-primary mt-2"
+                                        @onclick="OpenSiteAssignments">
+                                    Manage Site Assignments
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (_canViewContractors)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm">
+                        <div class="card-body">
+                            <h6>Contractors</h6>
+                            <h2>@_contractorCount</h2>
+
+                            <button class="btn btn-primary mt-2"
+                                    @onclick="OpenContractors">
+                                Manage Contractors
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (_canViewAttendance)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm"
+                         role="button"
+                         @onclick='() => Navigation.NavigateTo("/hr/attendance")'>
+
+                        <div class="card-body">
+                            <h6>Attendance</h6>
+                            <h2>0%</h2>
+                            <button class="btn btn-primary mt-2"
+                                    @onclick="OpenAttendance">
+                                Manage Attendances
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
+                @if (_canViewTimesheets)
+                {
+                    <div class="col-lg-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h6>Timesheets</h6>
+                                <h2>0</h2>
+
+                                <button class="btn btn-primary mt-2"
+                                        @onclick="OpenTimesheets">
+                                    Manage Timesheets
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (_canViewShifts)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm">
+                        <div class="card-body">
+                            <h6>Shifts</h6>
+                            <h2>0</h2>
+
+                            <button class="btn btn-primary mt-2"
+                                    @onclick="OpenShifts">
+                                Manage Shifts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (_canViewLeave)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm">
+                        <div class="card-body">
+                            <h6>Leave</h6>
+                            <h2>0</h2>
+
+                            <button class="btn btn-primary mt-2"
+                                    @onclick="OpenLeave">
+                                Manage Leave
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (_canViewPayroll)
+            {
+                <div class="col-lg-3">
+                    <div class="card text-center shadow-sm">
+                        <div class="card-body">
+                            <h6>Payroll</h6>
+                            <h2>ETB 0</h2>
+
+                            <button class="btn btn-primary mt-2"
+                                    @onclick="OpenPayroll">
+                                Manage Payroll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!_canViewEmployees && !_canViewContractors && !_canViewAttendance && !_canViewShifts && !_canViewLeave && !_canViewPayroll)
+            {
+                <div class="col-12">
+                    <p class="text-muted">You don't have access to any HR sections.</p>
+                </div>
+            }
+
+        </div>
+
+    </div>
+}
+
+@code {
+    private int _employeeCount = 0;
+    private int _contractorCount;
+
+    private bool _ready;
+    private bool _canViewEmployees;
+    private bool _showCompanyEmployeesButton = true;
+    private bool _canViewCompanyEmployees;
+    private bool _canViewSiteAssignments;
+    private bool _canViewTimesheets;
+    private bool _canViewContractors;
+    private bool _canViewAttendance;
+    private bool _canViewShifts;
+    private bool _canViewLeave;
+    private bool _canViewPayroll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var permissions = await AuthService.GetPermissionsAsync();
+
+        _canViewEmployees = permissions.Contains("HRM_Employee_View");
+
+        var userScope = await AuthService.GetCurrentUserScopeAsync();
+
+        var isSupervisor =
+            userScope.Roles.Any(
+                role => string.Equals(
+                    role,
+                    "Supervisor",
+                    StringComparison.OrdinalIgnoreCase));
+
+        _canViewSiteAssignments =
+            permissions.Contains("HRM_SiteAssignment_View") &&
+            !isSupervisor;
+
+        _canViewTimesheets =
+            permissions.Contains("HRM_Timesheet_View");
+
+        var isHrOfficer =
+            userScope.Roles.Contains(
+                "HROfficer",
+                StringComparer.OrdinalIgnoreCase) ||
+            userScope.Roles.Contains(
+                "HrOfficer",
+                StringComparer.OrdinalIgnoreCase);
+
+        _showCompanyEmployeesButton =
+            !(isSupervisor && userScope.HasActiveSiteAccess) &&
+            !(isHrOfficer && userScope.HasActiveSiteAccess);
+
+        var isCompanyAdmin = permissions.Contains("Sites_Manage");
+        var isSuperAdmin = permissions.Contains("SuperAdmin");
+
+        _canViewCompanyEmployees = isCompanyAdmin || isSuperAdmin;
+        _canViewContractors = permissions.Contains("HRM_Contractor_View");
+        _canViewAttendance = permissions.Contains("HRM_Attendance_View");
+        _canViewShifts = permissions.Contains("HRM_Shift_View");
+        _canViewLeave = permissions.Contains("HRM_Leave_View");
+        _canViewPayroll = permissions.Contains("HRM_Payroll_View");
+
+        // If the user only has access to a single HR section, skip the hub
+        // and take them straight there instead of showing a near-empty grid.
+        var accessibleRoutes = new List<string>();
+        if (_canViewEmployees) accessibleRoutes.Add("/hr/employees/company");
+        if (_canViewContractors) accessibleRoutes.Add("/hr/contractors");
+        if (_canViewAttendance) accessibleRoutes.Add("/hr/attendance");
+        if (_canViewShifts) accessibleRoutes.Add("/hr/shifts");
+        if (_canViewLeave) accessibleRoutes.Add("/hr/leave");
+        if (_canViewPayroll) accessibleRoutes.Add("/hr/payroll");
+
+        if (accessibleRoutes.Count == 1)
+        {
+            Navigation.NavigateTo(accessibleRoutes[0], forceLoad: false, replace: true);
+            return;
+        }
+
+        _ready = true;
+
+        if (_canViewContractors)
+        {
+            var contractors = await ContractorService.GetContractorsAsync();
+            _contractorCount = contractors.Count;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenCompanyEmployees()
+    {
+        Navigation.NavigateTo("/hr/employees/company");
+    }
+
+    private void OpenSiteEmployees()
+    {
+        Navigation.NavigateTo("/hr/employees/site");
+    }
+
+    private void OpenContractors()
+    {
+        Navigation.NavigateTo("/hr/contractors");
+    }
+
+    private void OpenAttendance()
+    {
+        Navigation.NavigateTo("/hr/attendance");
+    }
+
+    private void OpenSiteAssignments()
+    {
+        Navigation.NavigateTo("/hr/site-assignments");
+    }
+
+    private void OpenLeave()
+    {
+        Navigation.NavigateTo("/hr/leave");
+    }
+
+    private void OpenShifts()
+    {
+        Navigation.NavigateTo("/hr/shifts");
+    }
+
+    private void OpenTimesheets()
+    {
+        Navigation.NavigateTo("/hr/timesheets");
+    }
+
+    private void OpenPayroll()
+    {
+        Navigation.NavigateTo("/hr/payroll");
+    }
+}

@@ -8,6 +8,8 @@ public interface IEmployeeService
     Task<IReadOnlyCollection<EmployeeResponse>> GetAllAsync(
         Guid currentUserId,
         EmployeeStatus? status = null,
+        EmployeeScope? employeeScope = null,
+        Guid? siteId = null,
         CancellationToken cancellationToken = default);
 
     Task<EmployeeResponse> GetByIdAsync(

@@ -10,6 +10,16 @@ public sealed class CreateDocumentRequest
 
     public DocumentType DocumentType { get; set; }
 
+    public string? DrawingNumber { get; init; }
+
+    public string? SheetNumber { get; init; }
+
+    public DrawingDiscipline? Discipline { get; init; }
+
+    public DrawingStatus? DrawingStatus { get; init; }
+
+    public string? CurrentRevision { get; init; }
+
     public string FileName { get; set; } = string.Empty;
 
     public string StoragePath { get; set; } = string.Empty;

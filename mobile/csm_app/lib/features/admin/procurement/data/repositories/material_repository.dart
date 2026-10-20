@@ -1,6 +1,7 @@
 import 'package:csm_app/core/network/api_client.dart';
 
 import '../models/material.dart';
+import '../models/material_lookup.dart';
 
 class MaterialRepository {
   MaterialRepository({
@@ -34,6 +35,47 @@ class MaterialRepository {
             item as Map<String, dynamic>,
           ),
         )
+        .toList();
+  }
+  Future<List<MaterialLookup>> getCategories() async {
+    final response = await _apiClient.getList(
+      '/Materials/lookup/categories',
+    );
+
+    return response
+        .map(
+          (item) => MaterialLookup.fromJson(
+        item as Map<String, dynamic>,
+      ),
+    )
+        .toList();
+  }
+
+  Future<List<MaterialLookup>> getUnits() async {
+    final response = await _apiClient.getList(
+      '/Materials/lookup/units',
+    );
+
+    return response
+        .map(
+          (item) => MaterialLookup.fromJson(
+        item as Map<String, dynamic>,
+      ),
+    )
+        .toList();
+  }
+
+  Future<List<MaterialLookup>> getMaterialTypes() async {
+    final response = await _apiClient.getList(
+      '/Materials/lookup/material-types',
+    );
+
+    return response
+        .map(
+          (item) => MaterialLookup.fromJson(
+        item as Map<String, dynamic>,
+      ),
+    )
         .toList();
   }
 

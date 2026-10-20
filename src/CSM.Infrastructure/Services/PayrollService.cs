@@ -6,19 +6,29 @@ using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
+using CSM.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
+
 
 namespace CSM.Infrastructure.Services;
+
 
 public sealed class PayrollService : IPayrollService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public PayrollService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
+
 
     public async Task<IReadOnlyCollection<PayrollResponse>> GetAllAsync(
         Guid currentUserId,
@@ -43,6 +53,40 @@ public sealed class PayrollService : IPayrollService
         {
             query = query.Where(
                 x => x.CompanyId == GetActorCompanyId(actor));
+        }
+
+        if (HasRole(actor, AppRoles.Employee))
+        {
+            if (!actor.EmployeeId.HasValue)
+            {
+                throw new PayrollManagementException(
+                    "No employee record is linked to this user.");
+            }
+
+            query = query.Where(
+                x => x.EmployeeId == actor.EmployeeId.Value);
+        }
+
+        var authorizedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == currentUserId &&
+                x.IsActive)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (authorizedSiteIds.Count > 0)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            query = query.Where(x =>
+                _dbContext.SiteAssignments.Any(a =>
+                    a.EmployeeId == x.EmployeeId &&
+                    authorizedSiteIds.Contains(a.ConstructionSiteId) &&
+                    a.StartDate <= today &&
+                    (!a.EndDate.HasValue ||
+                     a.EndDate.Value >= today)));
         }
 
         if (employeeId.HasValue)
@@ -118,6 +162,8 @@ public sealed class PayrollService : IPayrollService
                 "Payroll period end cannot be before the start date.");
         }
 
+
+
         var employee = await _dbContext.Employees
             .FirstOrDefaultAsync(
                 x => x.Id == request.EmployeeId,
@@ -125,29 +171,38 @@ public sealed class PayrollService : IPayrollService
             ?? throw new PayrollManagementException(
                 "Employee was not found.");
 
-        EnsureCompanyAccess(
-            actor,
-            employee.CompanyId);
-
-        if (employee.Status != EmployeeStatus.Active)
+        if (employee.WageType == WageType.Monthly)
         {
-            throw new PayrollManagementException(
-                "Payroll can only be created for an active employee.");
+            var tempRecord = new PayrollRecord
+            {
+                PeriodStart = request.PeriodStart,
+                PeriodEnd = request.PeriodEnd
+            };
+
+            EnsureFullCalendarMonth(tempRecord);
         }
 
-        var duplicateExists =
-            await _dbContext.PayrollRecords.AnyAsync(
-                x =>
-                    x.EmployeeId == request.EmployeeId &&
-                    x.PeriodStart == request.PeriodStart &&
-                    x.PeriodEnd == request.PeriodEnd,
-                cancellationToken);
+       EnsureCompanyAccess(actor, employee.CompanyId);
 
-        if (duplicateExists)
-        {
-            throw new PayrollManagementException(
-                "A payroll record already exists for this employee and period.");
-        }
+       if (employee.Status != EmployeeStatus.Active)
+       {
+           throw new PayrollManagementException(
+               "Payroll can only be created for an active employee.");
+       }
+
+       var duplicateExists = await _dbContext.PayrollRecords.AnyAsync(
+           x =>
+               x.EmployeeId == request.EmployeeId &&
+               x.PeriodStart == request.PeriodStart &&
+               x.PeriodEnd == request.PeriodEnd &&
+               x.Status != PayrollStatus.Cancelled,
+           cancellationToken);
+
+       if (duplicateExists)
+       {
+           throw new PayrollManagementException(
+               "A payroll record already exists for this employee and period.");
+       }
 
         var record = new PayrollRecord
         {
@@ -236,17 +291,54 @@ public sealed class PayrollService : IPayrollService
                     x.PeriodEndDate <= record.PeriodEnd)
             .ToListAsync(cancellationToken);
 
-        if (timesheets.Count == 0)
-        {
+
+var hasApprovedTimesheets = timesheets.Count > 0;
+
+if (hasApprovedTimesheets)
+{
+    record.RegularHours =
+        timesheets.Sum(x => x.RegularHours);
+
+    record.OvertimeHours =
+        timesheets.Sum(x => x.OvertimeHours);
+}
+else
+{
+    switch (record.Employee.WageType)
+    {
+        case WageType.Hourly:
+            if (!request.RegularHours.HasValue ||
+                request.RegularHours.Value < 0m)
+            {
+                throw new PayrollManagementException(
+                    "When no approved timesheets exist, regular hours must be supplied and cannot be negative.");
+            }
+
+            record.RegularHours = request.RegularHours.Value;
+            break;
+
+        case WageType.Daily:
+            if (!request.WorkingDays.HasValue ||
+                request.WorkingDays.Value < 0)
+            {
+                throw new PayrollManagementException(
+                    "When no approved timesheets exist, working days must be supplied and cannot be negative.");
+            }
+
+            break;
+
+        case WageType.Monthly:
+            EnsureFullCalendarMonth(record);
+            break;
+
+        default:
             throw new PayrollManagementException(
-                "No approved timesheets were found for this payroll period.");
-        }
+                "Employee wage type is not supported.");
+    }
 
-        record.RegularHours =
-            timesheets.Sum(x => x.RegularHours);
+    record.OvertimeHours = request.OvertimeHours ?? 0m;
+}
 
-        record.OvertimeHours =
-            timesheets.Sum(x => x.OvertimeHours);
 
         var employee = record.Employee;
 
@@ -263,21 +355,23 @@ public sealed class PayrollService : IPayrollService
 
                 break;
 
-            case WageType.Daily:
-                var payableDays =
-                    timesheets
-                        .Select(x => x.PeriodStartDate)
-                        .Distinct()
-                        .Count();
 
-                record.BasePay =
-                    employee.BaseWage *
-                    payableDays;
+case WageType.Daily:
+    var payableDays = hasApprovedTimesheets
+        ? timesheets
+            .Select(x => x.PeriodStartDate)
+            .Distinct()
+            .Count()
+        : request.WorkingDays!.Value;
 
-                hourlyRate =
-                    employee.BaseWage / 8m;
+    record.BasePay =
+        employee.BaseWage * payableDays;
 
-                break;
+    hourlyRate =
+        employee.BaseWage / 8m;
+
+    break;
+
 
             case WageType.Monthly:
                 EnsureFullCalendarMonth(record);
@@ -336,7 +430,16 @@ public sealed class PayrollService : IPayrollService
             currentUserId,
             cancellationToken);
 
-        EnsureCanApprove(actor);
+        if (!IsSuperAdmin(actor) &&
+            !HasRole(actor, AppRoles.CompanyAdmin) &&
+            !await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Payroll_Approve.ToString(),
+                cancellationToken))
+        {
+            throw new PayrollManagementException(
+                "You are not authorized to approve payroll.");
+        }
 
         var record = await GetPayrollAsync(
             payrollRecordId,
@@ -377,7 +480,16 @@ public sealed class PayrollService : IPayrollService
             currentUserId,
             cancellationToken);
 
-        EnsureCanApprove(actor);
+        if (!IsSuperAdmin(actor) &&
+            !HasRole(actor, AppRoles.CompanyAdmin) &&
+            !await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Payroll_Approve.ToString(),
+                cancellationToken))
+        {
+            throw new PayrollManagementException(
+                "You are not authorized to approve payroll.");
+        }
 
         var record = await GetPayrollAsync(
             payrollRecordId,
@@ -520,7 +632,7 @@ public sealed class PayrollService : IPayrollService
         };
 
         _dbContext.PayrollAdjustments.Add(adjustment);
-        _dbContext.PayrollAdjustments.Add(adjustment);
+
 
         if (record.Status == PayrollStatus.Calculated)
         {
@@ -532,6 +644,189 @@ public sealed class PayrollService : IPayrollService
 
         return Map(record);
     }
+
+    public async Task<byte[]> GeneratePayslipAsync(
+        Guid currentUserId,
+        Guid payrollRecordId,
+        CancellationToken cancellationToken = default)
+    {
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+        EnsureCanRead(actor);
+
+        var record = await GetPayrollAsync(payrollRecordId, cancellationToken);
+        EnsureCompanyAccess(actor, record.CompanyId);
+
+        var employeeName = string.Join(" ",
+            new[]
+            {
+                record.Employee.FirstName,
+                record.Employee.MiddleName,
+                record.Employee.LastName
+            }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+        var document = QuestPDF.Fluent.Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(25);
+
+                page.Header().Column(column =>
+                {
+                    column.Item().Text("HBG CONSTRUCTION PLC")
+                        .FontSize(22)
+                        .Bold();
+
+                    column.Item().Text("Employee Payslip")
+                        .FontSize(14)
+                        .FontColor(Colors.Grey.Darken2);
+
+                    column.Item().PaddingTop(5).LineHorizontal(1);
+                });
+
+                page.Content().Column(column =>
+                {
+                    column.Spacing(10);
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text($"Employee: {employeeName}");
+                            c.Item().Text($"Employee No: {record.Employee.EmployeeNumber}");
+                            c.Item().Text($"Currency: {record.CurrencyCode}");
+                        });
+
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().AlignRight().Text($"Status: {record.Status}");
+                            c.Item().AlignRight().Text(
+                                $"Period: {record.PeriodStart:dd/MM/yyyy} - {record.PeriodEnd:dd/MM/yyyy}");
+                        });
+                    });
+
+                    column.Item().PaddingVertical(5).LineHorizontal(0.5f);
+
+                    column.Item().Text("Earnings")
+                        .FontSize(13)
+                        .Bold();
+
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn();
+                        });
+
+                        void Row(string title, decimal value)
+                        {
+                            table.Cell().PaddingVertical(3).Text(title);
+                            table.Cell().PaddingVertical(3).AlignRight()
+                                .Text(value.ToString("N2"));
+                        }
+
+                        Row("Basic Salary", record.BasePay);
+                        Row("Overtime", record.OvertimePay);
+                        Row("Allowances", record.Allowances);
+                        Row("Bonuses", record.Bonuses);
+
+                        foreach (var item in record.Adjustments.Where(x => !x.IsDeduction))
+                            Row(item.Description, item.Amount);
+
+                        table.Cell().PaddingTop(6).Text("GROSS PAY").Bold();
+                        table.Cell().PaddingTop(6).AlignRight()
+                            .Text(record.GrossPay.ToString("N2"))
+                            .Bold();
+                    });
+
+                    column.Item().PaddingTop(15);
+
+                    column.Item().Text("Deductions")
+                        .FontSize(13)
+                        .Bold();
+
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn();
+                        });
+
+                        void Row(string title, decimal value)
+                        {
+                            table.Cell().PaddingVertical(3).Text(title);
+                            table.Cell().PaddingVertical(3).AlignRight()
+                                .Text(value.ToString("N2"));
+                        }
+
+                        Row("Income Tax", record.TaxDeduction);
+                        Row("Pension", record.PensionDeduction);
+                        Row("Other Deductions", record.OtherDeductions);
+
+                        foreach (var item in record.Adjustments.Where(x => x.IsDeduction))
+                            Row(item.Description, item.Amount);
+
+                        table.Cell().PaddingTop(6).Text("TOTAL DEDUCTIONS").Bold();
+                        table.Cell().PaddingTop(6).AlignRight()
+                            .Text(record.TotalDeductions.ToString("N2"))
+                            .Bold();
+                    });
+
+                    column.Item().PaddingTop(18);
+
+                    column.Item().Background(Colors.Grey.Lighten3).Padding(12).Row(row =>
+                    {
+                        row.RelativeItem().Text("NET PAY")
+                            .FontSize(16)
+                            .Bold();
+
+                        row.RelativeItem().AlignRight().Text(
+                            $"{record.CurrencyCode} {record.NetPay:N2}")
+                            .FontSize(18)
+                            .Bold()
+                            .FontColor(Colors.Green.Darken2);
+                    });
+
+                    column.Item().PaddingTop(30);
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text("Prepared By").FontSize(11);
+                            c.Item().PaddingTop(20).LineHorizontal(0.5f);
+                        });
+
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().AlignCenter().Text("Finance Manager").FontSize(11);
+                            c.Item().PaddingTop(20).LineHorizontal(0.5f);
+                        });
+
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().AlignRight().Text("Employee").FontSize(11);
+                            c.Item().PaddingTop(20).LineHorizontal(0.5f);
+                        });
+                    });
+                });
+
+                page.Footer().AlignCenter().Text(text =>
+                {
+                    text.Span("Generated on ");
+                    text.Span(DateTime.UtcNow.ToString("dd MMM yyyy HH:mm"));
+                });
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+
 
     private async Task<User> GetActorAsync(
         Guid currentUserId,
@@ -603,20 +898,24 @@ public sealed class PayrollService : IPayrollService
             record.TotalDeductions;
     }
 
-    private static void EnsureFullCalendarMonth(
-        PayrollRecord record)
+    private static void EnsureFullCalendarMonth(PayrollRecord record)
     {
-        var expectedStart =
-            new DateOnly(
-                record.PeriodStart.Year,
-                record.PeriodStart.Month,
-                1);
+        var start = record.PeriodStart;
+        var end = record.PeriodEnd;
 
-        var expectedEnd =
-            expectedStart.AddMonths(1).AddDays(-1);
+        // Must start on the 1st
+        if (start.Day != 1)
+        {
+            throw new PayrollManagementException(
+                "Monthly payroll must start on the first day of the month.");
+        }
 
-        if (record.PeriodStart != expectedStart ||
-            record.PeriodEnd != expectedEnd)
+        // Must end on the month's last day
+        var lastDay = DateTime.DaysInMonth(start.Year, start.Month);
+
+        if (end.Year != start.Year ||
+            end.Month != start.Month ||
+            end.Day != lastDay)
         {
             throw new PayrollManagementException(
                 "Monthly payroll must cover a complete calendar month.");
@@ -634,13 +933,15 @@ public sealed class PayrollService : IPayrollService
         }
     }
 
-    private static void EnsureCanRead(
-        User actor)
+    private static void EnsureCanRead(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
@@ -653,7 +954,9 @@ public sealed class PayrollService : IPayrollService
         User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

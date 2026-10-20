@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize]
 public sealed class WorkTasksController : ControllerBase
 {
     private readonly IWorkTaskService _workTaskService;
@@ -21,6 +21,7 @@ public sealed class WorkTasksController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Projects.View")]
     public async Task<ActionResult<IReadOnlyCollection<WorkTaskResponse>>> GetAll(
         [FromQuery] Guid projectId,
         [FromQuery] Guid? projectPhaseId,
@@ -38,11 +39,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpGet("{taskId:guid}")]
+    [Authorize(Policy = "Projects.View")]
     public async Task<ActionResult<WorkTaskResponse>> GetById(
         Guid taskId,
         CancellationToken cancellationToken)
@@ -58,11 +62,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPost]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> Create(
         CreateWorkTaskRequest request,
         CancellationToken cancellationToken)
@@ -81,11 +88,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPut("{taskId:guid}")]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> Update(
         Guid taskId,
         UpdateWorkTaskRequest request,
@@ -103,11 +113,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPut("{taskId:guid}/status")]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> ChangeStatus(
         Guid taskId,
         ChangeWorkTaskStatusRequest request,
@@ -125,11 +138,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPut("{taskId:guid}/progress")]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> UpdateProgress(
         Guid taskId,
         UpdateWorkTaskProgressRequest request,
@@ -147,11 +163,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPost("{taskId:guid}/dependencies")]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> AddDependency(
         Guid taskId,
         AddWorkTaskDependencyRequest request,
@@ -169,11 +188,14 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpDelete("{taskId:guid}/dependencies/{dependsOnTaskId:guid}")]
+    [Authorize(Policy = "Projects.Manage")]
     public async Task<ActionResult<WorkTaskResponse>> RemoveDependency(
         Guid taskId,
         Guid dependsOnTaskId,
@@ -191,7 +213,9 @@ public sealed class WorkTasksController : ControllerBase
         }
         catch (WorkTaskManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 

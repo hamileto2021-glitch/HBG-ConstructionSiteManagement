@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class StockReturnsController : ControllerBase
 {
     private readonly IStockReturnService _stockReturnService;
@@ -21,7 +21,48 @@ public sealed class StockReturnsController : ControllerBase
         _stockReturnService = stockReturnService;
     }
 
+    [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyCollection<StockReturnResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stockReturnService.GetAllAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (StockReturnManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{stockReturnId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<StockReturnResponse>> GetById(
+        Guid stockReturnId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stockReturnService.GetByIdAsync(
+                GetCurrentUserId(),
+                stockReturnId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (StockReturnManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<StockReturnResponse>> Create(
         CreateStockReturnRequest request,
         CancellationToken cancellationToken)

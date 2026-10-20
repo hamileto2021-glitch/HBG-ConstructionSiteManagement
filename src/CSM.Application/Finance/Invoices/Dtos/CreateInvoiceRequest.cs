@@ -3,7 +3,7 @@ using CSM.Domain.Enums;
 namespace CSM.Application.Finance.Invoices.Dtos;
 
 public sealed record CreateInvoiceRequest(
-    Guid ConstructionSiteId,
+    Guid? ConstructionSiteId,
     Guid? ProjectId,
     Guid? VendorId,
     string InvoiceNumber,

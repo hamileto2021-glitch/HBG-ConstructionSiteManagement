@@ -30,7 +30,7 @@ class _WorkTaskCreateScreenState
 
   DateTime? _plannedStartDate;
   DateTime? _plannedEndDate;
-  TaskPriority _priority = TaskPriority.normal;
+  Priority _priority = Priority.normal;
   bool _isSaving = false;
 
   @override
@@ -175,15 +175,15 @@ class _WorkTaskCreateScreenState
               ),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<TaskPriority>(
+            DropdownButtonFormField<Priority>(
               initialValue: _priority,
               decoration: const InputDecoration(
                 labelText: 'Priority',
                 border: OutlineInputBorder(),
               ),
-              items: TaskPriority.values
+              items: Priority.values
                   .map(
-                    (priority) => DropdownMenuItem<TaskPriority>(
+                    (priority) => DropdownMenuItem<Priority>(
                       value: priority,
                       child: Text(_priorityLabel(priority)),
                     ),
@@ -229,15 +229,15 @@ class _WorkTaskCreateScreenState
     );
   }
 
-  static String _priorityLabel(TaskPriority priority) {
+  static String _priorityLabel(Priority priority) {
     switch (priority) {
-      case TaskPriority.low:
+      case Priority.low:
         return 'Low';
-      case TaskPriority.normal:
+      case Priority.normal:
         return 'Normal';
-      case TaskPriority.high:
+      case Priority.high:
         return 'High';
-      case TaskPriority.critical:
+      case Priority.critical:
         return 'Critical';
     }
   }

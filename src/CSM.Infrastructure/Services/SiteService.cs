@@ -19,40 +19,86 @@ public sealed class SiteService : ISiteService
         _dbContext = dbContext;
     }
 
-    public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
-        Guid currentUserId,
-        CancellationToken cancellationToken = default)
+
+public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
+    Guid currentUserId,
+    CancellationToken cancellationToken = default)
+{
+    var actor = await GetActorAsync(
+        currentUserId,
+        cancellationToken);
+
+    IQueryable<ConstructionSite> query =
+        _dbContext.ConstructionSites
+            .AsNoTracking();
+
+    if (!IsSuperAdmin(actor))
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        EnsureSiteRole(actor);
 
-        IQueryable<ConstructionSite> query =
-            _dbContext.ConstructionSites
-                .AsNoTracking();
-
-        if (!IsSuperAdmin(actor))
+        if (!actor.CompanyId.HasValue)
         {
-            EnsureSiteRole(actor);
-
-            if (!actor.CompanyId.HasValue)
-            {
-                throw new SiteManagementException(
-                    "Current user is not assigned to a company.");
-            }
-
-            query = query.Where(
-                x => x.CompanyId == actor.CompanyId.Value);
+            throw new SiteManagementException(
+                "Current user is not assigned to a company.");
         }
 
-        var sites = await query
-            .OrderBy(x => x.Name)
-            .ToListAsync(cancellationToken);
+        var companyId = actor.CompanyId.Value;
 
-        return sites
-            .Select(Map)
-            .ToArray();
+        if (HasRole(actor, AppRoles.CompanyAdmin))
+        {
+            query = query.Where(
+                x => x.CompanyId == companyId);
+        }
+        else if (HasRole(actor, AppRoles.SiteManager) ||
+                 HasRole(actor, AppRoles.Accountant) ||
+                 HasRole(actor, AppRoles.HROfficer) ||
+                 HasRole(actor, AppRoles.HrOfficer))
+        {
+            var assignedSiteIds = _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .Where(access =>
+                    access.UserId == currentUserId &&
+                    access.CompanyId == companyId &&
+                    access.IsActive)
+                .Select(access => access.SiteId);
+
+            var hasSiteAssignments = await assignedSiteIds
+                .AnyAsync(cancellationToken);
+
+            query = query.Where(
+                site => site.CompanyId == companyId);
+
+            if (hasSiteAssignments)
+            {
+                query = query.Where(
+                    site => assignedSiteIds.Contains(site.Id));
+            }
+            // No active assignments: preserve company-wide access,
+            // matching the existing SiteManager behavior.
+        }
+        else
+        {
+            query = query.Where(
+                site =>
+                    site.CompanyId == companyId &&
+                    _dbContext.UserSiteAccesses.Any(
+                        access =>
+                            access.UserId == currentUserId &&
+                            access.SiteId == site.Id &&
+                            access.CompanyId == companyId &&
+                            access.IsActive));
+        }
     }
+
+    var sites = await query
+        .OrderBy(x => x.Name)
+        .ToListAsync(cancellationToken);
+
+    return sites
+        .Select(Map)
+        .ToArray();
+}
+
 
     public async Task<SiteResponse> GetByIdAsync(
         Guid currentUserId,
@@ -77,17 +123,26 @@ public sealed class SiteService : ISiteService
         CreateSiteRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
-        EnsureCanCreateOrModify(actor);
+        EnsureCanCreate(actor);
 
-        if (!IsSuperAdmin(actor) &&
-            actor.CompanyId != request.CompanyId)
+        // Resolve company from the logged-in user
+        Guid companyId;
+
+        if (IsSuperAdmin(actor))
         {
-            throw new SiteManagementException(
-                "You can only create sites for your own company.");
+            if (request.CompanyId == Guid.Empty)
+                throw new SiteManagementException("Company is required.");
+
+            companyId = request.CompanyId;
+        }
+        else
+        {
+            if (actor.CompanyId is null)
+                throw new SiteManagementException("Your account is not assigned to a company.");
+
+            companyId = actor.CompanyId.Value;
         }
 
         ValidateSiteInput(
@@ -100,48 +155,34 @@ public sealed class SiteService : ISiteService
             request.PlannedEndDate);
 
         var company = await _dbContext.Companies
-            .SingleOrDefaultAsync(
-                x => x.Id == request.CompanyId,
-                cancellationToken);
+            .SingleOrDefaultAsync(x => x.Id == companyId, cancellationToken);
 
         if (company is null)
-        {
-            throw new SiteManagementException(
-                "Company was not found.");
-        }
+            throw new SiteManagementException("Company was not found.");
 
         if (!company.IsActive)
-        {
-            throw new SiteManagementException(
-                "Cannot create a site for an inactive company.");
-        }
+            throw new SiteManagementException("Cannot create a site for an inactive company.");
 
-        var normalizedSiteCode =
-            request.SiteCode.Trim().ToUpperInvariant();
+        var normalizedSiteCode = request.SiteCode.Trim().ToUpperInvariant();
 
-        var siteCodeExists =
-            await _dbContext.ConstructionSites
-                .IgnoreQueryFilters()
-                .AnyAsync(
-                    x =>
-                        x.CompanyId == request.CompanyId &&
-                        x.SiteCode.ToUpper() == normalizedSiteCode,
-                    cancellationToken);
+        var siteCodeExists = await _dbContext.ConstructionSites
+            .IgnoreQueryFilters()
+            .AnyAsync(x =>
+                x.CompanyId == companyId &&
+                x.SiteCode.ToUpper() == normalizedSiteCode,
+                cancellationToken);
 
         if (siteCodeExists)
-        {
-            throw new SiteManagementException(
-                "A site with this code already exists in the company.");
-        }
+            throw new SiteManagementException("A site with this code already exists in the company.");
 
         await ValidateBusinessUnitAsync(
-            request.CompanyId,
+            companyId,
             request.BusinessUnitId,
             cancellationToken);
 
         var site = new ConstructionSite
         {
-            CompanyId = request.CompanyId,
+            CompanyId = companyId,
             SiteCode = normalizedSiteCode,
             Name = request.Name.Trim(),
             Description = Clean(request.Description),
@@ -152,20 +193,15 @@ public sealed class SiteService : ISiteService
             Country = Clean(request.Country),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
-            GeofenceRadiusMeters =
-                request.GeofenceRadiusMeters,
-            PlannedStartDate =
-                request.PlannedStartDate,
-            PlannedEndDate =
-                request.PlannedEndDate,
+            GeofenceRadiusMeters = request.GeofenceRadiusMeters,
+            PlannedStartDate = request.PlannedStartDate,
+            PlannedEndDate = request.PlannedEndDate,
             Status = SiteStatus.Planning,
             IsActive = true
         };
 
         _dbContext.ConstructionSites.Add(site);
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Map(site);
     }
@@ -180,13 +216,11 @@ public sealed class SiteService : ISiteService
             currentUserId,
             cancellationToken);
 
-        EnsureCanCreateOrModify(actor);
-
         var site = await GetSiteAsync(
             siteId,
             cancellationToken);
 
-        EnsureSiteAccess(actor, site);
+        EnsureCanModify(actor, site);
 
         ValidateSiteInput(
             site.SiteCode,
@@ -234,13 +268,11 @@ public sealed class SiteService : ISiteService
             currentUserId,
             cancellationToken);
 
-        EnsureCanCreateOrModify(actor);
-
         var site = await GetSiteAsync(
             siteId,
             cancellationToken);
 
-        EnsureSiteAccess(actor, site);
+        EnsureCanModify(actor, site);
 
         if (site.Status == request.Status)
         {
@@ -288,18 +320,60 @@ public sealed class SiteService : ISiteService
             currentUserId,
             cancellationToken);
 
-        EnsureCanCreateOrModify(actor);
-
         var site = await GetSiteAsync(
             siteId,
             cancellationToken);
 
-        EnsureSiteAccess(actor, site);
+        EnsureCanModify(actor, site);
 
         site.IsActive = isActive;
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<SiteResponse>> GetAssignmentOptionsAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        if (!IsSuperAdmin(actor))
+        {
+            if (!actor.CompanyId.HasValue)
+            {
+                throw new SiteManagementException(
+                    "Current user is not assigned to a company.");
+            }
+
+            if (!HasRole(actor, AppRoles.CompanyAdmin) &&
+                !HasRole(actor, AppRoles.HrOfficer) &&
+                !HasRole(actor, AppRoles.HROfficer))
+            {
+                throw new SiteManagementException(
+                    "You are not authorized to access site assignment options.");
+            }
+        }
+
+        var query = _dbContext.ConstructionSites
+            .AsNoTracking()
+            .Where(x => x.IsActive);
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(
+                x => x.CompanyId == actor.CompanyId!.Value);
+        }
+
+        var sites = await query
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
+        return sites
+            .Select(Map)
+            .ToArray();
     }
 
     private async Task<User> GetActorAsync(
@@ -351,31 +425,87 @@ public sealed class SiteService : ISiteService
             throw new SiteManagementException(
                 "You cannot access a site outside your company.");
         }
-    }
-
-    private static void EnsureCanCreateOrModify(
-        User actor)
-    {
-        if (IsSuperAdmin(actor))
-        {
-            return;
-        }
 
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.Accountant))
         {
             return;
         }
 
-        throw new SiteManagementException(
-            "You are not authorized to create or modify construction sites.");
+        var activeAssignments = _dbContext.UserSiteAccesses
+            .Where(access =>
+                access.UserId == actor.Id &&
+                access.CompanyId == site.CompanyId &&
+                access.IsActive);
+
+        // Match GetAllAsync: a Site Manager with no active
+        // assignments can access sites within their company.
+        if (HasRole(actor, AppRoles.SiteManager) &&
+            !activeAssignments.Any())
+        {
+            return;
+        }
+
+        var hasSiteAccess = activeAssignments.Any(
+            access => access.SiteId == site.Id);
+
+        if (!hasSiteAccess)
+        {
+            throw new SiteManagementException(
+                "You are not assigned to this site.");
+        }
     }
+
+
+
+private static void EnsureCanCreate(User actor)
+{
+    if (IsSuperAdmin(actor) ||
+        HasRole(actor, AppRoles.CompanyAdmin))
+    {
+        return;
+    }
+
+    throw new SiteManagementException(
+        "Only Super Admins and Company Admins can create construction sites.");
+}
+
+private void EnsureCanModify(
+    User actor,
+    ConstructionSite site)
+{
+    if (IsSuperAdmin(actor))
+    {
+        return;
+    }
+
+    EnsureSiteRole(actor);
+
+    if (!actor.CompanyId.HasValue ||
+        actor.CompanyId.Value != site.CompanyId)
+    {
+        throw new SiteManagementException(
+            "You cannot modify a site outside your company.");
+    }
+
+    if (HasRole(actor, AppRoles.CompanyAdmin))
+    {
+        return;
+    }
+
+    EnsureSiteAccess(actor, site);
+}
+
+
 
     private static void EnsureSiteRole(User actor)
     {
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

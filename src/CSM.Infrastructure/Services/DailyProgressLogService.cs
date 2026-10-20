@@ -48,6 +48,8 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
         IQueryable<DailyProgressLog> query =
             _dbContext.DailyProgressLogs
                 .AsNoTracking()
+                .Include(x => x.DailyProgressTaskEntries)
+                    .ThenInclude(x => x.EquipmentEntries)
                 .Where(x => x.ProjectId == project.Id);
 
         if (fromDate.HasValue)
@@ -127,10 +129,15 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
                         x.LogDate == request.LogDate,
                     cancellationToken);
 
-        if (duplicateExists)
+        var existing = await _dbContext.DailyProgressLogs
+            .FirstOrDefaultAsync(
+                x => x.ProjectId == project.Id &&
+                     x.LogDate == request.LogDate,
+                cancellationToken);
+
+        if (existing is not null)
         {
-            throw new DailyProgressLogManagementException(
-                "A daily progress log already exists for this project and date.");
+            return Map(existing);
         }
 
         var logNumber =
@@ -186,11 +193,45 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
 
                 _dbContext.DailyProgressLogs.Add(log);
 
-                await _dbContext.SaveChangesAsync(
-                    cancellationToken);
+                // Load the task for this daily report
+                var task = await _dbContext.WorkTasks
+                    .Include(t => t.ProjectPhase)
+                        .ThenInclude(p => p.Tasks)
+                    .FirstOrDefaultAsync(
+                        t => t.Id == request.TaskId,
+                        cancellationToken);
 
-                await transaction.CommitAsync(
-                    cancellationToken);
+                if (task is not null)
+                {
+                    // Update task progress
+                    task.ProgressPercentage = request.ProgressPercentage;
+
+                    task.Status = request.ProgressPercentage switch
+                    {
+                        0 => WorkTaskStatus.NotStarted,
+                        100 => WorkTaskStatus.Completed,
+                        _ => WorkTaskStatus.InProgress
+                    };
+
+                    // Recalculate phase progress
+                    var phase = task.ProjectPhase;
+
+                    phase.ProgressPercentage =
+                        phase.Tasks.Any()
+                            ? phase.Tasks.Average(x => x.ProgressPercentage)
+                            : 0;
+
+                    phase.Status = phase.ProgressPercentage switch
+                    {
+                        0 => ProjectPhaseStatus.NotStarted,
+                        100 => ProjectPhaseStatus.Completed,
+                        _ => ProjectPhaseStatus.InProgress
+                    };
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
             });
 
         return Map(log);
@@ -483,8 +524,7 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
         return $"DPL-{nextNumber:D6}";
     }
 
-    private static DailyProgressLogResponse Map(
-        DailyProgressLog log)
+    private static DailyProgressLogResponse Map(DailyProgressLog log)
     {
         return new DailyProgressLogResponse(
             log.Id,
@@ -494,9 +534,12 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
             log.LogDate,
             log.WeatherCondition,
             log.TemperatureCelsius,
-            log.LaborCount,
+
+            // Existing fields
+            log.DailyProgressTaskEntries.Sum(x => x.LabourCount),
             log.ContractorLaborCount,
             log.ProgressPercentage,
+
             log.WorkCompleted,
             log.WorkPlannedNext,
             log.MaterialsUsedSummary,
@@ -505,6 +548,7 @@ public sealed class DailyProgressLogService : IDailyProgressLogService
             log.Issues,
             log.SafetyNotes,
             log.Remarks,
-            log.CreatedAtUtc);
+            log.CreatedAtUtc
+        );
     }
 }

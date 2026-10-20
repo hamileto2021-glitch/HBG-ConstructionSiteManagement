@@ -15,6 +15,7 @@ public sealed record UpdateEmployeeRequest(
     string? JobTitle,
     string? Department,
     EmployeeType EmployeeType,
+    EmployeeScope EmployeeScope,
     WageType WageType,
     decimal BaseWage,
     string CurrencyCode,

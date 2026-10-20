@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.SiteManagement)]
+[Authorize]
 public sealed class SitesController : ControllerBase
 {
     private readonly ISiteService _siteService;
@@ -21,6 +21,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Sites.View")]
     public async Task<ActionResult<IReadOnlyCollection<SiteResponse>>> GetAll(
         CancellationToken cancellationToken)
     {
@@ -39,6 +40,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpGet("{siteId:guid}")]
+    [Authorize(Policy = "Sites.View")]
     public async Task<ActionResult<SiteResponse>> GetById(
         Guid siteId,
         CancellationToken cancellationToken)
@@ -53,12 +55,15 @@ public sealed class SitesController : ControllerBase
             return Ok(site);
         }
         catch (SiteManagementException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+{
+    return StatusCode(
+        StatusCodes.Status403Forbidden,
+        new { message = ex.Message });
+}
     }
 
     [HttpPost]
+    [Authorize(Policy = "Sites.Manage")]
     public async Task<ActionResult<SiteResponse>> Create(
         CreateSiteRequest request,
         CancellationToken cancellationToken)
@@ -82,6 +87,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpPut("{siteId:guid}")]
+    [Authorize(Policy = "Sites.Manage")]
     public async Task<ActionResult<SiteResponse>> Update(
         Guid siteId,
         UpdateSiteRequest request,
@@ -104,6 +110,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpPut("{siteId:guid}/status")]
+    [Authorize(Policy = "Sites.Manage")]
     public async Task<ActionResult<SiteResponse>> ChangeStatus(
         Guid siteId,
         ChangeSiteStatusRequest request,
@@ -126,6 +133,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpPut("{siteId:guid}/activate")]
+    [Authorize(Policy = "Sites.Manage")]
     public async Task<IActionResult> Activate(
         Guid siteId,
         CancellationToken cancellationToken)
@@ -147,6 +155,7 @@ public sealed class SitesController : ControllerBase
     }
 
     [HttpPut("{siteId:guid}/deactivate")]
+    [Authorize(Policy = "Sites.Manage")]
     public async Task<IActionResult> Deactivate(
         Guid siteId,
         CancellationToken cancellationToken)
@@ -166,6 +175,29 @@ public sealed class SitesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [HttpGet("assignment-options")]
+    [Authorize(Policy = "Sites.View")]
+    public async Task<ActionResult<IReadOnlyCollection<SiteResponse>>> GetAssignmentOptions(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sites = await _siteService.GetAssignmentOptionsAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(sites);
+        }
+        catch (SiteManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+
+
+
 
     private Guid GetCurrentUserId()
     {

@@ -20,6 +20,85 @@ public sealed class StockReturnService : IStockReturnService
         _dbContext = dbContext;
     }
 
+    public async Task<IReadOnlyCollection<StockReturnResponse>> GetAllAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanManage(actor);
+
+        var query = _dbContext.StockMovements
+            .AsNoTracking()
+            .Where(x => x.MovementType == StockMovementType.Return)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .AsQueryable();
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(x => x.CompanyId == actor.CompanyId);
+        }
+
+        if (HasRole(actor, AppRoles.SiteManager))
+        {
+            var activeSiteIds = await _dbContext.UserSiteAccesses
+                .Where(access =>
+                    access.UserId == actor.Id &&
+                    access.CompanyId == actor.CompanyId &&
+                    access.IsActive)
+                .Select(access => access.SiteId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (activeSiteIds.Count > 0)
+            {
+                query = query.Where(
+                    x => activeSiteIds.Contains(
+                        x.StockItem.ConstructionSiteId));
+            }
+        }
+
+        var records = await query
+            .OrderByDescending(x => x.MovementDateUtc)
+            .ToListAsync(cancellationToken);
+
+        return records.Select(Map).ToList();
+    }
+
+    public async Task<StockReturnResponse> GetByIdAsync(
+        Guid currentUserId,
+        Guid stockReturnId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanManage(actor);
+
+        var query = _dbContext.StockMovements
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == stockReturnId &&
+                x.MovementType == StockMovementType.Return)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .AsQueryable();
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(x => x.CompanyId == actor.CompanyId);
+        }
+
+        var movement = await query.SingleOrDefaultAsync(cancellationToken)
+            ?? throw new StockReturnManagementException("Stock return was not found.");
+
+        return Map(movement);
+    }
+
     public async Task<StockReturnResponse> CreateAsync(
         Guid currentUserId,
         CreateStockReturnRequest request,
@@ -323,6 +402,67 @@ public sealed class StockReturnService : IStockReturnService
         };
     }
 
+    private StockReturnResponse Map(StockMovement movement)
+    {
+        var remarks = movement.Remarks ?? string.Empty;
+
+        string? returnedBy = null;
+        string? reason = null;
+        string? note = null;
+
+        foreach (var part in remarks.Split(" | ", StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("Returned By: "))
+                returnedBy = part["Returned By: ".Length..];
+            else if (part.StartsWith("Reason: "))
+                reason = part["Reason: ".Length..];
+            else
+                note = part;
+        }
+
+        var originalIssue = _dbContext.StockMovements
+            .AsNoTracking()
+            .FirstOrDefault(x => x.Id == movement.ReferenceId);
+
+        var originalIssued = originalIssue?.Quantity ?? 0m;
+
+        var previouslyReturned = _dbContext.StockMovements
+            .AsNoTracking()
+            .Where(x =>
+                x.MovementType == StockMovementType.Return &&
+                x.ReferenceId == movement.ReferenceId &&
+                x.Id != movement.Id)
+            .Sum(x => (decimal?)x.Quantity) ?? 0m;
+
+        return new StockReturnResponse
+        {
+            Id = movement.Id,
+            OriginalIssueMovementId = movement.ReferenceId ?? Guid.Empty,
+            StockItemId = movement.StockItemId,
+            ConstructionSiteId = movement.StockItem.ConstructionSiteId,
+            SiteName = movement.StockItem.ConstructionSite.Name,
+            MaterialId = movement.StockItem.MaterialId,
+            MaterialCode = movement.StockItem.Material.MaterialCode,
+            MaterialName = movement.StockItem.Material.Name,
+            UnitOfMeasure = movement.StockItem.Material.UnitOfMeasure,
+
+            OriginalIssuedQuantity = originalIssued,
+            PreviouslyReturnedQuantity = previouslyReturned,
+            ReturnedQuantity = movement.Quantity,
+            RemainingReturnableQuantity =
+                originalIssued - previouslyReturned - movement.Quantity,
+
+            UnitCost = movement.UnitCost ?? 0m,
+            QuantityOnHandBefore = movement.StockBalanceBefore ?? 0m,
+            QuantityOnHandAfter = movement.StockBalanceAfter ?? 0m,
+            ReturnDateUtc = movement.MovementDateUtc,
+            ReferenceNumber = movement.ReferenceNumber ?? string.Empty,
+            ReturnedBy = returnedBy,
+            Reason = reason,
+            Remarks = note
+        };
+    }
+
     private async Task<User> GetActorAsync(
         Guid currentUserId,
         CancellationToken cancellationToken)
@@ -368,16 +508,12 @@ public sealed class StockReturnService : IStockReturnService
         }
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanManage(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(
-                actor,
-                AppRoles.CompanyAdmin) ||
-            HasRole(
-                actor,
-                AppRoles.SiteManager))
+        if (HasRole(actor, AppRoles.Administrator) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }
@@ -408,7 +544,7 @@ public sealed class StockReturnService : IStockReturnService
     {
         return HasRole(
             actor,
-            AppRoles.SuperAdmin);
+            AppRoles.Administrator);
     }
 
     private static bool HasRole(

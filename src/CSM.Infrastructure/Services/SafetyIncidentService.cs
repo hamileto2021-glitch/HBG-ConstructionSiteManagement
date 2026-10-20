@@ -32,6 +32,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
 
         var query = _dbContext.SafetyIncidents
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .Where(x => !x.IsDeleted);
 
         if (!IsSuperAdmin(actor))
@@ -40,37 +41,11 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
                 x => x.CompanyId == GetActorCompanyId(actor));
         }
 
-        return await query
+        var incidents = await query
             .OrderByDescending(x => x.OccurredAtUtc)
-            .Select(x => new SafetyIncidentResponse
-            {
-                Id = x.Id,
-                CompanyId = x.CompanyId,
-                ConstructionSiteId = x.ConstructionSiteId,
-                ProjectId = x.ProjectId,
-                EmployeeId = x.EmployeeId,
-                IncidentNumber = x.IncidentNumber,
-                OccurredAtUtc = x.OccurredAtUtc,
-                ReportedAtUtc = x.ReportedAtUtc,
-                ReportedBy = x.ReportedBy,
-                LocationDescription = x.LocationDescription,
-                Description = x.Description,
-                Severity = x.Severity,
-                Status = x.Status,
-                InjuryOccurred = x.InjuryOccurred,
-                MedicalTreatmentRequired = x.MedicalTreatmentRequired,
-                LostTimeIncident = x.LostTimeIncident,
-                ImmediateActionTaken = x.ImmediateActionTaken,
-                RootCause = x.RootCause,
-                CorrectiveAction = x.CorrectiveAction,
-                InvestigatedBy = x.InvestigatedBy,
-                InvestigationCompletedAtUtc =
-                    x.InvestigationCompletedAtUtc,
-                ClosedAtUtc = x.ClosedAtUtc,
-                CreatedAtUtc = x.CreatedAtUtc,
-                UpdatedAtUtc = x.UpdatedAtUtc
-            })
             .ToListAsync(cancellationToken);
+
+        return incidents.Select(Map).ToList();
     }
 
     public async Task<SafetyIncidentResponse> GetByIdAsync(
@@ -86,17 +61,15 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
 
         var incident = await _dbContext.SafetyIncidents
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .SingleOrDefaultAsync(
-                x =>
-                    x.Id == safetyIncidentId &&
-                    !x.IsDeleted,
+                x => x.Id == safetyIncidentId &&
+                     !x.IsDeleted,
                 cancellationToken)
             ?? throw new SafetyIncidentManagementException(
                 "Safety incident was not found.");
 
-        EnsureCompanyAccess(
-            actor,
-            incident.CompanyId);
+        EnsureCompanyAccess(actor, incident.CompanyId);
 
         return Map(incident);
     }
@@ -591,6 +564,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             CompanyId = incident.CompanyId,
             ConstructionSiteId =
                 incident.ConstructionSiteId,
+            ConstructionSiteName = incident.ConstructionSite?.Name ?? string.Empty,
             ProjectId = incident.ProjectId,
             EmployeeId = incident.EmployeeId,
             IncidentNumber =

@@ -43,4 +43,7 @@ public class WorkTask : TenantEntity
 
     public ICollection<WorkTaskDependency> DependentTasks { get; set; }
         = new List<WorkTaskDependency>();
+
+    public ICollection<DailyProgressTaskEntry> DailyProgressEntries { get; set; }
+        = new List<DailyProgressTaskEntry>();
 }

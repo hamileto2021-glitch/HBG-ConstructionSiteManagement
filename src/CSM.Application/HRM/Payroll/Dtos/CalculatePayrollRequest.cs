@@ -1,3 +1,4 @@
+
 namespace CSM.Application.HRM.Payroll.Dtos;
 
 public sealed record CalculatePayrollRequest(
@@ -6,4 +7,7 @@ public sealed record CalculatePayrollRequest(
     decimal Bonuses,
     decimal TaxDeduction,
     decimal PensionDeduction,
-    decimal OtherDeductions);
+    decimal OtherDeductions,
+    decimal? RegularHours = null,
+    int? WorkingDays = null,
+    decimal? OvertimeHours = null);

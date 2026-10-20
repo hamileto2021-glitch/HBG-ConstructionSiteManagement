@@ -16,7 +16,7 @@ public sealed class DailyMaterialUsageResponse
 
     public string MaterialName { get; set; } = string.Empty;
 
-    public Guid DailyProgressLogId { get; set; }
+    public Guid? DailyProgressLogId { get; set; }
 
     public Guid LoggedByUserId { get; set; }
 

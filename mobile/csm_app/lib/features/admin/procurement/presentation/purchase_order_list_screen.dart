@@ -4,6 +4,11 @@ import '../data/models/purchase_order.dart';
 import '../data/repositories/purchase_order_repository.dart';
 import 'purchase_order_create_screen.dart';
 import 'purchase_order_detail_screen.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
+
 
 class PurchaseOrderListScreen extends StatefulWidget {
   const PurchaseOrderListScreen({
@@ -217,6 +222,107 @@ class _PurchaseOrderListScreenState
       );
     }
 
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _PurchaseOrderKpiCard(
+                  title: 'POs',
+                  value: '${_purchaseOrders.length}',
+                  icon: Icons.receipt_long,
+                  color: Colors.blue,
+                ),
+                _PurchaseOrderKpiCard(
+                  title: 'Pending',
+                  value: '$_pendingCount',
+                  icon: Icons.hourglass_top,
+                  color: Colors.orange,
+                ),
+                _PurchaseOrderKpiCard(
+                  title: 'Approved',
+                  value: '$_approvedCount',
+                  icon: Icons.check_circle,
+                  color: Colors.green,
+                ),
+                _PurchaseOrderKpiCard(
+                  title: 'Value',
+                  value: _totalValue.toStringAsFixed(0),
+                  icon: Icons.account_balance_wallet,
+                  color: Colors.deepPurple,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'PO Number',
+                  value: (r) => r['number'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Vendor',
+                  value: (r) => r['vendor'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Site',
+                  value: (r) => r['site'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Amount',
+                  value: (r) => r['amount'] as String,
+                  numeric: true,
+                ),
+                AdaptiveColumn(
+                  label: 'Status',
+                  value: (r) => r['status'] as String,
+                ),
+              ],
+              rows: _purchaseOrders.map((po) {
+                return {
+                  'item': po,
+                  'number': po.purchaseOrderNumber,
+                  'vendor': po.vendorName,
+                  'site': po.siteName,
+                  'amount':
+                  '${po.currencyCode} ${po.totalAmount.toStringAsFixed(2)}',
+                  'status': _statusLabel(po.status),
+                };
+              }).toList(),
+              onRowTap: (row) async {
+                final po = row['item'] as PurchaseOrder;
+
+                final changed = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PurchaseOrderDetailScreen(
+                      repository: widget.repository,
+                      purchaseOrderId: po.id,
+                    ),
+                  ),
+                );
+
+                if (changed == true && mounted) {
+                  await _loadPurchaseOrders();
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _purchaseOrders.length,
@@ -225,19 +331,15 @@ class _PurchaseOrderListScreenState
 
         return _PurchaseOrderCard(
           purchaseOrder: purchaseOrder,
-          statusLabel:
-              _statusLabel(purchaseOrder.status),
-          orderDate:
-              _formatDate(purchaseOrder.orderDate),
+          statusLabel: _statusLabel(purchaseOrder.status),
+          orderDate: _formatDate(purchaseOrder.orderDate),
           onTap: () async {
-            final changed =
-                await Navigator.of(context).push<bool>(
+            final changed = await Navigator.push<bool>(
+              context,
               MaterialPageRoute(
-                builder: (_) =>
-                    PurchaseOrderDetailScreen(
+                builder: (_) => PurchaseOrderDetailScreen(
                   repository: widget.repository,
-                  purchaseOrderId:
-                      purchaseOrder.id,
+                  purchaseOrderId: purchaseOrder.id,
                 ),
               ),
             );
@@ -250,6 +352,21 @@ class _PurchaseOrderListScreenState
       },
     );
   }
+
+
+
+  int get _pendingCount => _purchaseOrders
+      .where((e) => e.status == PurchaseOrderStatus.pendingApproval)
+      .length;
+
+  int get _approvedCount => _purchaseOrders
+      .where((e) => e.status == PurchaseOrderStatus.approved)
+      .length;
+
+  double get _totalValue => _purchaseOrders.fold(
+    0,
+        (sum, e) => sum + e.totalAmount,
+  );
 }
 
 class _PurchaseOrderCard extends StatelessWidget {
@@ -332,6 +449,45 @@ class _PurchaseOrderCard extends StatelessWidget {
             ),
           ],
         ),
+        ),
+      ),
+    );
+  }
+}
+class _PurchaseOrderKpiCard extends StatelessWidget {
+  const _PurchaseOrderKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(title),
+          ],
         ),
       ),
     );

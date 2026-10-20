@@ -1,12 +1,14 @@
 using CSM.Application.Common.Exceptions;
 using CSM.Application.HRM.Attendances;
 using CSM.Application.HRM.Attendances.Dtos;
+using CSM.Application.Notifications;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Organization;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
+using CSM.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
@@ -14,11 +16,17 @@ namespace CSM.Infrastructure.Services;
 public sealed class AttendanceService : IAttendanceService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly INotificationPublisher _notifications;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public AttendanceService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        INotificationPublisher notifications,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _notifications = notifications;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<AttendanceResponse>> GetAllAsync(
@@ -56,6 +64,37 @@ public sealed class AttendanceService : IAttendanceService
 
             query = query.Where(
                 x => x.CompanyId == companyId);
+        }
+
+        // Restrict site-level HR officers to their authorized sites.
+        var isHrOfficer =
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.HrOfficer);
+
+        if (isHrOfficer)
+        {
+            var hasActiveSiteAccess =
+                await _dbContext.UserSiteAccesses
+                    .AsNoTracking()
+                    .AnyAsync(
+                        x => x.UserId == currentUserId &&
+                             x.IsActive,
+                        cancellationToken);
+
+            if (hasActiveSiteAccess)
+            {
+                var authorizedSiteIds =
+                    _dbContext.UserSiteAccesses
+                        .AsNoTracking()
+                        .Where(
+                            x => x.UserId == currentUserId &&
+                                 x.IsActive)
+                        .Select(x => x.SiteId);
+
+                query = query.Where(
+                    x => authorizedSiteIds.Contains(
+                        x.ConstructionSiteId));
+            }
         }
 
         if (employeeId.HasValue)
@@ -270,6 +309,19 @@ public sealed class AttendanceService : IAttendanceService
 
         _dbContext.Attendances.Add(attendance);
 
+        // Needs approval: tell the people who can approve it. Staged on the
+        // same DbContext, so it is saved together with the record below.
+        if (requiresApproval)
+        {
+            await StageApprovalNeededAsync(
+                attendance,
+                currentUserId,
+                request.Source == AttendanceSource.Manual
+                    ? "manual entry"
+                    : "check-in outside the site geofence",
+                cancellationToken);
+        }
+
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
@@ -377,11 +429,26 @@ public sealed class AttendanceService : IAttendanceService
                 request.Longitude,
                 request.AccuracyMeters);
 
+        var alreadyNeededApproval = attendance.RequiresApproval;
+
         if (HasConfiguredGeofence(
                 attendance.ConstructionSite) &&
             !attendance.IsCheckOutWithinGeofence)
         {
             attendance.RequiresApproval = true;
+        }
+
+        // The check-out is what made this record need approval, so tell the
+        // approvers now. (A record that already needed approval was
+        // announced at check-in.)
+        if (!alreadyNeededApproval &&
+            attendance.RequiresApproval)
+        {
+            await StageApprovalNeededAsync(
+                attendance,
+                currentUserId,
+                "check-out outside the site geofence",
+                cancellationToken);
         }
 
         var remarks = Clean(request.Remarks);
@@ -442,7 +509,17 @@ public sealed class AttendanceService : IAttendanceService
             currentUserId,
             cancellationToken);
 
-        EnsureCanApprove(actor);
+        var canApprove =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Attendance_Approve.ToString(),
+                cancellationToken);
+
+        if (!canApprove)
+        {
+            throw new AttendanceManagementException(
+                "You are not authorized to approve attendance.");
+        }
 
         var attendance = await GetAttendanceAsync(
             attendanceId,
@@ -497,7 +574,17 @@ public sealed class AttendanceService : IAttendanceService
             currentUserId,
             cancellationToken);
 
-        EnsureCanOverride(actor);
+        var canOverride =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Attendance_Override.ToString(),
+                cancellationToken);
+
+        if (!canOverride)
+        {
+            throw new AttendanceManagementException(
+                "You are not authorized to override attendance.");
+        }
 
         var attendance = await GetAttendanceAsync(
             attendanceId,
@@ -596,10 +683,40 @@ public sealed class AttendanceService : IAttendanceService
             attendance.Remarks = remarks;
         }
 
+        // The record needs a fresh approval, so tell the other approvers.
+        await StageApprovalNeededAsync(
+            attendance,
+            currentUserId,
+            $"manual override: {reason}",
+            cancellationToken);
+
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
         return Map(attendance);
+    }
+
+    // Tells everyone with attendance approval for this site, except the
+    // person who just made the change.
+    private Task StageApprovalNeededAsync(
+        Attendance attendance,
+        Guid actorId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        return _notifications.StageForPermissionHoldersAsync(
+            attendance.CompanyId,
+            attendance.ConstructionSiteId,
+            GranularPermission.HRM_Attendance_Approve,
+            actorId,
+            "Attendance awaiting approval",
+            $"{BuildEmployeeName(attendance.Employee)} - " +
+            $"{attendance.ConstructionSite.Name}, " +
+            $"{attendance.AttendanceDate:dd MMM yyyy} ({reason})",
+            NotificationSeverity.Info,
+            "Attendance",
+            attendance.Id,
+            cancellationToken);
     }
 
     private static AttendanceStatus DetermineStatus(
@@ -805,8 +922,7 @@ public sealed class AttendanceService : IAttendanceService
             : value.Trim();
     }
 
-    private static void EnsureCanRead(
-        User actor)
+    private static void EnsureCanRead(User actor)
     {
         if (IsSuperAdmin(actor))
         {
@@ -815,7 +931,9 @@ public sealed class AttendanceService : IAttendanceService
 
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -824,13 +942,14 @@ public sealed class AttendanceService : IAttendanceService
             "You are not authorized to access attendance.");
     }
 
-    private static void EnsureCanModify(
-        User actor)
+    private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -890,19 +1009,26 @@ public sealed class AttendanceService : IAttendanceService
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static AttendanceResponse Map(
-        Attendance attendance)
+    private static string BuildEmployeeName(
+        Employee employee)
     {
-        var employeeName = string.Join(
+        return string.Join(
             " ",
             new[]
             {
-                attendance.Employee.FirstName,
-                attendance.Employee.MiddleName,
-                attendance.Employee.LastName
+                employee.FirstName,
+                employee.MiddleName,
+                employee.LastName
             }
             .Where(x =>
                 !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private static AttendanceResponse Map(
+        Attendance attendance)
+    {
+        var employeeName = BuildEmployeeName(
+            attendance.Employee);
 
         return new AttendanceResponse(
             attendance.Id,

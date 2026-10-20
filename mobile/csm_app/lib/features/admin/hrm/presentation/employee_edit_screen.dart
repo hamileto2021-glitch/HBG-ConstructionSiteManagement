@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../data/models/employee.dart';
 import '../data/repositories/employee_repository.dart';
+import '../../sites/data/models/site.dart';
+import '../../sites/data/repositories/site_repository.dart';
+import '../data/repositories/site_assignment_repository.dart';
+import '../data/models/site_assignment/site_assignment.dart';
+
 
 class EmployeeEditScreen extends StatefulWidget {
   const EmployeeEditScreen({
@@ -35,6 +40,12 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   late final TextEditingController _bankAccountController;
   late final TextEditingController _emergencyNameController;
   late final TextEditingController _emergencyPhoneController;
+  final _siteRepository = SiteRepository();
+  final _siteAssignmentRepository = SiteAssignmentRepository();
+
+  List<Site> _sites = [];
+  Site? _selectedSite;
+  SiteAssignment? _primaryAssignment;
 
   late DateTime? _dateOfBirth;
   late DateTime _hireDate;
@@ -48,45 +59,73 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   @override
   void initState() {
     super.initState();
+    _initialize();
+  }
 
+  Future<void> _initialize() async {
     final employee = widget.employee;
 
-    _firstNameController = TextEditingController(text: employee.firstName);
-    _middleNameController = TextEditingController(
-      text: employee.middleName ?? '',
-    );
-    _lastNameController = TextEditingController(text: employee.lastName);
-    _phoneController = TextEditingController(text: employee.phoneNumber ?? '');
-    _emailController = TextEditingController(text: employee.email ?? '');
-    _nationalIdController = TextEditingController(
-      text: employee.nationalIdNumber ?? '',
-    );
-    _taxIdController = TextEditingController(
-      text: employee.taxIdentificationNumber ?? '',
-    );
-    _jobTitleController = TextEditingController(text: employee.jobTitle ?? '');
-    _departmentController = TextEditingController(
-      text: employee.department ?? '',
-    );
-    _baseWageController = TextEditingController(
-      text: employee.baseWage.toString(),
-    );
-    _currencyController = TextEditingController(text: employee.currencyCode);
-    _bankNameController = TextEditingController(text: employee.bankName ?? '');
-    _bankAccountController = TextEditingController(
-      text: employee.bankAccountNumber ?? '',
-    );
-    _emergencyNameController = TextEditingController(
-      text: employee.emergencyContactName ?? '',
-    );
-    _emergencyPhoneController = TextEditingController(
-      text: employee.emergencyContactPhone ?? '',
-    );
+    _firstNameController =
+        TextEditingController(text: employee.firstName);
+    _middleNameController =
+        TextEditingController(text: employee.middleName ?? '');
+    _lastNameController =
+        TextEditingController(text: employee.lastName);
+    _phoneController =
+        TextEditingController(text: employee.phoneNumber ?? '');
+    _emailController =
+        TextEditingController(text: employee.email ?? '');
+    _nationalIdController =
+        TextEditingController(text: employee.nationalIdNumber ?? '');
+    _taxIdController =
+        TextEditingController(text: employee.taxIdentificationNumber ?? '');
+    _jobTitleController =
+        TextEditingController(text: employee.jobTitle ?? '');
+    _departmentController =
+        TextEditingController(text: employee.department ?? '');
+    _baseWageController =
+        TextEditingController(text: employee.baseWage.toString());
+    _currencyController =
+        TextEditingController(text: employee.currencyCode);
+    _bankNameController =
+        TextEditingController(text: employee.bankName ?? '');
+    _bankAccountController =
+        TextEditingController(text: employee.bankAccountNumber ?? '');
+    _emergencyNameController =
+        TextEditingController(text: employee.emergencyContactName ?? '');
+    _emergencyPhoneController =
+        TextEditingController(text: employee.emergencyContactPhone ?? '');
 
     _dateOfBirth = employee.dateOfBirth;
     _hireDate = employee.hireDate;
     _employeeType = employee.employeeType;
     _wageType = employee.wageType;
+
+    final sites = await _siteRepository.getAll();
+    final assignments = await _siteAssignmentRepository.getAll(
+      employeeId: employee.id,
+    );
+
+    SiteAssignment? primary;
+    if (assignments.isNotEmpty) {
+      primary = assignments.firstWhere(
+            (a) => a.isPrimaryAssignment,
+        orElse: () => assignments.first,
+      );
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _sites = sites;
+      _primaryAssignment = primary;
+
+      if (primary != null) {
+        _selectedSite = sites.firstWhere(
+              (s) => s.id == primary!.constructionSiteId,
+        );
+      }
+    });
   }
 
   @override
@@ -173,6 +212,19 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         emergencyContactName: _nullableText(_emergencyNameController.text),
         emergencyContactPhone: _nullableText(_emergencyPhoneController.text),
       );
+
+      if (_primaryAssignment != null &&
+          _selectedSite != null &&
+          _selectedSite!.id != _primaryAssignment!.constructionSiteId) {
+        await _siteAssignmentRepository.update(
+          assignmentId: _primaryAssignment!.id,
+          startDate: _hireDate,
+          endDate: _primaryAssignment!.endDate,
+          roleAtSite: _nullableText(_jobTitleController.text),
+          isPrimaryAssignment: true,
+          remarks: _primaryAssignment!.remarks,
+        );
+      }
 
       if (!mounted) {
         return;
@@ -336,6 +388,28 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             _buildTextField(
               controller: _departmentController,
               label: 'Department',
+            ),
+            const SizedBox(height: 12),
+
+            DropdownButtonFormField<Site>(
+              initialValue: _selectedSite,
+              decoration: const InputDecoration(
+                labelText: 'Construction Site',
+                border: OutlineInputBorder(),
+              ),
+              items: _sites.map((site) {
+                return DropdownMenuItem(
+                  value: site,
+                  child: Text(site.name),
+                );
+              }).toList(),
+              onChanged: _isSaving
+                  ? null
+                  : (value) {
+                setState(() => _selectedSite = value);
+              },
+              validator: (value) =>
+              value == null ? 'Construction site is required.' : null,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<EmployeeType>(

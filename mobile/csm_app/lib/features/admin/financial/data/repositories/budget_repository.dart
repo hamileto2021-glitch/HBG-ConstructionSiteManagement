@@ -1,6 +1,8 @@
 ﻿import 'package:csm_app/core/network/api_client.dart';
 
+
 import '../models/budget.dart';
+
 
 class BudgetRepository {
   BudgetRepository({
@@ -23,9 +25,7 @@ class BudgetRepository {
         .toList();
   }
 
-  Future<Budget> getById(
-    String budgetId,
-  ) async {
+  Future<Budget> getById(String budgetId) async {
     final response = await _apiClient.get(
       '/Budgets/$budgetId',
     );

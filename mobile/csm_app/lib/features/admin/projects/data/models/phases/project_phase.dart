@@ -9,6 +9,7 @@
 class ProjectPhase {
   const ProjectPhase({
     required this.id,
+    required this.phaseNumber,
     required this.companyId,
     required this.projectId,
     required this.name,
@@ -24,6 +25,7 @@ class ProjectPhase {
   });
 
   final String id;
+  final String phaseNumber;
   final String companyId;
   final String projectId;
   final String name;
@@ -40,6 +42,7 @@ class ProjectPhase {
   factory ProjectPhase.fromJson(Map<String, dynamic> json) {
     return ProjectPhase(
       id: json['id'] as String,
+      phaseNumber: json['phaseNumber'] as String,
       companyId: json['companyId'] as String,
       projectId: json['projectId'] as String,
       name: json['name'] as String,

@@ -1,0 +1,133 @@
+@page "/finance/sites/{SiteId:guid}/budgets"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using System.Net
+@using CSM.Web.Models.Finance
+@using CSM.Web.Services
+
+@inject IFinanceService FinanceService
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Site Budgets</PageTitle>
+
+<h3 class="mb-3">Site Budgets</h3>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <button class="btn btn-secondary"
+            @onclick="Back">
+        <i class="bi bi-arrow-left"></i>
+        Back
+    </button>
+
+    @if (_canManage)
+    {
+        <button class="btn btn-primary"
+                @onclick="Create">
+            <i class="bi bi-plus-lg"></i>
+            New Budget
+        </button>
+    }
+</div>
+
+@if (_loading)
+{
+    <p>Loading budgets...</p>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_items.Count == 0)
+{
+    <div class="alert alert-info">
+        No budgets have been created for this site.
+    </div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Budget No</th>
+                <th>Name</th>
+                <th>Project</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th width="90"></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in _items)
+        {
+            <tr>
+                <td>@item.BudgetNumber</td>
+                <td>@item.Name</td>
+                <td>@item.ProjectName</td>
+                <td>@($"{item.CurrencyCode} {item.TotalAmount:N2}")</td>
+                <td>@item.Status</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary"
+                            @onclick="() => Open(item.Id)">
+                        Open
+                    </button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public Guid SiteId { get; set; }
+
+    private bool _loading = true;
+    private bool _canManage;
+    private string? _error;
+    private List<BudgetResponse> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+
+            _canManage = permissions.Contains("Finance_Budget_Manage");
+
+            if (!permissions.Contains("Finance_Budget_View"))
+            {
+                _error = "You don't have permission to view budgets.";
+                return;
+            }
+
+            _items = (await FinanceService.GetSiteBudgetsAsync(SiteId)).ToList();
+        }
+        catch (HttpRequestException ex)
+            when (ex.StatusCode == HttpStatusCode.Forbidden)
+        {
+            // The API refuses either because the role lacks the budget
+            // permission or because the user is not assigned to this site.
+            _error = "You can't view budgets for this site. " +
+                     "Check that you are assigned to it.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load budgets: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    void Create()
+        => Navigation.NavigateTo($"/finance/sites/{SiteId}/budgets/create");
+
+    void Open(Guid id)
+        => Navigation.NavigateTo($"/finance/sites/{SiteId}/budgets/{id}");
+
+    private void Back()
+    {
+        Navigation.NavigateTo("/finance/sites");
+    }
+}

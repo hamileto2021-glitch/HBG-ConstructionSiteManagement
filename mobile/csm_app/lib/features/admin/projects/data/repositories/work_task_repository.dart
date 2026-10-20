@@ -51,7 +51,7 @@ class WorkTaskRepository {
     String? description,
     DateTime? plannedStartDate,
     DateTime? plannedEndDate,
-    required TaskPriority priority,
+    required Priority priority,
   }) async {
     final response = await _apiClient.post(
       '/WorkTasks',
@@ -82,7 +82,7 @@ class WorkTaskRepository {
     String? description,
     DateTime? plannedStartDate,
     DateTime? plannedEndDate,
-    required TaskPriority priority,
+    required Priority priority,
   }) async {
     final response = await _apiClient.put(
       '/WorkTasks/$taskId',
@@ -130,16 +130,27 @@ class WorkTaskRepository {
 
     return WorkTask.fromJson(response);
   }
+  Future<void> addDependency({
+    required String taskId,
+    required String dependsOnTaskId,
+  }) async {
+    await _apiClient.post(
+      '/WorkTasks/$taskId/dependencies',
+      body: {
+        'dependsOnTaskId': dependsOnTaskId,
+      },
+    );
+  }
 
-  String _priorityName(TaskPriority priority) {
+  String _priorityName(Priority priority) {
     switch (priority) {
-      case TaskPriority.low:
+      case Priority.low:
         return 'Low';
-      case TaskPriority.normal:
+      case Priority.normal:
         return 'Normal';
-      case TaskPriority.high:
+      case Priority.high:
         return 'High';
-      case TaskPriority.critical:
+      case Priority.critical:
         return 'Critical';
     }
   }
@@ -150,8 +161,6 @@ class WorkTaskRepository {
         return 'NotStarted';
       case WorkTaskStatus.inProgress:
         return 'InProgress';
-      case WorkTaskStatus.blocked:
-        return 'Blocked';
       case WorkTaskStatus.onHold:
         return 'OnHold';
       case WorkTaskStatus.completed:

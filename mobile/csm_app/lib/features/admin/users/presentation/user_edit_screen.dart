@@ -30,13 +30,15 @@ class _UserEditScreenState
   final List<String> _selectedRoles = [];
 
   final List<String> _availableRoles = const [
-    'SuperAdmin',
-    'CompanyAdmin',
-    'SiteManager',
-    'Accountant',
-    'HROfficer',
-    'Supervisor',
-    'Employee',
+    'Administrator',
+    'ProjectManager',
+    'SiteEngineer',
+    'Storekeeper',
+    'ProcurementOfficer',
+    'FinanceOfficer',
+    'HrOfficer',
+    'EquipmentManager',
+    'SafetyOfficer',
   ];
 
   @override
@@ -52,6 +54,27 @@ class _UserEditScreenState
     );
 
     _selectedRoles.addAll(widget.user.roles);
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'ProjectManager':
+        return 'Project Manager';
+      case 'SiteEngineer':
+        return 'Site Engineer';
+      case 'ProcurementOfficer':
+        return 'Procurement Officer';
+      case 'FinanceOfficer':
+        return 'Finance Officer';
+      case 'HrOfficer':
+        return 'HR Officer';
+      case 'EquipmentManager':
+        return 'Equipment Manager';
+      case 'SafetyOfficer':
+        return 'Safety Officer';
+      default:
+        return role;
+    }
   }
 
   Future<void> _save() async {
@@ -161,7 +184,7 @@ class _UserEditScreenState
             ..._availableRoles.map(
                   (role) => CheckboxListTile(
                 value: _selectedRoles.contains(role),
-                title: Text(role),
+                    title: Text(_roleLabel(role)),
                     onChanged: (value) {
                       setState(() {
                         if (value == true) {

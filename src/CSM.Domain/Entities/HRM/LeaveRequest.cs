@@ -19,6 +19,8 @@ public class LeaveRequest : TenantEntity
 
     public LeaveStatus Status { get; set; } = LeaveStatus.Pending;
 
+    public Guid? RequestedByUserId { get; set; }
+
     public Guid? ReviewedBy { get; set; }
 
     public DateTime? ReviewedAtUtc { get; set; }

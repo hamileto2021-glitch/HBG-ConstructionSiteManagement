@@ -1,6 +1,7 @@
 ﻿class Milestone {
   const Milestone({
     required this.id,
+    required this.milestoneNumber,
     required this.companyId,
     required this.projectId,
     this.projectPhaseId,
@@ -13,6 +14,7 @@
   });
 
   final String id;
+  final String milestoneNumber;
   final String companyId;
   final String projectId;
   final String? projectPhaseId;
@@ -26,19 +28,16 @@
   factory Milestone.fromJson(Map<String, dynamic> json) {
     return Milestone(
       id: json['id'] as String,
+      milestoneNumber: json['milestoneNumber'] as String,
       companyId: json['companyId'] as String,
       projectId: json['projectId'] as String,
       projectPhaseId: json['projectPhaseId'] as String?,
       name: json['name'] as String,
       description: json['description'] as String?,
-      plannedDate: DateTime.parse(
-        json['plannedDate'] as String,
-      ),
+      plannedDate: DateTime.parse(json['plannedDate'] as String),
       completedDate: _parseDate(json['completedDate']),
       isCompleted: json['isCompleted'] as bool,
-      createdAtUtc: DateTime.parse(
-        json['createdAtUtc'] as String,
-      ),
+      createdAtUtc: DateTime.parse(json['createdAtUtc'] as String),
     );
   }
 

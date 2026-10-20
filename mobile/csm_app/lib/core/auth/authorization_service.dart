@@ -56,4 +56,22 @@ class AuthorizationService {
       AppPolicies.projectManagementRoles,
     );
   }
+
+  bool canAccessEquipmentManagement() {
+    return hasAnyRole(
+      AppPolicies.equipmentManagementRoles,
+    );
+  }
+
+  bool canAccessComplianceManagement() {
+    return hasAnyRole(
+      AppPolicies.complianceManagementRoles,
+    );
+  }
+
+  bool canAccessReportManagement() {
+    return hasAnyRole(
+      AppPolicies.reportManagementRoles,
+    );
+  }
 }

@@ -74,6 +74,7 @@ public class DailyMaterialUsageConfiguration :
         builder.HasOne(x => x.DailyProgressLog)
             .WithMany()
             .HasForeignKey(x => x.DailyProgressLogId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.LoggedByUser)

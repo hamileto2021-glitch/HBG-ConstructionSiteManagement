@@ -47,6 +47,11 @@ public class PaymentConfiguration :
             .HasForeignKey(x => x.VendorId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(x => x.PayrollRecord)
+            .WithMany()
+            .HasForeignKey(x => x.PayrollRecordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

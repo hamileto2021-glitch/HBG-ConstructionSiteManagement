@@ -4,6 +4,10 @@ import '../data/models/employee.dart';
 import '../data/repositories/employee_repository.dart';
 import 'employee_details_screen.dart';
 import 'employee_create_screen.dart';
+import 'package:intl/intl.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
 
 class EmployeeListScreen extends StatefulWidget {
   const EmployeeListScreen({super.key, required this.repository});
@@ -18,6 +22,10 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Employee> _employees = [];
+  final NumberFormat _currency = NumberFormat('#,##0.00');
+
+  String money(double value, String currency) =>
+      '$currency ${_currency.format(value)}';
 
   @override
   void initState() {
@@ -51,6 +59,20 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         _isLoading = false;
         _errorMessage = error.toString();
       });
+    }
+  }
+  String _statusLabel(EmployeeStatus status) {
+    switch (status) {
+      case EmployeeStatus.active:
+        return 'Active';
+      case EmployeeStatus.onLeave:
+        return 'On Leave';
+      case EmployeeStatus.suspended:
+        return 'Suspended';
+      case EmployeeStatus.inactive:
+        return 'Inactive';
+      case EmployeeStatus.terminated:
+        return 'Terminated';
     }
   }
 
@@ -141,7 +163,65 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       );
     }
 
-    return ListView.separated(
+    return AppBreakpoints.isDesktop(context)
+        ? SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: AdaptiveDataTable(
+        columns: [
+          AdaptiveColumn(
+            label: 'Employee',
+            value: (r) => r['name'] as String,
+          ),
+          AdaptiveColumn(
+            label: 'Employee ID',
+            value: (r) => r['employeeId'] as String,
+          ),
+          AdaptiveColumn(
+            label: 'Department',
+            value: (r) => r['department'] as String,
+          ),
+          AdaptiveColumn(
+            label: 'Position',
+            value: (r) => r['position'] as String,
+          ),
+          AdaptiveColumn(
+            label: 'Status',
+            value: (r) => r['status'] as String,
+          ),
+        ],
+        rows: _employees.map((e) {
+          final fullName = [
+            e.firstName,
+            if (e.middleName != null && e.middleName!.trim().isNotEmpty)
+              e.middleName!,
+            e.lastName,
+          ].join(' ');
+
+          return {
+            'employee': e,
+            'name': fullName,
+            'employeeId': e.employeeNumber,
+            'department': e.department ?? '-',
+            'position': e.jobTitle ?? '-',
+            'status': _statusLabel(e.status),
+          };
+        }).toList(),
+        onRowTap: (row) {
+          final employee = row['employee'] as Employee;
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EmployeeDetailsScreen(
+                employee: employee,
+                repository: widget.repository,
+              ),
+            ),
+          ).then((_) => _loadEmployees());
+        },
+      ),
+    )
+        : ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _employees.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -163,6 +243,15 @@ class _EmployeeCard extends StatelessWidget {
 
   final Employee employee;
   final EmployeeRepository repository;
+  String _money(double value) {
+    return NumberFormat('#,##0.00').format(value);
+  }
+
+  String _date(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}';
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -193,13 +282,13 @@ class _EmployeeCard extends StatelessWidget {
               Row(
                 children: [
                   CircleAvatar(
+                    radius: 24,
                     child: Text(
-                      employee.firstName.isNotEmpty
-                          ? employee.firstName[0].toUpperCase()
-                          : '?',
+                      employee.firstName[0].toUpperCase(),
                     ),
                   ),
                   const SizedBox(width: 12),
+
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,60 +297,91 @@ class _EmployeeCard extends StatelessWidget {
                           fullName,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        const SizedBox(height: 4),
-                        Text(employee.employeeNumber),
+                        const SizedBox(height: 2),
+                        Text(
+                          employee.employeeNumber,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
                       ],
                     ),
                   ),
-                  Chip(label: Text(_statusLabel(employee.status))),
+
+                  _StatusChip(status: employee.status),
                 ],
               ),
-              if (employee.jobTitle != null &&
-                  employee.jobTitle!.trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  employee.jobTitle!,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ],
-              if (employee.department != null &&
-                  employee.department!.trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(employee.department!),
-              ],
-              const SizedBox(height: 12),
+
+              const SizedBox(height: 14),
+
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (employee.department != null)
+                    Chip(
+                      label: Text(employee.department!),
+                    ),
+
+                  if (employee.jobTitle != null)
+                    Chip(
+                      label: Text(employee.jobTitle!),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
               Row(
                 children: [
+                  const Icon(Icons.badge, size: 18),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(_employeeTypeLabel(employee.employeeType)),
                   ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  const Icon(Icons.calendar_month, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Hired: ${_date(employee.hireDate)}',
+                    ),
+                  ),
+                ],
+              ),
+
+              const Divider(height: 24),
+
+              Row(
+                children: [
+                  const Icon(Icons.account_balance_wallet, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${employee.wageType.name.toUpperCase()} WAGE',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ),
                   Text(
-                    '${employee.baseWage.toStringAsFixed(2)} '
-                    '${employee.currencyCode}',
+                    '${employee.currencyCode} ${_money(employee.baseWage)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ],
           ),
-        ),
+        )
       ),
     );
   }
 
-  String _statusLabel(EmployeeStatus status) {
-    switch (status) {
-      case EmployeeStatus.active:
-        return 'Active';
-      case EmployeeStatus.inactive:
-        return 'Inactive';
-      case EmployeeStatus.suspended:
-        return 'Suspended';
-      case EmployeeStatus.terminated:
-        return 'Terminated';
-      case EmployeeStatus.onLeave:
-        return 'On Leave';
-    }
-  }
+
 
   String _employeeTypeLabel(EmployeeType type) {
     switch (type) {
@@ -273,6 +393,55 @@ class _EmployeeCard extends StatelessWidget {
         return 'Contract';
       case EmployeeType.dailyLabor:
         return 'Daily Labor';
+    }
+  }
+}
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final EmployeeStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      backgroundColor: _color(status).withValues(alpha: .12),
+      label: Text(
+        _label(status),
+        style: TextStyle(
+          color: _color(status),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Color _color(EmployeeStatus status) {
+    switch (status) {
+      case EmployeeStatus.active:
+        return Colors.green;
+      case EmployeeStatus.onLeave:
+        return Colors.orange;
+      case EmployeeStatus.suspended:
+        return Colors.red;
+      case EmployeeStatus.inactive:
+        return Colors.grey;
+      case EmployeeStatus.terminated:
+        return Colors.black54;
+    }
+  }
+
+  String _label(EmployeeStatus status) {
+    switch (status) {
+      case EmployeeStatus.active:
+        return 'Active';
+      case EmployeeStatus.onLeave:
+        return 'On Leave';
+      case EmployeeStatus.suspended:
+        return 'Suspended';
+      case EmployeeStatus.inactive:
+        return 'Inactive';
+      case EmployeeStatus.terminated:
+        return 'Terminated';
     }
   }
 }

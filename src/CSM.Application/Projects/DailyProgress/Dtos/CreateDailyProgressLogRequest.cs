@@ -2,6 +2,7 @@ namespace CSM.Application.Projects.DailyProgress.Dtos;
 
 public sealed record CreateDailyProgressLogRequest(
     Guid ProjectId,
+    Guid TaskId,
     DateOnly LogDate,
     string? WeatherCondition,
     decimal? TemperatureCelsius,

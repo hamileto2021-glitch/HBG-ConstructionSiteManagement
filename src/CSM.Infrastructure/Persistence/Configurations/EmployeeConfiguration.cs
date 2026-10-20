@@ -36,6 +36,11 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .HasConversion<string>()
             .HasMaxLength(30);
 
+        builder.Property(x => x.EmployeeScope)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(x => x.Status)
             .HasConversion<string>()
             .HasMaxLength(30);

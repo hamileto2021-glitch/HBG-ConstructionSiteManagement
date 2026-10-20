@@ -1,5 +1,8 @@
 using CSM.Application.Compliance.Documents.Dtos;
 
+
+
+
 namespace CSM.Application.Compliance.Documents;
 
 public interface IDocumentService
@@ -22,5 +25,15 @@ public interface IDocumentService
         Guid currentUserId,
         Guid documentId,
         UpdateDocumentRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<DocumentVersionResponse> UploadVersionAsync(
+        Guid currentUserId,
+        Guid documentId,
+        Stream fileStream,
+        string fileName,
+        string? contentType,
+        long fileSizeBytes,
+        string? revisionNotes,
         CancellationToken cancellationToken = default);
 }

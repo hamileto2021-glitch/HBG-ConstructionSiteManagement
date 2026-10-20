@@ -25,8 +25,17 @@ class _PayrollCreateScreenState
   List<Employee> _employees = [];
   Employee? _selectedEmployee;
 
-  DateTime? _periodStart;
-  DateTime? _periodEnd;
+  DateTime _selectedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
+
+  DateTime get _periodStart =>
+      DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+
+  DateTime get _periodEnd =>
+      DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
 
   bool _isLoadingEmployees = true;
   bool _isSaving = false;
@@ -69,50 +78,26 @@ class _PayrollCreateScreenState
     }
   }
 
-  Future<void> _selectStartDate() async {
-    final selected = await showDatePicker(
+
+
+
+
+  Future<void> _selectPayrollMonth() async {
+    final picked = await showDatePicker(
       context: context,
-      initialDate: _periodStart ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2035),
+      initialDatePickerMode: DatePickerMode.year,
     );
 
-    if (selected != null && mounted) {
+    if (picked != null && mounted) {
       setState(() {
-        _periodStart = selected;
-
-        if (_periodEnd != null &&
-            _periodEnd!.isBefore(selected)) {
-          _periodEnd = null;
-        }
-      });
-    }
-  }
-
-  Future<void> _selectEndDate() async {
-    final start = _periodStart;
-
-    if (start == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Select the period start date first.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _periodEnd ?? start,
-      firstDate: start,
-      lastDate: DateTime(2100),
-    );
-
-    if (selected != null && mounted) {
-      setState(() {
-        _periodEnd = selected;
+        _selectedMonth = DateTime(
+          picked.year,
+          picked.month,
+          1,
+        );
       });
     }
   }
@@ -121,6 +106,7 @@ class _PayrollCreateScreenState
     if (!_formKey.currentState!.validate()) {
       return;
     }
+
 
     final employee = _selectedEmployee;
 
@@ -135,26 +121,20 @@ class _PayrollCreateScreenState
       return;
     }
 
-    if (_periodStart == null || _periodEnd == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Select the payroll period.',
-          ),
-        ),
-      );
-      return;
-    }
+
 
     setState(() {
       _isSaving = true;
     });
 
     try {
+
+      debugPrint('Start: ${_formatDate(_periodStart)}');
+      debugPrint('End: ${_formatDate(_periodEnd)}');
       await widget.repository.create(
         employeeId: employee.id,
-        periodStart: _periodStart!,
-        periodEnd: _periodEnd!,
+        periodStart: _periodStart,
+        periodEnd: _periodEnd,
       );
 
       if (!mounted) {
@@ -189,6 +169,30 @@ class _PayrollCreateScreenState
         });
       }
     }
+  }
+  String _monthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    return months[month - 1];
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -286,16 +290,31 @@ class _PayrollCreateScreenState
                 },
               ),
             const SizedBox(height: 16),
-            _DateField(
-              label: 'Period start',
-              value: _periodStart,
-              onTap: _selectStartDate,
-            ),
-            const SizedBox(height: 16),
-            _DateField(
-              label: 'Period end',
-              value: _periodEnd,
-              onTap: _selectEndDate,
+            InkWell(
+              onTap: _selectPayrollMonth,
+              borderRadius: BorderRadius.circular(8),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Payroll Month',
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.calendar_month),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_monthName(_selectedMonth.month)} ${_selectedMonth.year}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${_formatDate(_periodStart)}  →  ${_formatDate(_periodEnd)}',
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -325,42 +344,4 @@ class _PayrollCreateScreenState
   }
 }
 
-class _DateField extends StatelessWidget {
-  const _DateField({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
 
-  final String label;
-  final DateTime? value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(
-            Icons.calendar_today_outlined,
-          ),
-        ),
-        child: Text(
-          value == null
-              ? 'Select date'
-              : _formatDate(value!),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-  }
-}

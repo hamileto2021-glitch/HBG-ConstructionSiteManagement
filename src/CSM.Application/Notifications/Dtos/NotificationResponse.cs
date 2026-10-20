@@ -4,12 +4,13 @@ namespace CSM.Application.Notifications.Dtos;
 
 public sealed record NotificationResponse(
     Guid Id,
-    Guid UserId,
+    Guid RecipientUserId,
     string Title,
     string Message,
-    NotificationType Type,
+    NotificationSeverity Severity,
     bool IsRead,
     DateTime? ReadAtUtc,
-    string? RelatedEntityType,
-    Guid? RelatedEntityId,
+    string? SourceEntityType,
+    Guid? SourceEntityId,
+    string? LinkUrl,
     DateTime CreatedAtUtc);

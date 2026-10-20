@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class GoodsReceiptsController : ControllerBase
 {
     private readonly IGoodsReceiptService _goodsReceiptService;
@@ -22,6 +22,7 @@ public sealed class GoodsReceiptsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<GoodsReceiptResponse>>> GetAll(
         [FromQuery] Guid? constructionSiteId,
@@ -47,6 +48,7 @@ public sealed class GoodsReceiptsController : ControllerBase
     }
 
     [HttpGet("{goodsReceiptId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<ActionResult<GoodsReceiptResponse>> GetById(
         Guid goodsReceiptId,
         CancellationToken cancellationToken)
@@ -69,6 +71,7 @@ public sealed class GoodsReceiptsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<GoodsReceiptResponse>> Create(
         [FromBody] CreateGoodsReceiptRequest request,
         CancellationToken cancellationToken)

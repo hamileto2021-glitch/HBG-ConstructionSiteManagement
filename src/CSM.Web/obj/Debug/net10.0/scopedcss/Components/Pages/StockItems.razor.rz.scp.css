@@ -1,0 +1,42 @@
+.inventory-card[b-eenhyg9ute]{
+    cursor:pointer;
+    border:0;
+    border-radius:18px;
+    transition:all .18s ease;
+}
+
+.inventory-card:hover[b-eenhyg9ute]{
+    transform:translateY(-2px);
+    box-shadow:0 .5rem 1rem rgba(0,0,0,.12)!important;
+}
+
+.icon-box[b-eenhyg9ute]{
+    width:64px;
+    height:64px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+}
+
+.inventory-card h4[b-eenhyg9ute]{
+    font-weight:600;
+    margin-bottom:.35rem;
+}
+
+.inventory-card .text-muted[b-eenhyg9ute]{
+    font-size:.92rem;
+    line-height:1.4;
+}
+
+@media (max-width:768px){
+    .icon-box[b-eenhyg9ute]{
+        width:56px;
+        height:56px;
+    }
+
+    .inventory-card h4[b-eenhyg9ute]{
+        font-size:1.2rem;
+    }
+}

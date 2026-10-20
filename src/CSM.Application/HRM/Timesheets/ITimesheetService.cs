@@ -38,4 +38,9 @@ public interface ITimesheetService
         Guid timesheetId,
         CancelTimesheetRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<TimesheetResponse> GenerateAsync(
+        Guid currentUserId,
+        GenerateTimesheetRequest request,
+        CancellationToken cancellationToken = default);
 }

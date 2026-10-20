@@ -8,4 +8,8 @@ public interface IDailyMaterialUsageService
         Guid currentUserId,
         CreateDailyMaterialUsageRequest request,
         CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyCollection<DailyMaterialUsageResponse>> GetAllAsync(
+            Guid currentUserId,
+            CancellationToken cancellationToken = default);
 }

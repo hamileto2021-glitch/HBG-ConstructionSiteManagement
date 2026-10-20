@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/models/attendance/attendance.dart';
 import '../data/repositories/attendance_repository.dart';
@@ -30,6 +31,24 @@ class _AttendanceListScreenState
   DateTime? _fromDate;
   DateTime? _toDate;
 
+  final DateFormat _date = DateFormat('yyyy-MM-dd');
+
+  int get _presentCount =>
+      _attendances
+          .where((a) => a.status == AttendanceStatus.present)
+          .length;
+
+  int get _lateCount =>
+      _attendances
+          .where((a) => a.status == AttendanceStatus.late)
+          .length;
+
+  double get _regularHours =>
+      _attendances.fold(0, (s, a) => s + a.regularHours);
+
+  double get _overtimeHours =>
+      _attendances.fold(0, (s, a) => s + a.overtimeHours);
+
   @override
   void initState() {
     super.initState();
@@ -43,31 +62,28 @@ class _AttendanceListScreenState
     });
 
     try {
-      final attendances =
-      await widget.repository.getAll(
+      final attendances = await widget.repository.getAll(
         fromDate: _fromDate,
         toDate: _toDate,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _attendances = attendances;
         _isLoading = false;
       });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
+        _errorMessage = e.toString();
         _isLoading = false;
-        _errorMessage = error.toString();
       });
     }
   }
+
+  Future<void> _refresh() async => _loadAttendances();
 
   Future<void> _selectFromDate() async {
     final selected = await showDatePicker(
@@ -77,20 +93,16 @@ class _AttendanceListScreenState
       lastDate: DateTime(2100),
     );
 
-    if (selected == null || !mounted) {
-      return;
-    }
+    if (selected == null) return;
 
     setState(() {
       _fromDate = selected;
-
-      if (_toDate != null &&
-          _toDate!.isBefore(selected)) {
+      if (_toDate != null && _toDate!.isBefore(selected)) {
         _toDate = null;
       }
     });
 
-    await _loadAttendances();
+    _loadAttendances();
   }
 
   Future<void> _selectToDate() async {
@@ -101,22 +113,13 @@ class _AttendanceListScreenState
       lastDate: DateTime(2100),
     );
 
-    if (selected == null || !mounted) {
-      return;
-    }
+    if (selected == null) return;
 
-    setState(() {
-      _toDate = selected;
-    });
-
-    await _loadAttendances();
+    setState(() => _toDate = selected);
+    _loadAttendances();
   }
 
-  Future<void> _refresh() async {
-    await _loadAttendances();
-  }
-
-  void _clearDateFilters() {
+  void _clearFilters() {
     setState(() {
       _fromDate = null;
       _toDate = null;
@@ -133,6 +136,7 @@ class _AttendanceListScreenState
         actions: [
           IconButton(
             tooltip: 'Check In',
+            icon: const Icon(Icons.login),
             onPressed: () async {
               final result =
               await Navigator.of(context).push<bool>(
@@ -146,16 +150,14 @@ class _AttendanceListScreenState
                 ),
               );
 
-              if (result == true && mounted) {
-                await _loadAttendances();
+              if (result == true) {
+                _loadAttendances();
               }
             },
-            icon: const Icon(Icons.login),
           ),
           IconButton(
-            tooltip: 'Refresh',
-            onPressed: _isLoading ? null : _refresh,
             icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _refresh,
           ),
         ],
       ),
@@ -164,120 +166,129 @@ class _AttendanceListScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildFilterCard(context),
+            _buildFilterCard(),
             const SizedBox(height: 16),
+            _buildSummaryCards(),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              const LinearProgressIndicator(),
             if (_errorMessage != null)
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Unable to load attendance.\n\n'
-                        '$_errorMessage',
-                  ),
+                  child: Text(_errorMessage!),
                 ),
-              ),
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: LinearProgressIndicator(),
               ),
             if (!_isLoading &&
                 _errorMessage == null &&
                 _attendances.isEmpty)
-              _buildEmptyCard(context),
-            if (_attendances.isNotEmpty)
-              ..._attendances.map(
-                    (attendance) =>
-                    Padding(
-                      padding:
-                      const EdgeInsets.only(bottom: 12),
-                      child: _buildAttendanceCard(
-                        context,
-                        attendance,
-                      ),
-                    ),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('No attendance records found.'),
+                  ),
+                ),
               ),
+            ..._attendances.map(
+                  (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildAttendanceCard(a),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilterCard(BuildContext context) {
+  Widget _buildSummaryCards() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.5,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _SummaryCard(
+          title: 'Present',
+          value: '$_presentCount',
+          icon: Icons.check_circle,
+          color: Colors.green,
+        ),
+        _SummaryCard(
+          title: 'Late',
+          value: '$_lateCount',
+          icon: Icons.schedule,
+          color: Colors.orange,
+        ),
+        _SummaryCard(
+          title: 'Regular Hrs',
+          value: _regularHours.toStringAsFixed(1),
+          icon: Icons.access_time,
+          color: Colors.blue,
+        ),
+        _SummaryCard(
+          title: 'Overtime',
+          value: _overtimeHours.toStringAsFixed(1),
+          icon: Icons.more_time,
+          color: Colors.purple,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterCard() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Date Filters',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: _DateFilterButton(
+                  child: _DateButton(
                     label: 'From',
                     date: _fromDate,
-                    onPressed: _selectFromDate,
+                    onTap: _selectFromDate,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _DateFilterButton(
+                  child: _DateButton(
                     label: 'To',
                     date: _toDate,
-                    onPressed: _selectToDate,
+                    onTap: _selectToDate,
                   ),
                 ),
               ],
             ),
-            if (_fromDate != null ||
-                _toDate != null) ...[
-              const SizedBox(height: 8),
+            if (_fromDate != null || _toDate != null)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
-                  onPressed: _clearDateFilters,
+                  onPressed: _clearFilters,
                   icon: const Icon(Icons.clear),
-                  label: const Text(
-                    'Clear Filters',
-                  ),
+                  label: const Text('Clear Filters'),
                 ),
               ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildEmptyCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            'No attendance records found.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceCard(
-      BuildContext context,
-      Attendance attendance,
-      ) {
+  Widget _buildAttendanceCard(Attendance attendance) {
     return Card(
       child: InkWell(
         onTap: () {
@@ -293,76 +304,97 @@ class _AttendanceListScreenState
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      attendance.employeeName,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          attendance.employeeName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(attendance.employeeNumber),
+                      ],
                     ),
                   ),
                   Chip(
+                    backgroundColor: _statusColor(
+                      attendance.status,
+                    ).withValues(alpha: 0.12),
                     label: Text(
                       _statusLabel(attendance.status),
+                      style: TextStyle(
+                        color: _statusColor(attendance.status),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                attendance.employeeNumber,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Site: ${attendance.siteName}',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Date: '
-                    '${_formatDate(attendance.attendanceDate)}',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Check-in: '
-                    '${_formatDateTime(attendance.checkInAtUtc)}',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Check-out: '
-                    '${_formatDateTime(attendance.checkOutAtUtc)}',
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
+                  const Icon(Icons.location_city, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(attendance.siteName)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today, size: 18),
+                  const SizedBox(width: 6),
+                  Text(_date.format(attendance.attendanceDate)),
+                ],
+              ),
+              const Divider(height: 24),
+              Row(
+                children: [
                   Expanded(
-                    child: Text(
-                      'Regular: '
-                          '${attendance.regularHours} h',
+                    child: _timeTile(
+                      'Check In',
+                      attendance.checkInAtUtc,
                     ),
                   ),
                   Expanded(
-                    child: Text(
-                      'Overtime: '
-                          '${attendance.overtimeHours} h',
+                    child: _timeTile(
+                      'Check Out',
+                      attendance.checkOutAtUtc,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const Divider(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Regular: ${attendance.regularHours.toStringAsFixed(1)} h',
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'OT: ${attendance.overtimeHours.toStringAsFixed(1)} h',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Icon(
                     attendance.isApproved
                         ? Icons.verified
                         : Icons.pending_actions,
+                    color: attendance.isApproved
+                        ? Colors.green
+                        : Colors.orange,
                     size: 18,
                   ),
                   const SizedBox(width: 6),
@@ -370,8 +402,8 @@ class _AttendanceListScreenState
                     attendance.isApproved
                         ? 'Approved'
                         : attendance.requiresApproval
-                        ? 'Requires approval'
-                        : 'Approval not required',
+                        ? 'Requires Approval'
+                        : 'Approval Not Required',
                   ),
                 ],
               ),
@@ -380,6 +412,41 @@ class _AttendanceListScreenState
         ),
       ),
     );
+  }
+
+  Widget _timeTile(String title, DateTime? value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value == null
+              ? '--'
+              : '${value.toLocal().hour.toString().padLeft(2, '0')}:${value.toLocal().minute.toString().padLeft(2, '0')}',
+        ),
+      ],
+    );
+  }
+
+  Color _statusColor(AttendanceStatus status) {
+    switch (status) {
+      case AttendanceStatus.present:
+        return Colors.green;
+      case AttendanceStatus.late:
+        return Colors.orange;
+      case AttendanceStatus.absent:
+        return Colors.red;
+      case AttendanceStatus.halfDay:
+        return Colors.blue;
+      case AttendanceStatus.leave:
+        return Colors.purple;
+      case AttendanceStatus.holiday:
+        return Colors.teal;
+    }
   }
 
   String _statusLabel(AttendanceStatus status) {
@@ -398,53 +465,64 @@ class _AttendanceListScreenState
         return 'Holiday';
     }
   }
+}
 
-  String _formatDate(DateTime date) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-  }
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
-  String _formatDateTime(DateTime? date) {
-    if (date == null) {
-      return 'Not checked out';
-    }
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
 
-    final local = date.toLocal();
-
-    return '${_formatDate(local)} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            Text(title),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-class _DateFilterButton extends StatelessWidget {
-  const _DateFilterButton({
+class _DateButton extends StatelessWidget {
+  const _DateButton({
     required this.label,
     required this.date,
-    required this.onPressed,
+    required this.onTap,
   });
 
   final String label;
   final DateTime? date;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.calendar_today),
+      onPressed: onTap,
+      icon: const Icon(Icons.calendar_month),
       label: Text(
         date == null
             ? label
-            : '$label: ${_formatDate(date!)}',
+            : '$label: ${date!.year}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}',
       ),
     );
-  }
-
-  static String _formatDate(DateTime date) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
   }
 }

@@ -165,17 +165,18 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
       return;
     }
 
-    final changed = await Navigator.of(context).push<bool>(
+    final created = await Navigator.push<bool>(
+      context,
       MaterialPageRoute(
         builder: (_) => GoodsReceiptCreateScreen(
           repository: GoodsReceiptRepository(),
-          purchaseOrder: order,
+          purchaseOrderId: _purchaseOrder!.id,
         ),
       ),
     );
 
-    if (changed == true && mounted) {
-      await _loadPurchaseOrder();
+    if (created == true) {
+      _loadPurchaseOrder();
     }
   }
 
@@ -357,18 +358,42 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
-            Chip(label: Text(_statusLabel(order.status))),
-            const SizedBox(height: 12),
+
+            Chip(
+              label: Text(_statusLabel(order.status)),
+            ),
+
+            const SizedBox(height: 16),
+
             Text(
               order.vendorName,
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            if (order.vendorCode.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text('Vendor Code: ${order.vendorCode}'),
-            ],
+
             const SizedBox(height: 8),
-            Text('Site: ${order.siteName}'),
+
+            _infoRow('Vendor Code', order.vendorCode),
+
+            _infoRow(
+              'Site',
+              order.siteCode == null
+                  ? order.siteName
+                  : '${order.siteCode} • ${order.siteName}',
+            ),
+
+            if (order.projectName != null)
+              _infoRow(
+                'Project',
+                order.projectCode == null
+                    ? order.projectName!
+                    : '${order.projectCode} • ${order.projectName}',
+              ),
+
+            if (order.materialRequestNumber != null)
+              _infoRow(
+                'Material Request',
+                order.materialRequestNumber!,
+              ),
           ],
         ),
       ),
@@ -456,7 +481,9 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
             _infoRow('Order Date', _formatDate(order.orderDate)),
             _infoRow(
               'Expected Delivery',
-              _formatDate(order.expectedDeliveryDate),
+              order.expectedDeliveryDate == null
+                  ? 'Not Set'
+                  : _formatDate(order.expectedDeliveryDate),
             ),
             _infoRow('Currency', order.currencyCode),
             _infoRow('Exchange Rate', order.exchangeRate.toStringAsFixed(4)),

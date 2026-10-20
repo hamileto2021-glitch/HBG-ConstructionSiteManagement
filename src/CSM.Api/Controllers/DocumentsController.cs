@@ -5,6 +5,9 @@ using CSM.Application.Compliance.Documents;
 using CSM.Application.Compliance.Documents.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Api.Models.Documents;
+
+
 
 namespace CSM.Api.Controllers;
 
@@ -108,6 +111,33 @@ public sealed class DocumentsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+    [HttpPost("{id:guid}/upload-version")]
+    [RequestSizeLimit(100_000_000)]
+    public async Task<ActionResult<DocumentVersionResponse>> UploadVersion(
+        Guid id,
+        [FromForm] UploadDocumentVersionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result = await _documentService.UploadVersionAsync(
+            userId,
+            id,
+            request.File.OpenReadStream(),
+            request.File.FileName,
+            request.File.ContentType,
+            request.File.Length,
+            request.RevisionNotes,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+
+
+
+
 
     private Guid GetCurrentUserId()
     {

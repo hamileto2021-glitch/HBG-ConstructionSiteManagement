@@ -31,7 +31,7 @@ public sealed class NotificationService : INotificationService
             .Where(
                 x =>
                     x.CompanyId == actor.CompanyId &&
-                    x.UserId == currentUserId);
+                    x.RecipientUserId == currentUserId);
 
         if (isRead.HasValue)
         {
@@ -45,14 +45,15 @@ public sealed class NotificationService : INotificationService
                 x =>
                     new NotificationResponse(
                         x.Id,
-                        x.UserId,
+                        x.RecipientUserId,
                         x.Title,
                         x.Message,
-                        x.Type,
+                        x.Severity,
                         x.IsRead,
                         x.ReadAtUtc,
-                        x.RelatedEntityType,
-                        x.RelatedEntityId,
+                        x.SourceEntityType,
+                        x.SourceEntityId,
+                        x.LinkUrl,
                         x.CreatedAtUtc))
             .ToListAsync(cancellationToken);
     }
@@ -70,7 +71,7 @@ public sealed class NotificationService : INotificationService
             .CountAsync(
                 x =>
                     x.CompanyId == actor.CompanyId &&
-                    x.UserId == currentUserId &&
+                    x.RecipientUserId == currentUserId &&
                     !x.IsRead,
                 cancellationToken);
     }
@@ -94,7 +95,7 @@ public sealed class NotificationService : INotificationService
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 x =>
-                    x.Id == request.UserId &&
+                    x.Id == request.RecipientUserId &&
                     x.CompanyId == actor.CompanyId &&
                     x.IsActive,
                 cancellationToken);
@@ -120,16 +121,19 @@ public sealed class NotificationService : INotificationService
         var notification = new Notification
         {
             CompanyId = actor.CompanyId.Value,
-            UserId = recipient.Id,
+            RecipientUserId = recipient.Id,
             Title = request.Title.Trim(),
             Message = request.Message.Trim(),
-            Type = request.Type,
-            RelatedEntityType =
-                string.IsNullOrWhiteSpace(request.RelatedEntityType)
+            Severity = request.Severity,
+            SourceEntityType =
+                string.IsNullOrWhiteSpace(request.SourceEntityType)
                     ? null
-                    : request.RelatedEntityType.Trim(),
-            RelatedEntityId = request.RelatedEntityId,
-            IsRead = false
+                    : request.SourceEntityType.Trim(),
+            SourceEntityId = request.SourceEntityId,
+            IsRead = false,
+            LinkUrl = string.IsNullOrWhiteSpace(request.LinkUrl)
+                ? null
+                : request.LinkUrl.Trim()
         };
 
         _dbContext.Notifications.Add(notification);
@@ -155,7 +159,7 @@ public sealed class NotificationService : INotificationService
                 x =>
                     x.Id == notificationId &&
                     x.CompanyId == actor.CompanyId &&
-                    x.UserId == currentUserId,
+                    x.RecipientUserId == currentUserId,
                 cancellationToken);
 
         if (notification is null)
@@ -193,14 +197,15 @@ public sealed class NotificationService : INotificationService
     {
         return new NotificationResponse(
             notification.Id,
-            notification.UserId,
+            notification.RecipientUserId,
             notification.Title,
             notification.Message,
-            notification.Type,
+            notification.Severity,
             notification.IsRead,
             notification.ReadAtUtc,
-            notification.RelatedEntityType,
-            notification.RelatedEntityId,
+            notification.SourceEntityType,
+            notification.SourceEntityId,
+            notification.LinkUrl,
             notification.CreatedAtUtc);
     }
 }

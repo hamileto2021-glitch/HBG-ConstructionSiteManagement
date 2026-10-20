@@ -22,6 +22,64 @@ public sealed class StockAdjustmentService
         _dbContext = dbContext;
     }
 
+    public async Task<List<StockAdjustmentResponse>> GetAllAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanManage(actor);
+
+        var query = _dbContext.StockMovements
+            .AsNoTracking()
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.Material)
+            .Include(x => x.StockItem)
+                .ThenInclude(x => x.ConstructionSite)
+            .Where(x => x.ReferenceType == "StockAdjustment");
+
+        if (!IsSuperAdmin(actor))
+        {
+            query = query.Where(x => x.CompanyId == actor.CompanyId);
+        }
+
+        var records = await query
+            .OrderByDescending(x => x.MovementDateUtc)
+            .ToListAsync(cancellationToken);
+
+        return records
+            .Select(x => new StockAdjustmentResponse
+            {
+                MovementId = x.Id,
+
+                StockItemId = x.StockItemId,
+
+                MaterialId = x.StockItem.MaterialId,
+                MaterialCode = x.StockItem.Material.MaterialCode,
+                MaterialName = x.StockItem.Material.Name,
+                UnitOfMeasure = x.StockItem.Material.UnitOfMeasure,
+
+                ConstructionSiteId = x.StockItem.ConstructionSiteId,
+                ConstructionSiteName = x.StockItem.ConstructionSite.Name,
+
+                Increase = x.MovementType == StockMovementType.AdjustmentIncrease,
+
+                Quantity = x.Quantity,
+                UnitCost = x.UnitCost ?? 0m,
+
+                QuantityBefore = x.StockBalanceBefore ?? 0m,
+                QuantityAfter = x.StockBalanceAfter ?? 0m,
+
+                AdjustmentDateUtc = x.MovementDateUtc,
+                AdjustmentNumber = x.ReferenceNumber ?? string.Empty,
+
+                Reason = x.Remarks ?? string.Empty,
+                ApprovedBy = null,
+                Remarks = x.Remarks
+            })
+            .ToList();
+    }
+
     public async Task<StockAdjustmentResponse> CreateAsync(
     Guid currentUserId,
     CreateStockAdjustmentRequest request,
@@ -122,37 +180,29 @@ quantityAfter =
                 var movement = new StockMovement
                 {
                     CompanyId = stockItem.CompanyId,
-
                     StockItemId = stockItem.Id,
 
-                    MovementType =
-                        request.Increase
-                            ? StockMovementType.AdjustmentIncrease
-                            : StockMovementType.AdjustmentDecrease,
+                    MovementType = request.Increase
+                        ? StockMovementType.AdjustmentIncrease
+                        : StockMovementType.AdjustmentDecrease,
 
-                    MovementDateUtc =
-                        request.AdjustmentDateUtc,
+                    MovementDateUtc = request.AdjustmentDateUtc,
 
-                    Quantity =
-                        request.Quantity,
+                    Quantity = request.Quantity,
 
-                    UnitCost =
-                        request.UnitCost ??
-                        stockItem.AverageUnitCost,
+                    // ADD THESE TWO LINES
+                    StockBalanceBefore = quantityBefore,
+                    StockBalanceAfter = quantityAfter,
 
-                    ReferenceType =
-                        "StockAdjustment",
+                    UnitCost = request.UnitCost ?? stockItem.AverageUnitCost,
 
-                    ReferenceNumber =
-                        normalizedAdjustmentNumber,
+                    ReferenceType = "StockAdjustment",
+                    ReferenceNumber = normalizedAdjustmentNumber,
 
-                    Remarks =
-                        $"Reason: {request.Reason}" +
-                        (string.IsNullOrWhiteSpace(
-                            request.Remarks)
-                            ? string.Empty
-                            : Environment.NewLine +
-                              request.Remarks)
+                    Remarks = $"Reason: {request.Reason}" +
+                              (string.IsNullOrWhiteSpace(request.Remarks)
+                                  ? string.Empty
+                                  : Environment.NewLine + request.Remarks)
                 };
 
                 _dbContext.StockMovements.Add(
@@ -198,11 +248,11 @@ quantityAfter =
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanManage(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
+        if (HasRole(actor, AppRoles.Administrator) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
             HasRole(actor, AppRoles.SiteManager))
         {
             return;
@@ -246,7 +296,7 @@ quantityAfter =
     {
         return HasRole(
             user,
-            AppRoles.SuperAdmin);
+            AppRoles.Administrator);
     }
 
     private static bool HasRole(

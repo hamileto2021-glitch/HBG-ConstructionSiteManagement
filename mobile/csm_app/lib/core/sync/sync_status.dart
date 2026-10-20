@@ -2,6 +2,7 @@ enum SyncState {
   idle,
   syncing,
   completed,
+  offline,
   failed,
 }
 
@@ -21,6 +22,8 @@ class SyncStatus {
   final String? errorMessage;
 
   bool get isSyncing => state == SyncState.syncing;
+
+  bool get isOffline => state == SyncState.offline;
 
   bool get hasError => state == SyncState.failed;
 

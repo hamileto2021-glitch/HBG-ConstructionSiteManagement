@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize]
 public sealed class ReportsController : ControllerBase
 {
     private readonly IReportingService _reportingService;
@@ -22,6 +22,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("executive-dashboard")]
+    [Authorize(Policy = "Reports.View")]
     public async Task<ActionResult<ExecutiveDashboardResponse>> GetExecutiveDashboard(
         CancellationToken cancellationToken)
     {
@@ -41,6 +42,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("financial-summary")]
+    [Authorize(Policy = "Reports.FinancialSummary.View")]
     public async Task<ActionResult<FinancialSummaryResponse>> GetFinancialSummary(
         CancellationToken cancellationToken)
     {
@@ -56,6 +58,77 @@ public sealed class ReportsController : ControllerBase
         catch (ReportingManagementException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("site/{constructionSiteId:guid}/executive-dashboard")]
+    [Authorize(Policy = "Reports.View")]
+    public async Task<ActionResult<ExecutiveDashboardResponse>>
+        GetSiteExecutiveDashboard(
+            Guid constructionSiteId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result =
+                await _reportingService.GetSiteExecutiveDashboardAsync(
+                    GetCurrentUserId(),
+                    constructionSiteId,
+                    cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ReportingManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("site/{constructionSiteId:guid}/financial-summary")]
+    [Authorize(Policy = "Reports.FinancialSummary.View")]
+    public async Task<ActionResult<FinancialSummaryResponse>>
+        GetSiteFinancialSummary(
+            Guid constructionSiteId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result =
+                await _reportingService.GetSiteFinancialSummaryAsync(
+                    GetCurrentUserId(),
+                    constructionSiteId,
+                    cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ReportingManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("financial-summary/all")]
+    [Authorize(Policy = "Reports.FinancialSummary.View")]
+    public async Task<ActionResult<AllFinancialSummaryResponse>>
+        GetAllFinancialSummaries(
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result =
+                await _reportingService
+                    .GetAllFinancialSummariesAsync(
+                        GetCurrentUserId(),
+                        cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ReportingManagementException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
         }
     }
 

@@ -518,18 +518,18 @@ public sealed class EquipmentService : IEquipmentService
         }
     }
 
-    private static void EnsureCanAccess(
-        User actor)
+    private static void EnsureCanAccess(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.Accountant))
         {
             return;
         }
 
         throw new EquipmentManagementException(
-            "You are not authorized to manage equipment.");
+            "You are not authorized to view equipment.");
     }
 
     private static Guid GetActorCompanyId(

@@ -4,6 +4,10 @@ import '../data/models/material_request.dart';
 import '../data/repositories/material_request_repository.dart';
 import 'material_request_create_screen.dart';
 import 'material_request_detail_screen.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
 
 class MaterialRequestListScreen extends StatefulWidget {
   const MaterialRequestListScreen({
@@ -239,6 +243,92 @@ class _MaterialRequestListScreenState
       );
     }
 
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _MaterialRequestKpiCard(
+                  title: 'Requests',
+                  value: '${_requests.length}',
+                  icon: Icons.request_quote,
+                  color: Colors.blue,
+                ),
+                _MaterialRequestKpiCard(
+                  title: 'Submitted',
+                  value: '$_submittedCount',
+                  icon: Icons.hourglass_top,
+                  color: Colors.orange,
+                ),
+                _MaterialRequestKpiCard(
+                  title: 'Approved',
+                  value: '$_approvedCount',
+                  icon: Icons.check_circle,
+                  color: Colors.green,
+                ),
+                _MaterialRequestKpiCard(
+                  title: 'Fulfilled',
+                  value: '$_fulfilledCount',
+                  icon: Icons.inventory,
+                  color: Colors.deepPurple,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'Request No',
+                  value: (r) => r['number'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Site',
+                  value: (r) => r['site'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Project',
+                  value: (r) => r['project'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Priority',
+                  value: (r) => r['priority'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Status',
+                  value: (r) => r['status'] as String,
+                ),
+              ],
+              rows: _requests.map((req) {
+                return {
+                  'item': req,
+                  'number': req.requestNumber,
+                  'site': req.siteName,
+                  'project': req.projectName ?? '-',
+                  'priority': _priorityLabel(req.priority),
+                  'status': _statusLabel(req.status),
+                };
+              }).toList(),
+              onRowTap: (row) {
+                final request = row['item'] as MaterialRequest;
+                _openDetailScreen(request);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _requests.length,
@@ -254,6 +344,18 @@ class _MaterialRequestListScreenState
       },
     );
   }
+
+  int get _submittedCount => _requests
+      .where((e) => e.status == MaterialRequestStatus.submitted)
+      .length;
+
+  int get _approvedCount => _requests
+      .where((e) => e.status == MaterialRequestStatus.approved)
+      .length;
+
+  int get _fulfilledCount => _requests
+      .where((e) => e.status == MaterialRequestStatus.delivered)
+      .length;
 }
 
 class _MaterialRequestCard extends StatelessWidget {
@@ -365,6 +467,46 @@ class _InfoRow extends StatelessWidget {
             child: Text(value),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MaterialRequestKpiCard extends StatelessWidget {
+  const _MaterialRequestKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(title),
+          ],
+        ),
       ),
     );
   }

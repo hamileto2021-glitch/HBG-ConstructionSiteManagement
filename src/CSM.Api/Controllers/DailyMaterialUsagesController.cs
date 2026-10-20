@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class DailyMaterialUsagesController : ControllerBase
 {
     private readonly IDailyMaterialUsageService
@@ -23,7 +23,27 @@ public sealed class DailyMaterialUsagesController : ControllerBase
             dailyMaterialUsageService;
     }
 
+    [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyCollection<DailyMaterialUsageResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _dailyMaterialUsageService.GetAllAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (DailyMaterialUsageManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<DailyMaterialUsageResponse>> Create(
         [FromBody] CreateDailyMaterialUsageRequest request,
         CancellationToken cancellationToken)

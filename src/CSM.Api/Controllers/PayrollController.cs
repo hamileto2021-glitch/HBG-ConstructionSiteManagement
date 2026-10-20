@@ -5,23 +5,29 @@ using CSM.Application.HRM.Payroll;
 using CSM.Application.HRM.Payroll.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Application.Common.Audit;
+
 
 namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize]
 public sealed class PayrollController : ControllerBase
 {
     private readonly IPayrollService _payrollService;
+    private readonly IAuditService _auditService;
 
     public PayrollController(
-        IPayrollService payrollService)
+        IPayrollService payrollService,
+        IAuditService auditService)
     {
         _payrollService = payrollService;
+        _auditService = auditService;
     }
 
     [HttpGet]
+    [Authorize(Policy = "HRM.Payroll.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<PayrollResponse>>> GetAll(
         [FromQuery] Guid? employeeId = null,
@@ -48,6 +54,7 @@ public sealed class PayrollController : ControllerBase
     }
 
     [HttpGet("{payrollRecordId:guid}")]
+    [Authorize(Policy = "HRM.Payroll.View")]
     public async Task<ActionResult<PayrollResponse>> GetById(
         Guid payrollRecordId,
         CancellationToken cancellationToken)
@@ -116,6 +123,7 @@ public sealed class PayrollController : ControllerBase
     }
 
     [HttpPut("{payrollRecordId:guid}/approve")]
+    [Authorize(Policy = "HRM.Payroll.Approve")]
     public async Task<ActionResult<PayrollResponse>> Approve(
         Guid payrollRecordId,
         ApprovePayrollRequest request,
@@ -130,6 +138,17 @@ public sealed class PayrollController : ControllerBase
                     request,
                     cancellationToken);
 
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "Payroll",
+                "Approve",
+                "Payroll",
+                record.Id.ToString(),
+                $"Approved payroll for {record.EmployeeName}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
+
             return Ok(record);
         }
         catch (PayrollManagementException ex)
@@ -139,6 +158,7 @@ public sealed class PayrollController : ControllerBase
     }
 
     [HttpPut("{payrollRecordId:guid}/paid")]
+    [Authorize(Policy = "HRM.Payroll.Approve")]
     public async Task<ActionResult<PayrollResponse>> MarkPaid(
         Guid payrollRecordId,
         MarkPayrollPaidRequest request,
@@ -152,6 +172,17 @@ public sealed class PayrollController : ControllerBase
                     payrollRecordId,
                     request,
                     cancellationToken);
+
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "Payroll",
+                "Paid",
+                "Payroll",
+                record.Id.ToString(),
+                $"Marked payroll for {record.EmployeeName} as paid",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
 
             return Ok(record);
         }
@@ -175,6 +206,17 @@ public sealed class PayrollController : ControllerBase
                     payrollRecordId,
                     request,
                     cancellationToken);
+
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "Payroll",
+                "Cancel",
+                "Payroll",
+                record.Id.ToString(),
+                $"Cancelled payroll for {record.EmployeeName}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
 
             return Ok(record);
         }
@@ -206,6 +248,25 @@ public sealed class PayrollController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+    [HttpGet("{payrollRecordId:guid}/payslip")]
+    [Authorize(Policy = "HRM.Payroll.View")]
+    public async Task<IActionResult> GetPayslip(
+        Guid payrollRecordId,
+        CancellationToken cancellationToken)
+    {
+        var pdf = await _payrollService.GeneratePayslipAsync(
+            GetCurrentUserId(),
+            payrollRecordId,
+            cancellationToken);
+
+        return File(
+            pdf,
+            "application/pdf",
+            $"Payslip-{payrollRecordId}.pdf");
+    }
+
+
+
 
     private Guid GetCurrentUserId()
     {

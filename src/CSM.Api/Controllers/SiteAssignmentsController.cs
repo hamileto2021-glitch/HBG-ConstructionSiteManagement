@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.SiteAssignments;
 using CSM.Application.HRM.SiteAssignments.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class SiteAssignmentsController : ControllerBase
 {
     private readonly ISiteAssignmentService _siteAssignmentService;
@@ -22,6 +21,7 @@ public sealed class SiteAssignmentsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "HRM.SiteAssignment.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<SiteAssignmentResponse>>> GetAll(
         [FromQuery] Guid? employeeId,
@@ -46,6 +46,7 @@ public sealed class SiteAssignmentsController : ControllerBase
     }
 
     [HttpGet("{assignmentId:guid}")]
+    [Authorize(Policy = "HRM.SiteAssignment.View")]
     public async Task<ActionResult<SiteAssignmentResponse>> GetById(
         Guid assignmentId,
         CancellationToken cancellationToken)
@@ -67,6 +68,7 @@ public sealed class SiteAssignmentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "HRM.SiteAssignment.Manage")]
     public async Task<ActionResult<SiteAssignmentResponse>> Create(
         CreateSiteAssignmentRequest request,
         CancellationToken cancellationToken)
@@ -94,6 +96,7 @@ public sealed class SiteAssignmentsController : ControllerBase
     }
 
     [HttpPut("{assignmentId:guid}")]
+    [Authorize(Policy = "HRM.SiteAssignment.Manage")]
     public async Task<ActionResult<SiteAssignmentResponse>> Update(
         Guid assignmentId,
         UpdateSiteAssignmentRequest request,

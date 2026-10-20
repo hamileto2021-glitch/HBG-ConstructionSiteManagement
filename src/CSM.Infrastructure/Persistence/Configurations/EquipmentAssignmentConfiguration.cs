@@ -4,32 +4,30 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CSM.Infrastructure.Persistence.Configurations;
 
-public class EquipmentAssignmentConfiguration :
-    IEntityTypeConfiguration<EquipmentAssignment>
+public sealed class EquipmentAssignmentConfiguration
+    : IEntityTypeConfiguration<EquipmentAssignment>
 {
     public void Configure(EntityTypeBuilder<EquipmentAssignment> builder)
     {
         builder.ToTable("EquipmentAssignments");
+
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.MeterReadingAtAssignment).HasPrecision(19, 4);
-        builder.Property(x => x.MeterReadingAtRelease).HasPrecision(19, 4);
         builder.Property(x => x.AssignmentNumber)
-            .HasMaxLength(30)
+            .HasMaxLength(50)
             .IsRequired();
 
-        builder.HasIndex(x => new
-        {
-            x.CompanyId,
-            x.AssignmentNumber
-        }).IsUnique();
+        builder.Property(x => x.AssignedAtUtc)
+            .IsRequired();
 
-        builder.HasIndex(x => new
-        {
-            x.EquipmentId,
-            x.ConstructionSiteId,
-            x.AssignedAtUtc
-        });
+        builder.Property(x => x.Remarks)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.MeterReadingAtAssignment)
+            .HasPrecision(18, 2);
+
+        builder.Property(x => x.MeterReadingAtRelease)
+            .HasPrecision(18, 2);
 
         builder.HasOne(x => x.Equipment)
             .WithMany(x => x.Assignments)
@@ -37,15 +35,13 @@ public class EquipmentAssignmentConfiguration :
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.ConstructionSite)
-            .WithMany(x => x.EquipmentAssignments)
+            .WithMany()
             .HasForeignKey(x => x.ConstructionSiteId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.Project)
-            .WithMany(x => x.EquipmentAssignments)
+            .WithMany()
             .HasForeignKey(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

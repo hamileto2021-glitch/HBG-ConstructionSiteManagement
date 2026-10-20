@@ -25,4 +25,13 @@ public interface IMaterialService
         Guid materialId,
         UpdateMaterialRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MaterialLookupDto>> GetCategoriesAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MaterialLookupDto>> GetUnitsAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MaterialLookupDto>> GetMaterialTypesAsync(
+        CancellationToken cancellationToken = default);
 }

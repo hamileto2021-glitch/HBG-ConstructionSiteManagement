@@ -5,7 +5,7 @@ namespace CSM.Application.Finance.Expenses.Dtos;
 public sealed record ExpenseResponse(
     Guid Id,
     Guid CompanyId,
-    Guid ConstructionSiteId,
+    Guid? ConstructionSiteId,
     Guid? ProjectId,
     Guid CostCodeId,
     Guid? VendorId,
@@ -20,6 +20,7 @@ public sealed record ExpenseResponse(
     string? ReceiptDocumentUrl,
     ExpenseStatus Status,
     Guid? ApprovedBy,
+    string? ApprovedByName,
     DateTime? ApprovedAtUtc,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc);

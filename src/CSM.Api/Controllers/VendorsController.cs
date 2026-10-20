@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class VendorsController : ControllerBase
 {
     private readonly IVendorService _vendorService;
@@ -22,6 +22,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Procurement.Vendor.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<VendorResponse>>> GetAll(
         [FromQuery] bool? isActive,
@@ -44,6 +45,7 @@ public sealed class VendorsController : ControllerBase
     }
 
     [HttpGet("{vendorId:guid}")]
+    [Authorize(Policy = "Procurement.Vendor.View")]
     public async Task<ActionResult<VendorResponse>> GetById(
         Guid vendorId,
         CancellationToken cancellationToken)

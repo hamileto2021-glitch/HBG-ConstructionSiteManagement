@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/models/payroll.dart';
 import '../data/repositories/payroll_repository.dart';
 
+
+
 class PayrollCalculateScreen extends StatefulWidget {
   const PayrollCalculateScreen({
     super.key,
@@ -22,94 +24,62 @@ class _PayrollCalculateScreenState
     extends State<PayrollCalculateScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final _overtimeMultiplierController =
-      TextEditingController(text: '1.5');
-  final _allowancesController =
-      TextEditingController(text: '0');
-  final _bonusesController =
-      TextEditingController(text: '0');
-  final _taxDeductionController =
-      TextEditingController(text: '0');
-  final _pensionDeductionController =
-      TextEditingController(text: '0');
-  final _otherDeductionsController =
-      TextEditingController(text: '0');
+  final _overtimeHoursController =
+  TextEditingController(text: '0');
 
-  bool _isSaving = false;
+  final _pensionController =
+  TextEditingController(text: '0');
+
+  final _taxController =
+  TextEditingController(text: '0');
+
+  final _otherDeductionsController =
+  TextEditingController(text: '0');
+
+
+  bool _loadingCalculation = false;
+
 
   @override
   void dispose() {
-    _overtimeMultiplierController.dispose();
-    _allowancesController.dispose();
-    _bonusesController.dispose();
-    _taxDeductionController.dispose();
-    _pensionDeductionController.dispose();
+    _overtimeHoursController.dispose();
+    _pensionController.dispose();
+    _taxController.dispose();
     _otherDeductionsController.dispose();
     super.dispose();
   }
 
   Future<void> _calculatePayroll() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _loadingCalculation = true);
 
     try {
-      await widget.repository.calculate(
+      final updated = await widget.repository.calculate(
         payrollId: widget.payroll.id,
-        overtimeMultiplier: double.parse(
-          _overtimeMultiplierController.text.trim(),
-        ),
-        allowances: double.parse(
-          _allowancesController.text.trim(),
-        ),
-        bonuses: double.parse(
-          _bonusesController.text.trim(),
-        ),
-        taxDeduction: double.parse(
-          _taxDeductionController.text.trim(),
-        ),
-        pensionDeduction: double.parse(
-          _pensionDeductionController.text.trim(),
-        ),
-        otherDeductions: double.parse(
-          _otherDeductionsController.text.trim(),
-        ),
+        overtimeMultiplier: 1.5,
+        allowances: 0,
+        bonuses: 0,
+        taxDeduction:
+        double.tryParse(_taxController.text) ?? 0,
+        pensionDeduction:
+        double.tryParse(_pensionController.text) ?? 0,
+        otherDeductions:
+        double.tryParse(_otherDeductionsController.text) ?? 0,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
+
+      Navigator.pop(context, updated);
+    } catch (e) {
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Payroll calculated successfully.',
-          ),
-        ),
-      );
-
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Payroll calculation failed: $error',
-          ),
-        ),
+        SnackBar(content: Text(e.toString())),
       );
     } finally {
       if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+        setState(() => _loadingCalculation = false);
       }
     }
   }
@@ -175,35 +145,24 @@ class _PayrollCalculateScreenState
             ),
             const SizedBox(height: 24),
             _NumberField(
-              controller: _overtimeMultiplierController,
-              label: 'Overtime multiplier',
-              validator: (value) => _validateNumber(
-                value,
-                allowZero: false,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _NumberField(
-              controller: _allowancesController,
-              label: 'Allowances',
+              controller: _overtimeHoursController,
+              label: 'Overtime Hours',
               validator: _validateNumber,
             ),
+
             const SizedBox(height: 16),
+
             _NumberField(
-              controller: _bonusesController,
-              label: 'Bonuses',
+              controller: _pensionController,
+              label: 'Pension Deduction',
               validator: _validateNumber,
             ),
+
             const SizedBox(height: 16),
+
             _NumberField(
-              controller: _taxDeductionController,
-              label: 'Tax deduction',
-              validator: _validateNumber,
-            ),
-            const SizedBox(height: 16),
-            _NumberField(
-              controller: _pensionDeductionController,
-              label: 'Pension deduction',
+              controller: _taxController,
+              label: 'Tax Deduction',
               validator: _validateNumber,
             ),
             const SizedBox(height: 16),
@@ -212,21 +171,19 @@ class _PayrollCalculateScreenState
               label: 'Other deductions',
               validator: _validateNumber,
             ),
+
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed:
-                  _isSaving ? null : _calculatePayroll,
-              icon: _isSaving
+              onPressed: _loadingCalculation ? null : _calculatePayroll,
+              icon: _loadingCalculation
                   ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
-                    )
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
                   : const Icon(Icons.calculate_outlined),
               label: Text(
-                _isSaving
+                _loadingCalculation
                     ? 'Calculating...'
                     : 'Calculate Payroll',
               ),
@@ -236,6 +193,8 @@ class _PayrollCalculateScreenState
       ),
     );
   }
+
+
 
   String _formatDate(DateTime date) {
     final local = date.toLocal();

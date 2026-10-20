@@ -1,6 +1,7 @@
 using CSM.Domain.Common;
 using CSM.Domain.Entities.Finance;
 using CSM.Domain.Enums;
+using CSM.Domain.Entities.Equipment;
 
 namespace CSM.Domain.Entities.Procurement;
 
@@ -24,6 +25,9 @@ public class Equipment : TenantEntity
 
     public EquipmentStatus Status { get; set; }
         = EquipmentStatus.Available;
+
+    public ICollection<EquipmentHourLog> HourLogs { get; set; }
+        = new List<EquipmentHourLog>();
 
     public Guid? VendorId { get; set; }
 
@@ -53,4 +57,7 @@ public class Equipment : TenantEntity
 
     public ICollection<EquipmentDowntime> DowntimeRecords { get; set; }
         = new List<EquipmentDowntime>();
+
+    public ICollection<EquipmentFuelLog> FuelLogs { get; set; }
+        = new List<EquipmentFuelLog>();
 }

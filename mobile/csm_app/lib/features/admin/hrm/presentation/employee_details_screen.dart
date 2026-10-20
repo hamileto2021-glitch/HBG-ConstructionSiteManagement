@@ -4,6 +4,11 @@ import '../data/models/employee.dart';
 import '../data/repositories/employee_repository.dart';
 import 'employee_edit_screen.dart';
 
+import '../../sites/data/repositories/site_repository.dart';
+import '../data/repositories/site_assignment_repository.dart';
+
+
+
 class EmployeeDetailsScreen extends StatefulWidget {
   const EmployeeDetailsScreen({
     super.key,
@@ -22,12 +27,45 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
   late Employee _employee;
   bool _isLoading = true;
   String? _errorMessage;
+  final _siteRepository = SiteRepository();
+  final _siteAssignmentRepository = SiteAssignmentRepository();
+
+  String? _siteName;
 
   @override
   void initState() {
     super.initState();
+
     _employee = widget.employee;
-    _loadEmployee();
+
+    _loadPrimarySite();
+  }
+
+  Future<void> _loadPrimarySite() async {
+    try {
+      final assignments = await _siteAssignmentRepository.getAll(
+        employeeId: widget.employee.id,
+      );
+
+      if (assignments.isEmpty) return;
+
+      final primary = assignments.firstWhere(
+            (a) => a.isPrimaryAssignment,
+        orElse: () => assignments.first,
+      );
+
+      final sites = await _siteRepository.getAll();
+
+      final site = sites.firstWhere(
+            (s) => s.id == primary.constructionSiteId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _siteName = site.name;
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadEmployee() async {
@@ -373,6 +411,10 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
             _InfoRow(
               label: 'Department',
               value: _employee.department ?? 'Not specified',
+            ),
+            _InfoRow(
+              label: 'Construction Site',
+              value: _siteName ?? 'Not assigned',
             ),
             _InfoRow(
               label: 'Employee type',

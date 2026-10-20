@@ -28,7 +28,10 @@ public sealed class WorkTaskService : IWorkTaskService
         var actor = await GetActorAsync(currentUserId, cancellationToken);
         var project = await GetProjectAsync(projectId, cancellationToken);
 
-        EnsureProjectAccess(actor, project);
+        await EnsureProjectAccess(
+            actor,
+            project,
+            cancellationToken);
 
         if (projectPhaseId.HasValue)
         {
@@ -64,7 +67,10 @@ public sealed class WorkTaskService : IWorkTaskService
         var actor = await GetActorAsync(currentUserId, cancellationToken);
         var task = await GetTaskAsync(taskId, cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         return Map(task);
     }
@@ -89,7 +95,10 @@ public sealed class WorkTaskService : IWorkTaskService
             request.ProjectId,
             cancellationToken);
 
-        EnsureProjectAccess(actor, project);
+        await EnsureProjectAccess(
+            actor,
+            project,
+            cancellationToken);
         EnsureProjectCanBeModified(project);
 
         if (request.ProjectPhaseId.HasValue)
@@ -192,7 +201,10 @@ public sealed class WorkTaskService : IWorkTaskService
 
         var task = await GetTaskAsync(taskId, cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         var project = await GetProjectAsync(
             task.ProjectId,
@@ -265,7 +277,10 @@ public sealed class WorkTaskService : IWorkTaskService
 
         var task = await GetTaskAsync(taskId, cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         var project = await GetProjectAsync(
             task.ProjectId,
@@ -334,7 +349,10 @@ public sealed class WorkTaskService : IWorkTaskService
 
         var task = await GetTaskAsync(taskId, cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         var project = await GetProjectAsync(
             task.ProjectId,
@@ -399,7 +417,10 @@ public sealed class WorkTaskService : IWorkTaskService
             taskId,
             cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         var project = await GetProjectAsync(
             task.ProjectId,
@@ -419,7 +440,10 @@ public sealed class WorkTaskService : IWorkTaskService
             request.DependsOnTaskId,
             cancellationToken);
 
-        EnsureTaskAccess(actor, dependsOnTask);
+        await EnsureTaskAccess(
+            actor,
+            dependsOnTask,
+            cancellationToken);
 
         if (dependsOnTask.ProjectId != task.ProjectId)
         {
@@ -490,7 +514,10 @@ public sealed class WorkTaskService : IWorkTaskService
             taskId,
             cancellationToken);
 
-        EnsureTaskAccess(actor, task);
+        await EnsureTaskAccess(
+            actor,
+            task,
+            cancellationToken);
 
         var project = await GetProjectAsync(
             task.ProjectId,
@@ -712,19 +739,27 @@ public sealed class WorkTaskService : IWorkTaskService
 
                 if (allCompleted)
                 {
-                    milestone.IsCompleted = true;
+                    milestone.Status = MilestoneStatus.Completed;
 
-                    if (!milestone.CompletedDate.HasValue)
+                    if (!milestone.ActualDate.HasValue)
                     {
-                        milestone.CompletedDate = today;
+                        milestone.ActualDate = today;
                     }
+
+                    milestone.ProgressPercentage = 100m;
                 }
                 else
                 {
-                    // Keep milestone synchronized if a future workflow
-                    // causes one of its tasks to become incomplete again.
-                    milestone.IsCompleted = false;
-                    milestone.CompletedDate = null;
+                    milestone.Status = MilestoneStatus.InProgress;
+                    milestone.ActualDate = null;
+
+                    var completedCount = taskStatuses.Count(
+                        x => x == WorkTaskStatus.Completed);
+
+                    milestone.ProgressPercentage =
+                        taskStatuses.Count == 0
+                            ? 0m
+                            : completedCount * 100m / taskStatuses.Count;
                 }
             }
         }
@@ -885,9 +920,10 @@ public sealed class WorkTaskService : IWorkTaskService
         return Map(task);
     }
 
-    private static void EnsureProjectAccess(
+    private async Task EnsureProjectAccess(
         User actor,
-        Project project)
+        Project project,
+        CancellationToken cancellationToken)
     {
         if (IsSuperAdmin(actor))
         {
@@ -902,11 +938,32 @@ public sealed class WorkTaskService : IWorkTaskService
             throw new WorkTaskManagementException(
                 "You cannot access a project outside your company.");
         }
+
+        if (HasRole(actor, AppRoles.CompanyAdmin))
+        {
+            return;
+        }
+
+        var hasSiteAccess = await _dbContext.UserSiteAccesses
+            .AnyAsync(
+                access =>
+                    access.UserId == actor.Id &&
+                    access.SiteId == project.ConstructionSiteId &&
+                    access.CompanyId == project.CompanyId &&
+                    access.IsActive,
+                cancellationToken);
+
+        if (!hasSiteAccess)
+        {
+            throw new WorkTaskManagementException(
+                "You are not assigned to this project's site.");
+        }
     }
 
-    private static void EnsureTaskAccess(
+    private async Task EnsureTaskAccess(
         User actor,
-        WorkTask task)
+        WorkTask task,
+        CancellationToken cancellationToken)
     {
         if (IsSuperAdmin(actor))
         {
@@ -921,8 +978,42 @@ public sealed class WorkTaskService : IWorkTaskService
             throw new WorkTaskManagementException(
                 "You cannot access a task outside your company.");
         }
-    }
 
+        if (HasRole(actor, AppRoles.CompanyAdmin))
+        {
+            return;
+        }
+
+        var projectSiteId = await _dbContext.Projects
+            .Where(
+                project =>
+                    project.Id == task.ProjectId &&
+                    project.CompanyId == task.CompanyId &&
+                    !project.IsDeleted)
+            .Select(project => (Guid?)project.ConstructionSiteId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!projectSiteId.HasValue)
+        {
+            throw new WorkTaskManagementException(
+                "The task's project was not found.");
+        }
+
+        var hasSiteAccess = await _dbContext.UserSiteAccesses
+            .AnyAsync(
+                access =>
+                    access.UserId == actor.Id &&
+                    access.SiteId == projectSiteId.Value &&
+                    access.CompanyId == task.CompanyId &&
+                    access.IsActive,
+                cancellationToken);
+
+        if (!hasSiteAccess)
+        {
+            throw new WorkTaskManagementException(
+                "You are not assigned to this task's project site.");
+        }
+    }
     private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor))

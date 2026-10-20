@@ -21,35 +21,73 @@ public sealed class ProjectService : IProjectService
 
     public async Task<IReadOnlyCollection<ProjectResponse>> GetAllAsync(
         Guid currentUserId,
-        Guid? constructionSiteId = null,
+        Guid? constructionSiteId,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
-        IQueryable<Project> query =
-            _dbContext.Projects.AsNoTracking();
 
-        if (!IsSuperAdmin(actor))
+
+        IQueryable<Project> query = _dbContext.Projects
+            .AsNoTracking()
+            .Include(x => x.ConstructionSite);
+
+
+if (!IsSuperAdmin(actor))
+{
+    if (!actor.CompanyId.HasValue)
+    {
+        throw new ProjectManagementException(
+            "Current user is not assigned to a company.");
+    }
+
+    query = query.Where(
+        x => x.CompanyId == actor.CompanyId.Value);
+
+    if (HasRole(actor, AppRoles.CompanyAdmin))
+    {
+        // CompanyAdmin can see all projects within the company.
+    }
+    else if (HasRole(actor, AppRoles.SiteManager))
+    {
+        var activeAssignments = _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(access =>
+                access.UserId == actor.Id &&
+                access.CompanyId == actor.CompanyId.Value &&
+                access.IsActive)
+            .Select(access => access.SiteId);
+
+        var hasSiteAssignments =
+            await activeAssignments.AnyAsync(cancellationToken);
+
+        if (hasSiteAssignments)
         {
-            EnsureProjectRole(actor);
-
-            if (!actor.CompanyId.HasValue)
-            {
-                throw new ProjectManagementException(
-                    "Current user is not assigned to a company.");
-            }
-
-            query = query.Where(
-                x => x.CompanyId == actor.CompanyId.Value);
+            query = query.Where(project =>
+                activeAssignments.Contains(project.ConstructionSiteId));
         }
+    }
+    else if (await HasProjectViewPermissionAsync(actor.Id, cancellationToken))
+    {
+        // Users with Projects_View can see company projects.
+    }
+    else
+    {
+        query = query.Where(project =>
+            _dbContext.UserSiteAccesses.Any(access =>
+                access.UserId == actor.Id &&
+                access.SiteId == project.ConstructionSiteId &&
+                access.CompanyId == project.CompanyId &&
+                access.IsActive));
+    }
+}
 
+
+        // Filter by selected construction site
         if (constructionSiteId.HasValue)
         {
-            query = query.Where(
-                x => x.ConstructionSiteId ==
-                     constructionSiteId.Value);
+            query = query.Where(x =>
+                x.ConstructionSiteId == constructionSiteId.Value);
         }
 
         var projects = await query
@@ -114,11 +152,32 @@ public sealed class ProjectService : IProjectService
                 "Cannot create a project for an inactive construction site.");
         }
 
-        if (!IsSuperAdmin(actor) &&
-            actor.CompanyId != site.CompanyId)
+        if (!IsSuperAdmin(actor))
         {
-            throw new ProjectManagementException(
-                "You cannot create a project for a site outside your company.");
+            if (!actor.CompanyId.HasValue ||
+                actor.CompanyId.Value != site.CompanyId)
+            {
+                throw new ProjectManagementException(
+                    "You cannot create a project for a site outside your company.");
+            }
+
+            if (!HasRole(actor, AppRoles.CompanyAdmin))
+            {
+                var hasSiteAccess = await _dbContext.UserSiteAccesses
+                    .AnyAsync(
+                        access =>
+                            access.UserId == actor.Id &&
+                            access.SiteId == site.Id &&
+                            access.CompanyId == site.CompanyId &&
+                            access.IsActive,
+                        cancellationToken);
+
+                if (!hasSiteAccess)
+                {
+                    throw new ProjectManagementException(
+                        "You are not assigned to this project's site.");
+                }
+            }
         }
 
         var normalizedCode =
@@ -195,14 +254,18 @@ public sealed class ProjectService : IProjectService
         }
 
         project.Name = request.Name.Trim();
-        project.Description =
-            Clean(request.Description);
-        project.PlannedStartDate =
-            request.PlannedStartDate;
-        project.PlannedEndDate =
-            request.PlannedEndDate;
-        project.ContractValue =
-            request.ContractValue;
+        project.Description = Clean(request.Description);
+
+        project.Status = Enum.Parse<ProjectStatus>(request.Status);
+
+        project.ProgressPercentage = Math.Clamp(
+            request.ProgressPercentage,
+            0m,
+            100m);
+
+        project.PlannedStartDate = request.PlannedStartDate;
+        project.PlannedEndDate = request.PlannedEndDate;
+        project.ContractValue = request.ContractValue;
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -292,11 +355,26 @@ public sealed class ProjectService : IProjectService
         return user;
     }
 
+    private async Task<bool> HasProjectViewPermissionAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.UserRoles
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .SelectMany(x => x.Role.GranularPermissions)
+            .AnyAsync(
+                x => x.Permission == GranularPermission.Projects_View,
+                cancellationToken);
+    }
+
     private async Task<Project> GetProjectAsync(
         Guid projectId,
         CancellationToken cancellationToken)
     {
         return await _dbContext.Projects
+            .Include(p => p.ConstructionSite)
+                .ThenInclude(s => s.Company)
             .SingleOrDefaultAsync(
                 x => x.Id == projectId,
                 cancellationToken)
@@ -304,24 +382,54 @@ public sealed class ProjectService : IProjectService
                 "Project was not found.");
     }
 
-    private static void EnsureProjectAccess(
-        User actor,
-        Project project)
+
+private void EnsureProjectAccess(
+    User actor,
+    Project project)
+{
+    if (IsSuperAdmin(actor))
     {
-        if (IsSuperAdmin(actor))
-        {
-            return;
-        }
-
-        EnsureProjectRole(actor);
-
-        if (!actor.CompanyId.HasValue ||
-            actor.CompanyId.Value != project.CompanyId)
-        {
-            throw new ProjectManagementException(
-                "You cannot access a project outside your company.");
-        }
+        return;
     }
+
+    EnsureProjectRole(actor);
+
+    if (!actor.CompanyId.HasValue ||
+        actor.CompanyId.Value != project.CompanyId)
+    {
+        throw new ProjectManagementException(
+            "You cannot access a project outside your company.");
+    }
+
+    if (HasRole(actor, AppRoles.CompanyAdmin))
+    {
+        return;
+    }
+
+    var activeAssignments = _dbContext.UserSiteAccesses
+        .Where(access =>
+            access.UserId == actor.Id &&
+            access.CompanyId == project.CompanyId &&
+            access.IsActive);
+
+
+    if (HasRole(actor, AppRoles.SiteManager) &&
+        !activeAssignments.Any())
+    {
+        return;
+    }
+
+    var hasSiteAccess = activeAssignments.Any(
+        access => access.SiteId == project.ConstructionSiteId);
+
+    if (!hasSiteAccess)
+    {
+        throw new ProjectManagementException(
+            "You are not assigned to this project's site.");
+    }
+}
+
+
     private async Task ValidateProjectCompletionAsync(
         Project project,
         CancellationToken cancellationToken)
@@ -377,13 +485,13 @@ public sealed class ProjectService : IProjectService
                 $"The project cannot be completed while work tasks remain incomplete: {taskNumbers}.");
         }
 
-        var incompleteMilestones = await _dbContext.Milestones
-            .AsNoTracking()
-            .Where(x =>
-                x.ProjectId == project.Id &&
-                !x.IsCompleted)
-            .Select(x => x.Name)
-            .ToListAsync(cancellationToken);
+       var incompleteMilestones = await _dbContext.Milestones
+           .AsNoTracking()
+           .Where(x =>
+               x.ProjectId == project.Id &&
+               x.Status != MilestoneStatus.Completed)
+           .Select(x => x.Name)
+           .ToListAsync(cancellationToken);
 
         if (incompleteMilestones.Count > 0)
         {
@@ -532,18 +640,27 @@ public sealed class ProjectService : IProjectService
     {
         return new ProjectResponse(
             project.Id,
+
             project.CompanyId,
+            project.ConstructionSite?.Company?.Name ?? "Hamilton Business Group",
+
             project.ConstructionSiteId,
+            project.ConstructionSite?.Name ?? "Unknown Site",
+
             project.ProjectCode,
             project.Name,
             project.Description,
+
             project.PlannedStartDate,
             project.PlannedEndDate,
             project.ActualStartDate,
             project.ActualEndDate,
+
             project.ContractValue,
             project.ProgressPercentage,
+
             project.Status,
-            project.CreatedAtUtc);
+            project.CreatedAtUtc
+        );
     }
 }

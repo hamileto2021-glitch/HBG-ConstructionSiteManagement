@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/models/equipment_maintenance.dart';
 import '../data/repositories/equipment_maintenance_repository.dart';
@@ -10,7 +11,7 @@ class EquipmentMaintenanceListScreen extends StatefulWidget {
     super.key,
     EquipmentMaintenanceRepository? repository,
   }) : repository =
-            repository ?? EquipmentMaintenanceRepository();
+      repository ?? EquipmentMaintenanceRepository();
 
   final EquipmentMaintenanceRepository repository;
 
@@ -26,6 +27,19 @@ class _EquipmentMaintenanceListScreenState
   bool? _completedOnly;
   String? _errorMessage;
 
+  final NumberFormat _currency = NumberFormat('#,##0.00');
+
+  int get _total => _maintenance.length;
+
+  int get _pending =>
+      _maintenance.where((e) => e.completedAtUtc == null).length;
+
+  int get _completed =>
+      _maintenance.where((e) => e.completedAtUtc != null).length;
+
+  double get _totalCost =>
+      _maintenance.fold(0, (s, e) => s + (e.cost ?? 0));
+
   @override
   void initState() {
     super.initState();
@@ -39,23 +53,22 @@ class _EquipmentMaintenanceListScreenState
     });
 
     try {
-      final maintenance =
-          await widget.repository.getAll(
+      final result = await widget.repository.getAll(
         completedOnly: _completedOnly,
       );
 
       if (!mounted) return;
 
       setState(() {
-        _maintenance = maintenance;
+        _maintenance = result;
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
-        _isLoading = false;
         _errorMessage = error.toString();
+        _isLoading = false;
       });
     }
   }
@@ -76,12 +89,7 @@ class _EquipmentMaintenanceListScreenState
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              8,
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: SizedBox(
               width: double.infinity,
               child: SegmentedButton<bool?>(
@@ -94,16 +102,12 @@ class _EquipmentMaintenanceListScreenState
                   ButtonSegment<bool?>(
                     value: false,
                     label: Text('Pending'),
-                    icon: Icon(
-                      Icons.pending_actions_outlined,
-                    ),
+                    icon: Icon(Icons.pending_actions_outlined),
                   ),
                   ButtonSegment<bool?>(
                     value: true,
                     label: Text('Completed'),
-                    icon: Icon(
-                      Icons.task_alt_outlined,
-                    ),
+                    icon: Icon(Icons.task_alt_outlined),
                   ),
                 ],
                 selected: {_completedOnly},
@@ -116,20 +120,16 @@ class _EquipmentMaintenanceListScreenState
               ),
             ),
           ),
-          Expanded(
-            child: _buildBody(),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          final created =
-          await Navigator.of(context).push<bool>(
+          final created = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
-              builder: (_) =>
-                  EquipmentMaintenanceCreateScreen(
-                    maintenanceRepository: widget.repository,
-                  ),
+              builder: (_) => EquipmentMaintenanceCreateScreen(
+                maintenanceRepository: widget.repository,
+              ),
             ),
           );
 
@@ -157,11 +157,13 @@ class _EquipmentMaintenanceListScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 48,
-              ),
+              const Icon(Icons.error_outline, size: 48),
               const SizedBox(height: 16),
+              Text(
+                'Unable to load maintenance records',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
@@ -182,19 +184,13 @@ class _EquipmentMaintenanceListScreenState
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           children: const [
-            SizedBox(height: 120),
-            Icon(
-              Icons.build_circle_outlined,
-              size: 64,
-            ),
+            SizedBox(height: 140),
+            Icon(Icons.build_circle_outlined, size: 64),
             SizedBox(height: 16),
             Center(
-              child: Text(
-                'No equipment maintenance records found.',
-              ),
+              child: Text('No maintenance records found.'),
             ),
           ],
         ),
@@ -203,36 +199,74 @@ class _EquipmentMaintenanceListScreenState
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(
-          16,
-          8,
-          16,
-          24,
-        ),
-        itemCount: _maintenance.length,
-        itemBuilder: (context, index) {
-          return _MaintenanceCard(
-            maintenance: _maintenance[index],
-            onTap: () async {
-              final updated =
-              await Navigator.of(context).push<bool>(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      EquipmentMaintenanceDetailScreen(
-                        maintenance: _maintenance[index],
-                        repository: widget.repository,
-                      ),
-                ),
-              );
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          _buildSummaryCards(),
+          const SizedBox(height: 16),
+          ..._maintenance.map(
+                (record) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _MaintenanceCard(
+                maintenance: record,
+                onTap: () async {
+                  final updated =
+                  await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          EquipmentMaintenanceDetailScreen(
+                            maintenance: record,
+                            repository: widget.repository,
+                          ),
+                    ),
+                  );
 
-              if (updated == true && mounted) {
-                await _load();
-              }
-            },
-          );
-        },
+                  if (updated == true && mounted) {
+                    await _load();
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.55,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _SummaryCard(
+          title: 'Total',
+          value: '$_total',
+          icon: Icons.build,
+          color: Colors.blue,
+        ),
+        _SummaryCard(
+          title: 'Pending',
+          value: '$_pending',
+          icon: Icons.pending_actions,
+          color: Colors.orange,
+        ),
+        _SummaryCard(
+          title: 'Completed',
+          value: '$_completed',
+          icon: Icons.task_alt,
+          color: Colors.green,
+        ),
+        _SummaryCard(
+          title: 'Cost',
+          value: 'ETB ${_currency.format(_totalCost)}',
+          icon: Icons.account_balance_wallet,
+          color: Colors.purple,
+        ),
+      ],
     );
   }
 }
@@ -246,35 +280,22 @@ class _MaintenanceCard extends StatelessWidget {
   final EquipmentMaintenance maintenance;
   final VoidCallback onTap;
 
-  String _formatDate(DateTime value) {
-    final local = value.toLocal();
+  static final NumberFormat _currency =
+  NumberFormat('#,##0.00');
 
-    return '${local.year.toString().padLeft(4, '0')}-'
-        '${local.month.toString().padLeft(2, '0')}-'
-        '${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _formatNumber(double? value) {
-    if (value == null) {
-      return '—';
-    }
-
-    return value.toStringAsFixed(
-      value.truncateToDouble() == value ? 0 : 2,
-    );
+  String _date(DateTime value) {
+    final d = value.toLocal();
+    return '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final completed = maintenance.completedAtUtc != null;
     final theme = Theme.of(context);
 
-    final isCompleted =
-        maintenance.completedAtUtc != null;
-
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -282,127 +303,144 @@ class _MaintenanceCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment:
-                CrossAxisAlignment.start,
+            CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(12),
-                      color: theme
-                          .colorScheme
-                          .primaryContainer,
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons.build_outlined,
-                      color: theme
-                          .colorScheme
-                          .onPrimaryContainer,
+                      Icons.build,
+                      color:
+                      theme.colorScheme.onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      CrossAxisAlignment.start,
                       children: [
                         Text(
                           maintenance.equipmentCode,
-                          style: theme
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
+                          style: theme.textTheme.labelLarge,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           maintenance.equipmentName,
-                          style:
-                              theme.textTheme.labelLarge,
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   Chip(
+                    backgroundColor: completed
+                        ? Colors.green.withValues(alpha: .12)
+                        : Colors.orange.withValues(alpha: .12),
                     label: Text(
-                      isCompleted
-                          ? 'Completed'
-                          : 'Pending',
+                      completed ? 'Completed' : 'Pending',
+                      style: TextStyle(
+                        color: completed
+                            ? Colors.green
+                            : Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    visualDensity:
-                        VisualDensity.compact,
                   ),
                 ],
               ),
+
               const Divider(height: 24),
+
               _InfoRow(
-                label: 'Maintenance Type',
+                label: 'Type',
                 value: maintenance.maintenanceType,
               ),
               _InfoRow(
                 label: 'Scheduled',
-                value: _formatDate(
-                  maintenance.scheduledAtUtc,
-                ),
+                value: _date(maintenance.scheduledAtUtc),
               ),
               _InfoRow(
-                label: 'Started',
-                value:
-                    maintenance.startedAtUtc == null
-                        ? '—'
-                        : _formatDate(
-                            maintenance.startedAtUtc!,
-                          ),
-              ),
-              _InfoRow(
-                label: 'Completed',
-                value:
-                    maintenance.completedAtUtc == null
-                        ? '—'
-                        : _formatDate(
-                            maintenance.completedAtUtc!,
-                          ),
-              ),
-              _InfoRow(
-                label: 'Meter Reading',
-                value: _formatNumber(
-                  maintenance.meterReading,
-                ),
+                label: 'Meter',
+                value: maintenance.meterReading == null
+                    ? '—'
+                    : maintenance.meterReading!
+                    .toStringAsFixed(1),
               ),
               _InfoRow(
                 label: 'Cost',
                 value: maintenance.cost == null
                     ? '—'
-                    : '${_formatNumber(maintenance.cost)} '
-                        '${maintenance.currencyCode}',
+                    : '${maintenance.currencyCode} ${_currency.format(maintenance.cost)}',
               ),
               if (maintenance.serviceProvider != null &&
                   maintenance.serviceProvider!
                       .trim()
                       .isNotEmpty)
                 _InfoRow(
-                  label: 'Service Provider',
-                  value:
-                      maintenance.serviceProvider!,
+                  label: 'Provider',
+                  value: maintenance.serviceProvider!,
                 ),
-              _InfoRow(
-                label: 'Next Maintenance',
-                value: maintenance
-                            .nextMaintenanceAtUtc ==
-                        null
-                    ? '—'
-                    : _formatDate(
-                        maintenance
-                            .nextMaintenanceAtUtc!,
-                      ),
-              ),
+              if (maintenance.completedAtUtc != null)
+                _InfoRow(
+                  label: 'Completed',
+                  value: _date(maintenance.completedAtUtc!),
+                ),
+              if (maintenance.nextMaintenanceAtUtc != null)
+                _InfoRow(
+                  label: 'Next Service',
+                  value: _date(
+                    maintenance.nextMaintenanceAtUtc!,
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall,
+            ),
+            Text(title),
+          ],
         ),
       ),
     );
@@ -424,10 +462,10 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 145,
+            width: 110,
             child: Text(
               label,
               style: Theme.of(context)
@@ -436,7 +474,10 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(value),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),

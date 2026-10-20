@@ -5,94 +5,148 @@ import 'package:csm_app/features/admin/navigation/admin_nav_item.dart';
 
 void main() {
   group('AdminNavItem', () {
-    test('SuperAdmin sees every Admin navigation item', () {
+    test('Administrator sees every navigation item', () {
       final items = AdminNavItem.forRoles(
-        {AppRoles.superAdmin},
+        {AppRoles.administrator},
       );
 
       expect(items.length, AdminNavItem.all.length);
     });
 
-    test('CompanyAdmin sees company-related management areas except Company Management', () {
+    test('Project Manager sees project modules', () {
       final items = AdminNavItem.forRoles(
-        {AppRoles.companyAdmin},
+        {AppRoles.projectManager},
       );
 
-      final routes = items.map((item) => item.route).toSet();
+      final routes = items.map((e) => e.route).toSet();
 
       expect(routes, contains('/admin'));
       expect(routes, contains('/admin/projects'));
-      expect(routes, contains('/admin/users'));
       expect(routes, contains('/admin/sites'));
-      expect(routes, contains('/admin/hr'));
       expect(routes, contains('/admin/finance'));
-      expect(routes, contains('/admin/procurement'));
+      expect(routes, contains('/reports'));
+
+      expect(routes, isNot(contains('/admin/users')));
       expect(routes, isNot(contains('/admin/company')));
     });
 
-    test('SiteManager sees project, site and procurement navigation', () {
+    test('Site Engineer sees project and site modules', () {
       final items = AdminNavItem.forRoles(
-        {AppRoles.siteManager},
+        {AppRoles.siteEngineer},
       );
 
-      final routes = items.map((item) => item.route).toSet();
+      final routes = items.map((e) => e.route).toSet();
 
       expect(routes, contains('/admin'));
       expect(routes, contains('/admin/projects'));
       expect(routes, contains('/admin/sites'));
-      expect(routes, contains('/admin/procurement'));
+      expect(routes, contains('/reports'));
 
-      expect(routes, isNot(contains('/admin/company')));
       expect(routes, isNot(contains('/admin/users')));
-      expect(routes, isNot(contains('/admin/hr')));
       expect(routes, isNot(contains('/admin/finance')));
     });
 
-    test('Accountant sees Finance and Dashboard only', () {
+    test('Storekeeper sees inventory, procurement and reports', () {
       final items = AdminNavItem.forRoles(
-        {AppRoles.accountant},
+        {AppRoles.storekeeper},
       );
 
-      final routes = items.map((item) => item.route).toSet();
-
-      expect(routes, {'/admin', '/admin/finance'});
-    });
-
-    test('HROfficer sees HR and Dashboard only', () {
-      final items = AdminNavItem.forRoles(
-        {AppRoles.hrOfficer},
-      );
-
-      final routes = items.map((item) => item.route).toSet();
-
-      expect(routes, {'/admin', '/admin/hr'});
-    });
-
-    test('Supervisor sees Project, Site and Dashboard', () {
-      final items = AdminNavItem.forRoles(
-        {AppRoles.supervisor},
-      );
-
-      final routes = items.map((item) => item.route).toSet();
+      final routes = items.map((e) => e.route).toSet();
 
       expect(
         routes,
         {
           '/admin',
-          '/admin/projects',
-          '/admin/sites',
+          '/admin/procurement',
+          '/admin/inventory',
+          '/reports',
         },
       );
     });
 
-    test('Employee sees Dashboard only', () {
+    test('Procurement Officer sees procurement and reports', () {
       final items = AdminNavItem.forRoles(
-        {AppRoles.employee},
+        {AppRoles.procurementOfficer},
       );
 
-      final routes = items.map((item) => item.route).toSet();
+      final routes = items.map((e) => e.route).toSet();
 
-      expect(routes, {'/admin'});
+      expect(
+        routes,
+        {
+          '/admin',
+          '/admin/procurement',
+          '/reports',
+        },
+      );
+    });
+
+    test('Finance Officer sees finance and reports', () {
+      final items = AdminNavItem.forRoles(
+        {AppRoles.financeOfficer},
+      );
+
+      final routes = items.map((e) => e.route).toSet();
+
+      expect(
+        routes,
+        {
+          '/admin',
+          '/admin/finance',
+          '/reports',
+        },
+      );
+    });
+
+    test('HR Officer sees HR and reports', () {
+      final items = AdminNavItem.forRoles(
+        {AppRoles.hrOfficer},
+      );
+
+      final routes = items.map((e) => e.route).toSet();
+
+      expect(
+        routes,
+        {
+          '/admin',
+          '/admin/hr',
+          '/reports',
+        },
+      );
+    });
+
+    test('Equipment Manager sees equipment and reports', () {
+      final items = AdminNavItem.forRoles(
+        {AppRoles.equipmentManager},
+      );
+
+      final routes = items.map((e) => e.route).toSet();
+
+      expect(
+        routes,
+        {
+          '/admin',
+          '/admin/equipment',
+          '/reports',
+        },
+      );
+    });
+
+    test('Safety Officer sees compliance and reports', () {
+      final items = AdminNavItem.forRoles(
+        {AppRoles.safetyOfficer},
+      );
+
+      final routes = items.map((e) => e.route).toSet();
+
+      expect(
+        routes,
+        {
+          '/admin',
+          '/admin/compliance',
+          '/reports',
+        },
+      );
     });
   });
 }

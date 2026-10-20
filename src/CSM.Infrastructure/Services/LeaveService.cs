@@ -1,6 +1,7 @@
 using CSM.Application.Common.Exceptions;
 using CSM.Application.HRM.Leaves;
 using CSM.Application.HRM.Leaves.Dtos;
+using CSM.Application.Notifications;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Identity;
@@ -13,10 +14,14 @@ namespace CSM.Infrastructure.Services;
 public sealed class LeaveService : ILeaveService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly INotificationPublisher _notifications;
 
-    public LeaveService(ApplicationDbContext dbContext)
+    public LeaveService(
+        ApplicationDbContext dbContext,
+        INotificationPublisher notifications)
     {
         _dbContext = dbContext;
+        _notifications = notifications;
     }
 
     public async Task<IReadOnlyCollection<LeaveResponse>> GetAllAsync(
@@ -51,6 +56,28 @@ public sealed class LeaveService : ILeaveService
 
             query = query.Where(
                 x => x.CompanyId == companyId);
+        }
+
+        var authorizedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == currentUserId &&
+                x.IsActive)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (authorizedSiteIds.Count > 0)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            query = query.Where(x =>
+                _dbContext.SiteAssignments.Any(a =>
+                    a.EmployeeId == x.EmployeeId &&
+                    authorizedSiteIds.Contains(a.ConstructionSiteId) &&
+                    a.StartDate <= today &&
+                    (!a.EndDate.HasValue ||
+                     a.EndDate.Value >= today)));
         }
 
         if (employeeId.HasValue)
@@ -179,15 +206,29 @@ public sealed class LeaveService : ILeaveService
             Status = LeaveStatus.Pending,
             ReviewedBy = null,
             ReviewedAtUtc = null,
-            ReviewRemarks = null
+            ReviewRemarks = null,
+            RequestedByUserId = currentUserId
         };
 
         _dbContext.LeaveRequests.Add(leaveRequest);
 
-        await _dbContext.SaveChangesAsync(
+        leaveRequest.Employee = employee;
+
+        // Tell the people who can approve leave. Staged on the same
+        // DbContext, so it is saved together with the request below.
+        await _notifications.StageForCompanyPermissionHoldersAsync(
+            companyId,
+            GranularPermission.HRM_Leave_Approve,
+            currentUserId,
+            "Leave request awaiting approval",
+            DescribeLeave(leaveRequest),
+            NotificationSeverity.Info,
+            "LeaveRequest",
+            leaveRequest.Id,
             cancellationToken);
 
-        leaveRequest.Employee = employee;
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
 
         return Map(leaveRequest);
     }
@@ -230,6 +271,16 @@ public sealed class LeaveService : ILeaveService
         leaveRequest.ReviewedAtUtc = DateTime.UtcNow;
         leaveRequest.ReviewRemarks =
             Clean(request.Remarks);
+
+        NotifyRequester(
+            leaveRequest,
+            actor.Id,
+            request.Status == LeaveStatus.Approved
+                ? "Leave request approved"
+                : "Leave request rejected",
+            request.Status == LeaveStatus.Approved
+                ? NotificationSeverity.Info
+                : NotificationSeverity.Warning);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -275,10 +326,48 @@ public sealed class LeaveService : ILeaveService
         leaveRequest.ReviewRemarks =
             Clean(request.Remarks);
 
+        NotifyRequester(
+            leaveRequest,
+            actor.Id,
+            "Leave request cancelled",
+            NotificationSeverity.Warning);
+
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
         return Map(leaveRequest);
+    }
+
+    // Tells the person who raised the request, unless they made this change.
+    private void NotifyRequester(
+        LeaveRequest leaveRequest,
+        Guid actorId,
+        string title,
+        NotificationSeverity severity)
+    {
+        if (leaveRequest.RequestedByUserId is not Guid requester ||
+            requester == actorId)
+        {
+            return;
+        }
+
+        _notifications.StageForUser(
+            leaveRequest.CompanyId,
+            requester,
+            title,
+            DescribeLeave(leaveRequest),
+            severity,
+            "LeaveRequest",
+            leaveRequest.Id);
+    }
+
+    private static string DescribeLeave(LeaveRequest leaveRequest)
+    {
+        return $"{BuildEmployeeName(leaveRequest.Employee)} - " +
+               $"{leaveRequest.LeaveType}, " +
+               $"{leaveRequest.StartDate:dd MMM yyyy} to " +
+               $"{leaveRequest.EndDate:dd MMM yyyy} " +
+               $"({leaveRequest.NumberOfDays:0.##} days)";
     }
 
     private async Task<User> GetActorAsync(
@@ -321,7 +410,9 @@ public sealed class LeaveService : ILeaveService
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -335,7 +426,9 @@ public sealed class LeaveService : ILeaveService
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -348,7 +441,9 @@ public sealed class LeaveService : ILeaveService
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -357,11 +452,14 @@ public sealed class LeaveService : ILeaveService
             "You are not authorized to review leave requests.");
     }
 
+
     private static void EnsureCanCancel(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

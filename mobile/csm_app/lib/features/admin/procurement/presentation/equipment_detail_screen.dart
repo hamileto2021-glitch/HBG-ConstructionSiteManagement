@@ -52,13 +52,17 @@ class _EquipmentDetailScreenState
     _nameController =
         TextEditingController(text: equipment.name);
     _categoryController =
-        TextEditingController(text: equipment.category ?? '');
+        TextEditingController(text: equipment.category);
+
     _makeController =
-        TextEditingController(text: equipment.make ?? '');
+        TextEditingController(text: equipment.make);
+
     _modelController =
-        TextEditingController(text: equipment.model ?? '');
+        TextEditingController(text: equipment.model);
     _serialNumberController =
-        TextEditingController(text: equipment.serialNumber ?? '');
+        TextEditingController(text: equipment.serialNumber?.isNotEmpty == true
+            ? equipment.serialNumber!
+            : '-');
     _registrationNumberController =
         TextEditingController(
       text: equipment.registrationNumber ?? '',

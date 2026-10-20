@@ -4,6 +4,9 @@ import '../data/models/timesheet.dart';
 import '../data/repositories/employee_repository.dart';
 import '../data/repositories/timesheet_repository.dart';
 import 'timesheet_create_screen.dart';
+import 'timesheet_generate_screen.dart';
+import 'timesheet_detail_screen.dart';
+
 
 class TimesheetListScreen extends StatefulWidget {
   const TimesheetListScreen({
@@ -301,6 +304,24 @@ class _TimesheetListScreenState
         title: const Text('Timesheet Management'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.auto_fix_high),
+            tooltip: 'Generate Timesheet',
+            onPressed: () async {
+              final created = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TimesheetGenerateScreen(
+                    repository: widget.repository,
+                  ),
+                ),
+              );
+
+              if (created == true) {
+                await _loadTimesheets();
+              }
+            },
+          ),
+          IconButton(
             tooltip: 'Create Timesheet',
             onPressed: _isLoading
                 ? null
@@ -394,16 +415,32 @@ class _TimesheetListScreenState
   }
 
   Widget _buildTimesheetCard(
-    BuildContext context,
-    Timesheet timesheet,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
+      BuildContext context,
+      Timesheet timesheet,
+      ) {
+    return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () async {
+          final updated = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TimesheetDetailScreen(
+                timesheet: timesheet,
+                repository: widget.repository,
+              ),
+            ),
+          );
+
+          if (updated == true) {
+            await _loadTimesheets();
+          }
+        },
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             Row(
               children: [
                 const Icon(
@@ -515,27 +552,24 @@ class _TimesheetListScreenState
                 ],
               ),
             ],
-            if (timesheet.status !=
-                    TimesheetStatus.cancelled &&
-                timesheet.status !=
-                    TimesheetStatus.approved) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _cancelTimesheet(timesheet);
-                  },
-                  icon: const Icon(
-                    Icons.cancel_outlined,
+                if (timesheet.status != TimesheetStatus.cancelled &&
+                    timesheet.status != TimesheetStatus.approved) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        _cancelTimesheet(timesheet);
+                      },
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Cancel Timesheet'),
+                    ),
                   ),
-                  label: const Text('Cancel Timesheet'),
-                ),
-              ),
-            ],
-          ],
+                ],
+              ], // <-- closes children: [
+            ),
+          ),
         ),
-      ),
     );
   }
 

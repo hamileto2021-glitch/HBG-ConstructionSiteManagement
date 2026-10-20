@@ -9,6 +9,10 @@ using CSM.Domain.Entities.Projects;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ProcurementEquipment = CSM.Domain.Entities.Procurement.Equipment;
+using ProcurementEquipmentAssignment = CSM.Domain.Entities.Procurement.EquipmentAssignment;
+
+
 
 namespace CSM.Infrastructure.Services;
 
@@ -232,7 +236,7 @@ public sealed class EquipmentAssignmentService :
             companyId,
             cancellationToken);
 
-        var assignment = new EquipmentAssignment
+        var assignment = new ProcurementEquipmentAssignment
         {
             Id = Guid.NewGuid(),
             CompanyId = companyId,
@@ -457,9 +461,9 @@ public sealed class EquipmentAssignmentService :
                 "Current user was not found or is inactive.");
     }
 
-    private async Task<EquipmentAssignment> GetAssignmentAsync(
-        Guid assignmentId,
-        CancellationToken cancellationToken)
+   private async Task<ProcurementEquipmentAssignment> GetAssignmentAsync(
+       Guid assignmentId,
+       CancellationToken cancellationToken)
     {
         return await _dbContext.EquipmentAssignments
             .Include(x => x.Equipment)
@@ -502,18 +506,18 @@ public sealed class EquipmentAssignmentService :
         return $"EA-{maxNumber + 1:000000}";
     }
 
-    private static void EnsureCanAccess(
-        User actor)
+    private static void EnsureCanAccess(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.Accountant))
         {
             return;
         }
 
         throw new EquipmentAssignmentManagementException(
-            "You are not authorized to access equipment assignments.");
+            "You are not authorized to view equipment assignments.");
     }
 
     private static void EnsureCanModify(
@@ -593,7 +597,7 @@ public sealed class EquipmentAssignmentService :
     }
 
     private static EquipmentAssignmentResponse Map(
-        EquipmentAssignment assignment)
+        ProcurementEquipmentAssignment assignment)
     {
         return new EquipmentAssignmentResponse(
             assignment.Id,

@@ -106,6 +106,75 @@ public sealed class DocumentVersionService : IDocumentVersionService
         };
     }
 
+    public async Task<(Stream Stream, string FileName, string? ContentType)>
+        DownloadAsync(
+            Guid currentUserId,
+            Guid documentId,
+            Guid versionId,
+            CancellationToken cancellationToken)
+    {
+        var document = await GetDocumentAsync(
+            currentUserId,
+            documentId,
+            cancellationToken);
+
+        var version = await _dbContext.DocumentVersions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == versionId &&
+                    x.DocumentId == document.Id,
+                cancellationToken)
+            ?? throw new DocumentManagementException(
+                "Document version not found.");
+
+        var webRoot = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "wwwroot");
+
+        var relativePath = version.StoragePath
+            .TrimStart('/', '\\')
+            .Replace(
+                '/',
+                Path.DirectorySeparatorChar)
+            .Replace(
+                '\\',
+                Path.DirectorySeparatorChar);
+
+        var fullPath = Path.GetFullPath(
+            Path.Combine(webRoot, relativePath));
+
+        var webRootFullPath = Path.GetFullPath(
+            webRoot + Path.DirectorySeparatorChar);
+
+        if (!fullPath.StartsWith(
+                webRootFullPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DocumentManagementException(
+                "Invalid document storage path.");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            throw new DocumentManagementException(
+                "Document version file was not found.");
+        }
+
+        var stream = new FileStream(
+            fullPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            64 * 1024,
+            useAsync: true);
+
+        return (
+            stream,
+            version.FileName,
+            version.ContentType);
+    }
+
     private async Task<Document> GetDocumentAsync(
         Guid currentUserId,
         Guid documentId,

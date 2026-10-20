@@ -4,6 +4,9 @@ using CSM.Application.Auth.Dtos;
 using CSM.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
+using CSM.Infrastructure.Persistence;
 
 namespace CSM.Api.Controllers;
 
@@ -13,9 +16,18 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
 
-    public AuthController(IAuthService authService)
+    private readonly IPermissionEvaluator _permissionEvaluator;
+
+    private readonly ApplicationDbContext _dbContext;
+
+    public AuthController(
+        IAuthService authService,
+        IPermissionEvaluator permissionEvaluator,
+        ApplicationDbContext dbContext)
     {
         _authService = authService;
+        _permissionEvaluator = permissionEvaluator;
+        _dbContext = dbContext;
     }
 
     [AllowAnonymous]
@@ -82,33 +94,66 @@ public sealed class AuthController : ControllerBase
         return NoContent();
     }
 
-    [Authorize]
-    [HttpGet("me")]
-    public IActionResult Me()
+
+[Authorize]
+[HttpGet("me")]
+public async Task<IActionResult> Me(
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    var hasActiveSiteAccess = false;
+
+    if (Guid.TryParse(userIdValue, out var userId))
     {
-        return Ok(new
+        hasActiveSiteAccess = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.UserId == userId &&
+                     x.IsActive &&
+                     !x.IsDeleted,
+                cancellationToken);
+    }
+
+    return Ok(new
+    {
+        userId = userIdValue,
+        email = User.FindFirstValue(ClaimTypes.Email),
+        name = User.Identity?.Name,
+        companyId = User.FindFirst("company_id")?.Value,
+        employeeId = User.FindFirst("employee_id")?.Value,
+        roles = User.FindAll(ClaimTypes.Role)
+            .Select(x => x.Value)
+            .ToArray(),
+        hasActiveSiteAccess
+    });
+}
+
+
+    [Authorize]
+    [HttpGet("permissions")]
+    public async Task<IActionResult> Permissions(
+        CancellationToken cancellationToken)
+    {
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
         {
-            userId =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier),
+            return Unauthorized(new
+            {
+                message = "Invalid authenticated user."
+            });
+        }
 
-            email =
-                User.FindFirstValue(
-                    ClaimTypes.Email),
+        var permissions =
+            await _permissionEvaluator.GetPermissionsAsync(
+                userId,
+                cancellationToken);
 
-            name = User.Identity?.Name,
-
-            companyId =
-                User.FindFirst("company_id")?.Value,
-
-            employeeId =
-                User.FindFirst("employee_id")?.Value,
-
-            roles =
-                User.FindAll(ClaimTypes.Role)
-                    .Select(x => x.Value)
-                    .ToArray()
-        });
+        return Ok(permissions);
     }
 
     [Authorize]

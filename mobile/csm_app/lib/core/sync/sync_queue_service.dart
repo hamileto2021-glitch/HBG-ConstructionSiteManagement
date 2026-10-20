@@ -1,14 +1,8 @@
 import 'dart:convert';
 
-import 'package:uuid/uuid.dart';
+import '../database/app_database.dart';
 
-import '../database/local_database.dart';
-
-enum SyncOperation {
-  create,
-  update,
-  delete,
-}
+enum SyncOperation { create, update, delete }
 
 class SyncQueueItem {
   const SyncQueueItem({
@@ -33,77 +27,46 @@ class SyncQueueItem {
 }
 
 abstract interface class SyncQueueStore {
-  Future<String> enqueue({
-    required String entityType,
-    required String entityId,
-    required SyncOperation operation,
-    required Map<String, dynamic> payload,
-  });
-
-  Future<List<SyncQueueItem>> getPending({
-    int? limit,
-  });
-
+  Future<List<SyncQueueItem>> getPending({int? limit});
   Future<void> markRetry({
     required String id,
     required String error,
   });
-
   Future<void> remove(String id);
-
   Future<void> clear();
 }
 
 class SyncQueueService implements SyncQueueStore {
-  SyncQueueService({
-    LocalDatabase? database,
-    Uuid? uuid,
-  })  : _database = database ?? LocalDatabase.instance,
-        _uuid = uuid ?? const Uuid();
+  SyncQueueService({AppDatabase? database})
+      : _database = database ?? AppDatabase();
 
-  final LocalDatabase _database;
-  final Uuid _uuid;
+  final AppDatabase _database;
 
   @override
-  Future<String> enqueue({
-    required String entityType,
-    required String entityId,
-    required SyncOperation operation,
-    required Map<String, dynamic> payload,
-  }) async {
-    final db = await _database.database;
-    final id = _uuid.v4();
+  Future<List<SyncQueueItem>> getPending({int? limit}) async {
+    final rows = await _database.syncQueueDao.getPending();
 
-    await db.insert(
-      'sync_queue',
-      <String, dynamic>{
-        'id': id,
-        'entity_type': entityType,
-        'entity_id': entityId,
-        'operation': operation.name,
-        'payload': jsonEncode(payload),
-        'created_at_utc': DateTime.now().toUtc().toIso8601String(),
-        'retry_count': 0,
-        'last_error': null,
-      },
-    );
+    final items = rows.map((row) {
+      return SyncQueueItem(
+        id: row.id,
+        entityType: row.entity,
+        entityId: row.id,
+        operation: switch (row.action.toUpperCase()) {
+          'POST' => SyncOperation.create,
+          'PUT' => SyncOperation.update,
+          'DELETE' => SyncOperation.delete,
+          _ => SyncOperation.create,
+        },
+        payload: Map<String, dynamic>.from(
+          jsonDecode(row.payload) as Map,
+        ),
+        createdAtUtc: row.createdAt,
+        retryCount: 0,
+        lastError: null,
+      );
+    }).toList();
 
-    return id;
-  }
-
-  @override
-  Future<List<SyncQueueItem>> getPending({
-    int? limit,
-  }) async {
-    final db = await _database.database;
-
-    final rows = await db.query(
-      'sync_queue',
-      orderBy: 'created_at_utc ASC',
-      limit: limit,
-    );
-
-    return rows.map(_fromRow).toList();
+    return limit == null ? items : items.take(limit).toList();
   }
 
   @override
@@ -111,52 +74,19 @@ class SyncQueueService implements SyncQueueStore {
     required String id,
     required String error,
   }) async {
-    final db = await _database.database;
-
-    await db.rawUpdate(
-      '''
-      UPDATE sync_queue
-      SET retry_count = retry_count + 1,
-          last_error = ?
-      WHERE id = ?
-      ''',
-      <Object?>[error, id],
-    );
+    // Keep pending until the next sync attempt.
   }
 
   @override
   Future<void> remove(String id) async {
-    final db = await _database.database;
-
-    await db.delete(
-      'sync_queue',
-      where: 'id = ?',
-      whereArgs: <Object?>[id],
-    );
+    await _database.syncQueueDao.markSynced(id);
   }
 
   @override
   Future<void> clear() async {
-    final db = await _database.database;
-    await db.delete('sync_queue');
-  }
-
-  SyncQueueItem _fromRow(Map<String, Object?> row) {
-    return SyncQueueItem(
-      id: row['id']! as String,
-      entityType: row['entity_type']! as String,
-      entityId: row['entity_id']! as String,
-      operation: SyncOperation.values.byName(
-        row['operation']! as String,
-      ),
-      payload: Map<String, dynamic>.from(
-        jsonDecode(row['payload']! as String) as Map,
-      ),
-      createdAtUtc: DateTime.parse(
-        row['created_at_utc']! as String,
-      ),
-      retryCount: row['retry_count']! as int,
-      lastError: row['last_error'] as String?,
-    );
+    final rows = await _database.syncQueueDao.getPending();
+    for (final row in rows) {
+      await _database.syncQueueDao.markSynced(row.id);
+    }
   }
 }

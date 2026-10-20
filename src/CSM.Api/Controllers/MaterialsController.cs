@@ -10,18 +10,42 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class MaterialsController : ControllerBase
 {
     private readonly IMaterialService _materialService;
 
-    public MaterialsController(
-        IMaterialService materialService)
+    public MaterialsController(IMaterialService materialService)
     {
         _materialService = materialService;
     }
 
+    [HttpGet("lookup/categories")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyList<MaterialLookupDto>>> GetCategories(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _materialService.GetCategoriesAsync(cancellationToken));
+    }
+
+    [HttpGet("lookup/units")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyList<MaterialLookupDto>>> GetUnits(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _materialService.GetUnitsAsync(cancellationToken));
+    }
+
+    [HttpGet("lookup/material-types")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<IReadOnlyList<MaterialLookupDto>>> GetMaterialTypes(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _materialService.GetMaterialTypesAsync(cancellationToken));
+    }
+
     [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<ActionResult<IReadOnlyCollection<MaterialResponse>>> GetAll(
         [FromQuery] bool? isActive,
         [FromQuery] string? category,
@@ -39,14 +63,12 @@ public sealed class MaterialsController : ControllerBase
         }
         catch (MaterialManagementException ex)
         {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
+            return BadRequest(new { message = ex.Message });
         }
     }
 
     [HttpGet("{materialId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.View")]
     public async Task<ActionResult<MaterialResponse>> GetById(
         Guid materialId,
         CancellationToken cancellationToken)
@@ -62,14 +84,12 @@ public sealed class MaterialsController : ControllerBase
         }
         catch (MaterialManagementException ex)
         {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
+            return BadRequest(new { message = ex.Message });
         }
     }
 
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<MaterialResponse>> Create(
         [FromBody] CreateMaterialRequest request,
         CancellationToken cancellationToken)
@@ -83,22 +103,17 @@ public sealed class MaterialsController : ControllerBase
 
             return CreatedAtAction(
                 nameof(GetById),
-                new
-                {
-                    materialId = result.Id
-                },
+                new { materialId = result.Id },
                 result);
         }
         catch (MaterialManagementException ex)
         {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
+            return BadRequest(new { message = ex.Message });
         }
     }
 
     [HttpPut("{materialId:guid}")]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<MaterialResponse>> Update(
         Guid materialId,
         [FromBody] UpdateMaterialRequest request,
@@ -116,25 +131,18 @@ public sealed class MaterialsController : ControllerBase
         }
         catch (MaterialManagementException ex)
         {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
+            return BadRequest(new { message = ex.Message });
         }
     }
 
     private Guid GetCurrentUserId()
     {
-        var value =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            User.FindFirstValue("sub");
+        var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (!Guid.TryParse(
-                value,
-                out var userId))
+        if (!Guid.TryParse(value, out var userId))
         {
-            throw new MaterialManagementException(
-                "Current user identity is invalid.");
+            throw new UnauthorizedAccessException(
+                "Authenticated user identifier is missing.");
         }
 
         return userId;

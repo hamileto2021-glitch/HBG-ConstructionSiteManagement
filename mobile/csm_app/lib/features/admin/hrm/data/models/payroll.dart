@@ -13,6 +13,7 @@ class PayrollAdjustment {
     required this.description,
     required this.amount,
     required this.isDeduction,
+    required this.otherDeduction,
   });
 
   final String id;
@@ -20,16 +21,21 @@ class PayrollAdjustment {
   final String description;
   final double amount;
   final bool isDeduction;
+  final double otherDeduction;
 
   factory PayrollAdjustment.fromJson(
-    Map<String, dynamic> json,
-  ) {
+      Map<String, dynamic> json,
+      ) {
+    double numValue(dynamic value) =>
+        (value as num?)?.toDouble() ?? 0.0;
+
     return PayrollAdjustment(
       id: json['id'] as String,
       type: json['type'] as String,
       description: json['description'] as String,
-      amount: (json['amount'] as num).toDouble(),
-      isDeduction: json['isDeduction'] as bool,
+      amount: numValue(json['amount']),
+      isDeduction: json['isDeduction'] as bool? ?? false,
+      otherDeduction: numValue(json['otherDeduction']),
     );
   }
 }
@@ -93,81 +99,51 @@ class Payroll {
   final List<PayrollAdjustment> adjustments;
   final DateTime createdAtUtc;
 
-  factory Payroll.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory Payroll.fromJson(Map<String, dynamic> json) {
+    double numValue(dynamic value) =>
+        (value as num?)?.toDouble() ?? 0.0;
+
     return Payroll(
       id: json['id'] as String,
       companyId: json['companyId'] as String,
       employeeId: json['employeeId'] as String,
       employeeNumber: json['employeeNumber'] as String,
       employeeName: json['employeeName'] as String,
-      periodStart: DateTime.parse(
-        json['periodStart'] as String,
-      ),
-      periodEnd: DateTime.parse(
-        json['periodEnd'] as String,
-      ),
-      basePay: (json['basePay'] as num).toDouble(),
-      regularHours:
-          (json['regularHours'] as num).toDouble(),
-      overtimeHours:
-          (json['overtimeHours'] as num).toDouble(),
-      overtimePay:
-          (json['overtimePay'] as num).toDouble(),
-      allowances:
-          (json['allowances'] as num).toDouble(),
-      bonuses:
-          (json['bonuses'] as num).toDouble(),
-      grossPay:
-          (json['grossPay'] as num).toDouble(),
-      taxDeduction:
-          (json['taxDeduction'] as num).toDouble(),
-      pensionDeduction:
-          (json['pensionDeduction'] as num).toDouble(),
-      otherDeductions:
-          (json['otherDeductions'] as num).toDouble(),
-      totalDeductions:
-          (json['totalDeductions'] as num).toDouble(),
-      netPay:
-          (json['netPay'] as num).toDouble(),
-      currencyCode:
-          json['currencyCode'] as String,
-      status:
-          _parsePayrollStatus(json['status']),
-      approvedBy:
-          json['approvedBy'] as String?,
-      approvedAtUtc:
-          _parseDate(json['approvedAtUtc']),
-      paidAtUtc:
-          _parseDate(json['paidAtUtc']),
-      paymentReference:
-          json['paymentReference'] as String?,
-      adjustments:
-          (json['adjustments'] as List<dynamic>? ?? [])
-              .map(
-                (item) => PayrollAdjustment.fromJson(
-                  item as Map<String, dynamic>,
-                ),
-              )
-              .toList(),
-      createdAtUtc: DateTime.parse(
-        json['createdAtUtc'] as String,
-      ),
+      periodStart: DateTime.parse(json['periodStart'] as String),
+      periodEnd: DateTime.parse(json['periodEnd'] as String),
+
+      basePay: numValue(json['basePay']),
+      regularHours: numValue(json['regularHours']),
+      overtimeHours: numValue(json['overtimeHours']),
+      overtimePay: numValue(json['overtimePay']),
+      allowances: numValue(json['allowances']),
+      bonuses: numValue(json['bonuses']),
+      grossPay: numValue(json['grossPay']),
+      taxDeduction: numValue(json['taxDeduction']),
+      pensionDeduction: numValue(json['pensionDeduction']),
+      otherDeductions: numValue(json['otherDeductions']),
+      totalDeductions: numValue(json['totalDeductions']),
+      netPay: numValue(json['netPay']),
+
+      currencyCode: json['currencyCode'] as String,
+      status: _parsePayrollStatus(json['status']),
+      approvedBy: json['approvedBy'] as String?,
+      approvedAtUtc: _parseDate(json['approvedAtUtc']),
+      paidAtUtc: _parseDate(json['paidAtUtc']),
+      paymentReference: json['paymentReference'] as String?,
+      adjustments: (json['adjustments'] as List<dynamic>? ?? [])
+          .map((e) => PayrollAdjustment.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      createdAtUtc: DateTime.parse(json['createdAtUtc'] as String),
     );
-  }
+  } // <-- Factory ends here
 
   static DateTime? _parseDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
-
+    if (value == null) return null;
     return DateTime.tryParse(value.toString());
   }
 
-  static PayrollStatus _parsePayrollStatus(
-    dynamic value,
-  ) {
+  static PayrollStatus _parsePayrollStatus(dynamic value) {
     final name = value.toString().split('.').last;
 
     switch (name) {
@@ -187,9 +163,7 @@ class Payroll {
       case 'Cancelled':
         return PayrollStatus.cancelled;
       default:
-        throw FormatException(
-          'Unknown payroll status: $value',
-        );
+        throw FormatException('Unknown payroll status: $value');
     }
   }
 }

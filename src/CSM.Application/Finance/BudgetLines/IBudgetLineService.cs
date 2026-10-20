@@ -24,4 +24,9 @@ public interface IBudgetLineService
         Guid budgetLineId,
         UpdateBudgetLineRequest request,
         CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        Guid currentUserId,
+        Guid budgetLineId,
+        CancellationToken cancellationToken = default);
 }

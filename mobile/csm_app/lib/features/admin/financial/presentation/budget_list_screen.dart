@@ -1,5 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../../projects/data/models/project.dart';
+import '../../projects/data/repositories/project_repository.dart';
+import '../../sites/data/models/site.dart';
+import '../../sites/data/repositories/site_repository.dart';
 import '../data/models/budget.dart';
 import '../data/repositories/budget_repository.dart';
 import 'budget_create_screen.dart';
@@ -9,9 +13,16 @@ class BudgetListScreen extends StatefulWidget {
   BudgetListScreen({
     super.key,
     BudgetRepository? repository,
-  }) : repository = repository ?? BudgetRepository();
+    SiteRepository? siteRepository,
+    ProjectRepository? projectRepository,
+  })  : repository = repository ?? BudgetRepository(),
+        siteRepository = siteRepository ?? SiteRepository(),
+        projectRepository =
+            projectRepository ?? ProjectRepository();
 
   final BudgetRepository repository;
+  final SiteRepository siteRepository;
+  final ProjectRepository projectRepository;
 
   @override
   State<BudgetListScreen> createState() =>
@@ -21,6 +32,9 @@ class BudgetListScreen extends StatefulWidget {
 class _BudgetListScreenState
     extends State<BudgetListScreen> {
   List<Budget> _budgets = [];
+  List<Site> _sites = [];
+  List<Project> _projects = [];
+
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -37,13 +51,18 @@ class _BudgetListScreenState
     });
 
     try {
-      final budgets =
-          await widget.repository.getAll();
+      final results = await Future.wait([
+        widget.repository.getAll(),
+        widget.siteRepository.getAll(),
+        widget.projectRepository.getAll(),
+      ]);
 
       if (!mounted) return;
 
       setState(() {
-        _budgets = budgets;
+        _budgets = results[0] as List<Budget>;
+        _sites = results[1] as List<Site>;
+        _projects = results[2] as List<Project>;
         _isLoading = false;
       });
     } catch (error) {
@@ -56,6 +75,35 @@ class _BudgetListScreenState
     }
   }
 
+  String _siteDisplayName(
+      String siteId,
+      ) {
+    for (final site in _sites) {
+      if (site.id == siteId) {
+        return '${site.siteCode} - ${site.name}';
+      }
+    }
+
+    return '—';
+  }
+
+  String _projectDisplayName(
+      String? projectId,
+      ) {
+    if (projectId == null ||
+        projectId.isEmpty) {
+      return '—';
+    }
+
+    for (final project in _projects) {
+      if (project.id == projectId) {
+        return '${project.projectCode} - ${project.name}';
+      }
+    }
+
+    return '—';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,19 +113,23 @@ class _BudgetListScreenState
           IconButton(
             tooltip: 'Refresh',
             onPressed:
-                _isLoading ? null : _loadBudgets,
+            _isLoading ? null : _loadBudgets,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       floatingActionButton:
-          FloatingActionButton.extended(
+      FloatingActionButton.extended(
         onPressed: () async {
           final created =
-              await Navigator.of(context).push<bool>(
+          await Navigator.of(context).push<bool>(
             MaterialPageRoute(
               builder: (_) => BudgetCreateScreen(
                 repository: widget.repository,
+                siteRepository:
+                widget.siteRepository,
+                projectRepository:
+                widget.projectRepository,
               ),
             ),
           );
@@ -133,7 +185,7 @@ class _BudgetListScreenState
         onRefresh: _loadBudgets,
         child: ListView(
           physics:
-              const AlwaysScrollableScrollPhysics(),
+          const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(height: 120),
             Icon(
@@ -166,15 +218,23 @@ class _BudgetListScreenState
 
           return _BudgetCard(
             budget: budget,
+            siteDisplayName:
+            _siteDisplayName(
+              budget.constructionSiteId,
+            ),
+            projectDisplayName:
+            _projectDisplayName(
+              budget.projectId,
+            ),
             onTap: () async {
               final updated =
-                  await Navigator.of(context).push<bool>(
+              await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (_) =>
                       BudgetDetailScreen(
-                    budget: budget,
-                    repository: widget.repository,
-                  ),
+                        budget: budget,
+                        repository: widget.repository,
+                      ),
                 ),
               );
 
@@ -192,10 +252,14 @@ class _BudgetListScreenState
 class _BudgetCard extends StatelessWidget {
   const _BudgetCard({
     required this.budget,
+    required this.siteDisplayName,
+    required this.projectDisplayName,
     required this.onTap,
   });
 
   final Budget budget;
+  final String siteDisplayName;
+  final String projectDisplayName;
   final VoidCallback onTap;
 
   @override
@@ -211,7 +275,7 @@ class _BudgetCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment:
-                CrossAxisAlignment.start,
+            CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -220,7 +284,7 @@ class _BudgetCard extends StatelessWidget {
                     height: 48,
                     decoration: BoxDecoration(
                       borderRadius:
-                          BorderRadius.circular(12),
+                      BorderRadius.circular(12),
                       color: theme
                           .colorScheme
                           .primaryContainer,
@@ -237,7 +301,7 @@ class _BudgetCard extends StatelessWidget {
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      CrossAxisAlignment.start,
                       children: [
                         Text(
                           budget.budgetNumber,
@@ -252,9 +316,9 @@ class _BudgetCard extends StatelessWidget {
                               .textTheme
                               .titleMedium
                               ?.copyWith(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
+                            fontWeight:
+                            FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -270,16 +334,15 @@ class _BudgetCard extends StatelessWidget {
               _InfoRow(
                 label: 'Amount',
                 value:
-                    '${budget.totalAmount} ${budget.currencyCode}',
+                '${budget.totalAmount} ${budget.currencyCode}',
               ),
               _InfoRow(
                 label: 'Site',
-                value: budget.constructionSiteId,
+                value: siteDisplayName,
               ),
               _InfoRow(
                 label: 'Project',
-                value:
-                    budget.projectId ?? '—',
+                value: projectDisplayName,
               ),
               if (budget.description != null)
                 _InfoRow(
@@ -308,8 +371,8 @@ class _BudgetCard extends StatelessWidget {
   }
 
   static String _statusLabel(
-    BudgetStatus status,
-  ) {
+      BudgetStatus status,
+      ) {
     switch (status) {
       case BudgetStatus.draft:
         return 'Draft';
@@ -327,8 +390,8 @@ class _BudgetCard extends StatelessWidget {
   }
 
   static String _formatDate(
-    DateTime date,
-  ) {
+      DateTime date,
+      ) {
     final local = date.toLocal();
 
     String two(int value) =>
@@ -351,7 +414,7 @@ class _StatusChip extends StatelessWidget {
     return Chip(
       label: Text(status),
       visualDensity:
-          VisualDensity.compact,
+      VisualDensity.compact,
     );
   }
 }
@@ -369,10 +432,10 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding:
-          const EdgeInsets.only(bottom: 6),
+      const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 110,

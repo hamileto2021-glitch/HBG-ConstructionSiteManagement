@@ -1,11 +1,26 @@
 import '../../../../../core/network/api_client.dart';
 import '../models/attendance/attendance.dart';
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
+
+import '../../../../../core/database/app_database.dart';
+import '../../../../../core/sync/connectivity_service.dart';
+import 'package:flutter/foundation.dart';
+
 
 class AttendanceRepository {
-  AttendanceRepository({ApiClient? apiClient})
-      : _apiClient = apiClient ?? ApiClient();
+  AttendanceRepository({
+    ApiClient? apiClient,
+    AppDatabase? database,
+    ConnectivityService? connectivity,
+  })  : _apiClient = apiClient ?? ApiClient(),
+        _db = database ?? AppDatabase(),
+        _connectivity = connectivity ?? ConnectivityService();
 
   final ApiClient _apiClient;
+  final AppDatabase _db;
+  final ConnectivityService _connectivity;
+  final Uuid _uuid = const Uuid();
 
   Future<List<Attendance>> getAll({
     String? employeeId,
@@ -56,6 +71,7 @@ class AttendanceRepository {
     return Attendance.fromJson(response);
   }
 
+
   Future<Attendance> checkIn({
     required String employeeId,
     required String constructionSiteId,
@@ -68,23 +84,85 @@ class AttendanceRepository {
     String? biometricReference,
     String? remarks,
   }) async {
-    final response = await _apiClient.post(
-      '/Attendances/check-in',
-      body: <String, dynamic>{
-        'employeeId': employeeId,
-        'constructionSiteId': constructionSiteId,
-        'shiftId': shiftId,
-        'checkInAtUtc': checkInAtUtc.toUtc().toIso8601String(),
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracyMeters': accuracyMeters,
-        'source': _sourceName(source),
-        'biometricReference': biometricReference,
-        'remarks': remarks,
-      },
+    final payload = {
+      'employeeId': employeeId,
+      'constructionSiteId': constructionSiteId,
+      'shiftId': shiftId,
+      'checkInAtUtc': checkInAtUtc.toUtc().toIso8601String(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracyMeters': accuracyMeters,
+      'source': _sourceName(source),
+      'biometricReference': biometricReference,
+      'remarks': remarks,
+    };
+
+    // ONLINE
+    final online = await _connectivity.isOnline();
+
+    debugPrint('ATTENDANCE ONLINE: $online');
+
+    if (online) {
+      final response = await _apiClient.post(
+        '/Attendances/check-in',
+        body: payload,
+      );
+
+      return Attendance.fromJson(response);
+    }
+
+    debugPrint('OFFLINE -> enqueue attendance');
+
+    // OFFLINE
+    final id = _uuid.v4();
+
+    await _db.attendanceLocal.save(
+      id: id,
+      employeeId: employeeId,
+      employeeName: 'Offline Employee',
+      attendanceDate: checkInAtUtc,
+      status: 'Present',
+      checkIn: checkInAtUtc.toIso8601String(),
+      latitude: latitude,
+      longitude: longitude,
     );
 
-    return Attendance.fromJson(response);
+
+    debugPrint('QUEUE ENQUEUED: $id');
+
+    await _db.syncQueueDao.enqueue(
+      id: id,
+      entity: 'Attendance',
+      action: 'POST',
+      payload: jsonEncode(payload),
+    );
+
+    return Attendance.fromJson({
+      'id': id,
+      'companyId': '',
+      'employeeId': employeeId,
+      'employeeName': 'Offline Employee',
+      'employeeNumber': 'OFFLINE',
+      'constructionSiteId': constructionSiteId,
+      'siteName': 'Offline',
+      'shiftId': shiftId,
+      'shiftName': null,
+      'attendanceDate': checkInAtUtc.toUtc().toIso8601String(),
+      'checkInAtUtc': checkInAtUtc.toUtc().toIso8601String(),
+      'checkOutAtUtc': null,
+      'status': 'Present',
+      'source': _sourceName(source),
+      'isCheckInWithinGeofence': true,
+      'isCheckOutWithinGeofence': true,
+      'regularHours': 0,
+      'overtimeHours': 0,
+      'requiresApproval': false,
+      'isApproved': false,
+      'createdAtUtc': DateTime.now().toUtc().toIso8601String(),
+      'approvedByName': null,
+      'approvedAtUtc': null,
+      'remarks': remarks,
+    });
   }
 
   Future<Attendance> checkOut({

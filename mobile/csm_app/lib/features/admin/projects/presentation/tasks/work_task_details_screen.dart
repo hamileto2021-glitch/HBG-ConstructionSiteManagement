@@ -2,16 +2,22 @@
 
 import '../../data/models/work_task.dart';
 import '../../data/repositories/work_task_repository.dart';
+import 'work_task_dependency_screen.dart';
+import 'work_task_dependency_graph_screen.dart';
+import 'work_task_edit_screen.dart';
+
 
 class WorkTaskDetailsScreen extends StatefulWidget {
   const WorkTaskDetailsScreen({
     super.key,
     required this.task,
     required this.repository,
+    required this.allTasks,
   });
 
   final WorkTask task;
   final WorkTaskRepository repository;
+  final List<WorkTask> allTasks;
 
   @override
   State<WorkTaskDetailsScreen> createState() =>
@@ -35,13 +41,9 @@ class _WorkTaskDetailsScreenState
 
   Future<void> _loadTask() async {
     try {
-      final task = await widget.repository.getById(
-        widget.task.id,
-      );
+      final task = await widget.repository.getById(widget.task.id);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _task = task;
@@ -49,9 +51,7 @@ class _WorkTaskDetailsScreenState
         _errorMessage = null;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _isLoading = false;
@@ -61,8 +61,8 @@ class _WorkTaskDetailsScreenState
   }
 
   List<WorkTaskStatus> _allowedNextStatuses(
-    WorkTaskStatus current,
-  ) {
+      WorkTaskStatus current,
+      ) {
     switch (current) {
       case WorkTaskStatus.notStarted:
         return [
@@ -72,23 +72,15 @@ class _WorkTaskDetailsScreenState
 
       case WorkTaskStatus.inProgress:
         return [
-          WorkTaskStatus.blocked,
           WorkTaskStatus.onHold,
           WorkTaskStatus.completed,
-          WorkTaskStatus.cancelled,
-        ];
-
-      case WorkTaskStatus.blocked:
-        return [
-          WorkTaskStatus.inProgress,
-          WorkTaskStatus.onHold,
           WorkTaskStatus.cancelled,
         ];
 
       case WorkTaskStatus.onHold:
         return [
           WorkTaskStatus.inProgress,
-          WorkTaskStatus.completed,
+          WorkTaskStatus.onHold,
           WorkTaskStatus.cancelled,
         ];
 
@@ -98,23 +90,16 @@ class _WorkTaskDetailsScreenState
     }
   }
 
-  Future<void> _changeTaskStatus(
-    WorkTaskStatus status,
-  ) async {
-    setState(() {
-      _isChangingStatus = true;
-    });
+  Future<void> _changeTaskStatus(WorkTaskStatus status) async {
+    setState(() => _isChangingStatus = true);
 
     try {
-      final updatedTask =
-          await widget.repository.changeStatus(
+      final updatedTask = await widget.repository.changeStatus(
         taskId: _task.id,
         status: status,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _task = updatedTask;
@@ -129,27 +114,20 @@ class _WorkTaskDetailsScreenState
         ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
-      setState(() {
-        _isChangingStatus = false;
-      });
+      setState(() => _isChangingStatus = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
+        SnackBar(content: Text(error.toString())),
       );
     }
   }
 
   Future<void> _showStatusDialog(
-    List<WorkTaskStatus> allowedStatuses,
-  ) async {
-    final selectedStatus =
-        await showDialog<WorkTaskStatus>(
+      List<WorkTaskStatus> allowedStatuses,
+      ) async {
+    final selectedStatus = await showDialog<WorkTaskStatus>(
       context: context,
       builder: (dialogContext) {
         return SimpleDialog(
@@ -157,19 +135,14 @@ class _WorkTaskDetailsScreenState
           children: allowedStatuses
               .map(
                 (status) => SimpleDialogOption(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop(status);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      _statusLabel(status),
-                    ),
-                  ),
-                ),
-              )
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(status),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(_statusLabel(status)),
+              ),
+            ),
+          )
               .toList(),
         );
       },
@@ -182,8 +155,7 @@ class _WorkTaskDetailsScreenState
 
   Future<void> _showProgressDialog() async {
     final controller = TextEditingController(
-      text: _task.progressPercentage
-          .toStringAsFixed(1),
+      text: _task.progressPercentage.toStringAsFixed(1),
     );
 
     final value = await showDialog<double>(
@@ -204,9 +176,8 @@ class _WorkTaskDetailsScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
@@ -244,20 +215,16 @@ class _WorkTaskDetailsScreenState
   }
 
   Future<void> _updateProgress(double progress) async {
-    setState(() {
-      _isUpdatingProgress = true;
-    });
+    setState(() => _isUpdatingProgress = true);
 
     try {
       final updatedTask =
-          await widget.repository.updateProgress(
+      await widget.repository.updateProgress(
         taskId: _task.id,
         progressPercentage: progress,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _task = updatedTask;
@@ -268,23 +235,17 @@ class _WorkTaskDetailsScreenState
         SnackBar(
           content: Text(
             'Progress updated to '
-            '${updatedTask.progressPercentage.toStringAsFixed(1)}%.',
+                '${updatedTask.progressPercentage.toStringAsFixed(1)}%.',
           ),
         ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
-      setState(() {
-        _isUpdatingProgress = false;
-      });
+      setState(() => _isUpdatingProgress = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
+        SnackBar(content: Text(error.toString())),
       );
     }
   }
@@ -294,6 +255,43 @@ class _WorkTaskDetailsScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(_task.taskNumber),
+        actions: [
+          IconButton(
+            tooltip: 'Edit Task',
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              final updated = await Navigator.push<WorkTask>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WorkTaskEditScreen(
+                    task: _task,
+                    repository: widget.repository,
+                  ),
+                ),
+              );
+
+              if (updated != null && mounted) {
+                setState(() => _task = updated);
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Dependency Graph',
+            icon: const Icon(Icons.account_tree_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WorkTaskDependencyGraphScreen(
+                        task: _task,
+                        repository: widget.repository,
+                        allTasks: widget.allTasks,
+                      ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadTask,
@@ -305,8 +303,7 @@ class _WorkTaskDetailsScreenState
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Unable to refresh task details.\n\n'
-                    '$_errorMessage',
+                    'Unable to refresh task details.\n\n$_errorMessage',
                   ),
                 ),
               ),
@@ -321,6 +318,8 @@ class _WorkTaskDetailsScreenState
             const SizedBox(height: 16),
             _buildStatusCard(context),
             const SizedBox(height: 16),
+            _buildDependencyCard(context),
+            const SizedBox(height: 16),
             _buildInformationCard(context),
             const SizedBox(height: 16),
             _buildDatesCard(context),
@@ -330,42 +329,39 @@ class _WorkTaskDetailsScreenState
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _task.taskNumber,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _task.title,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
+  Widget _buildHeader(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _task.taskNumber,
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _task.title,
+            style:
+            Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 12),
+          Chip(
+            label: Text(_statusLabel(_task.status)),
+          ),
+          if (_task.description != null &&
+              _task.description!.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
-            Chip(
-              label: Text(
-                _statusLabel(_task.status),
-              ),
-            ),
-            if (_task.description != null &&
-                _task.description!.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(_task.description!),
-            ],
+            Text(_task.description!),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
   Widget _buildProgressCard(BuildContext context) {
     final progress =
-        (_task.progressPercentage / 100).clamp(0.0, 1.0);
+    (_task.progressPercentage / 100).clamp(0.0, 1.0);
 
     return Card(
       child: Padding(
@@ -389,21 +385,19 @@ class _WorkTaskDetailsScreenState
                 const SizedBox(width: 16),
                 Text(
                   '${_task.progressPercentage.toStringAsFixed(1)}%',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style:
+                  Theme.of(context).textTheme.titleMedium,
                 ),
               ],
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed:
-                  _isUpdatingProgress ? null : _showProgressDialog,
+              onPressed: _isUpdatingProgress
+                  ? null
+                  : _showProgressDialog,
               icon: const Icon(Icons.percent),
               label: const Text('Update Progress'),
             ),
-            if (_isUpdatingProgress) ...[
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(),
-            ],
           ],
         ),
       ),
@@ -411,12 +405,9 @@ class _WorkTaskDetailsScreenState
   }
 
   Widget _buildStatusCard(BuildContext context) {
-    final allowedStatuses =
-        _allowedNextStatuses(_task.status);
+    final allowed = _allowedNextStatuses(_task.status);
 
-    if (allowedStatuses.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (allowed.isEmpty) return const SizedBox.shrink();
 
     return Card(
       child: Padding(
@@ -436,99 +427,127 @@ class _WorkTaskDetailsScreenState
             FilledButton.icon(
               onPressed: _isChangingStatus
                   ? null
-                  : () => _showStatusDialog(
-                        allowedStatuses,
-                      ),
+                  : () => _showStatusDialog(allowed),
               icon: const Icon(Icons.sync_alt),
               label: const Text('Change Status'),
             ),
-            if (_isChangingStatus) ...[
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInformationCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Task Information',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _InfoRow(
-              label: 'Task number',
-              value: _task.taskNumber,
-            ),
-            _InfoRow(
-              label: 'Title',
-              value: _task.title,
-            ),
-            _InfoRow(
-              label: 'Priority',
-              value: _priorityLabel(_task.priority),
-            ),
-            _InfoRow(
-              label: 'Status',
-              value: _statusLabel(_task.status),
-            ),
-            if (_task.description != null &&
-                _task.description!.trim().isNotEmpty)
-              _InfoRow(
-                label: 'Description',
-                value: _task.description!,
+  Widget _buildDependencyCard(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Dependencies',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${_task.dependencies.length} predecessor(s)',
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            icon: const Icon(Icons.link),
+            label: const Text('Manage Dependencies'),
+            onPressed: () async {
+              final changed =
+              await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WorkTaskDependencyScreen(
+                        currentTask: _task,
+                        allTasks: widget.allTasks,
+                        repository: widget.repository,
+                      ),
+                ),
+              );
+
+              if (changed == true) {
+                _loadTask();
+              }
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _buildInformationCard(BuildContext context) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Task Information',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-          ],
+              const SizedBox(height: 16),
+              _InfoRow(
+                label: 'Task number',
+                value: _task.taskNumber,
+              ),
+              _InfoRow(
+                label: 'Title',
+                value: _task.title,
+              ),
+              _InfoRow(
+                label: 'Priority',
+                value: _priorityLabel(_task.priority),
+              ),
+              _InfoRow(
+                label: 'Status',
+                value: _statusLabel(_task.status),
+              ),
+              if (_task.description != null)
+                _InfoRow(
+                  label: 'Description',
+                  value: _task.description!,
+                ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _buildDatesCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Task Dates',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _InfoRow(
-              label: 'Planned start',
-              value: _formatDate(_task.plannedStartDate),
-            ),
-            _InfoRow(
-              label: 'Planned end',
-              value: _formatDate(_task.plannedEndDate),
-            ),
-            _InfoRow(
-              label: 'Actual start',
-              value: _formatDate(_task.actualStartDate),
-            ),
-            _InfoRow(
-              label: 'Actual end',
-              value: _formatDate(_task.actualEndDate),
-            ),
-            _InfoRow(
-              label: 'Created',
-              value: _formatDateTime(_task.createdAtUtc),
-            ),
-          ],
-        ),
+  Widget _buildDatesCard(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Task Dates',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          _InfoRow(
+            label: 'Planned start',
+            value: _formatDate(_task.plannedStartDate),
+          ),
+          _InfoRow(
+            label: 'Planned end',
+            value: _formatDate(_task.plannedEndDate),
+          ),
+          _InfoRow(
+            label: 'Actual start',
+            value: _formatDate(_task.actualStartDate),
+          ),
+          _InfoRow(
+            label: 'Actual end',
+            value: _formatDate(_task.actualEndDate),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
   static String _statusLabel(WorkTaskStatus status) {
     switch (status) {
@@ -536,8 +555,6 @@ class _WorkTaskDetailsScreenState
         return 'Not Started';
       case WorkTaskStatus.inProgress:
         return 'In Progress';
-      case WorkTaskStatus.blocked:
-        return 'Blocked';
       case WorkTaskStatus.onHold:
         return 'On Hold';
       case WorkTaskStatus.completed:
@@ -547,33 +564,25 @@ class _WorkTaskDetailsScreenState
     }
   }
 
-  static String _priorityLabel(TaskPriority priority) {
+  static String _priorityLabel(Priority priority) {
     switch (priority) {
-      case TaskPriority.low:
+      case Priority.low:
         return 'Low';
-      case TaskPriority.normal:
+      case Priority.normal:
         return 'Normal';
-      case TaskPriority.high:
+      case Priority.high:
         return 'High';
-      case TaskPriority.critical:
+      case Priority.critical:
         return 'Critical';
     }
   }
 
   static String _formatDate(DateTime? date) {
-    if (date == null) {
-      return 'Not set';
-    }
+    if (date == null) return 'Not set';
 
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
-  }
-
-  static String _formatDateTime(DateTime date) {
-    return '${_formatDate(date)} '
-        '${date.hour.toString().padLeft(2, '0')}:'
-        '${date.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -600,12 +609,9 @@ class _InfoRow extends StatelessWidget {
               style: Theme.of(context).textTheme.labelLarge,
             ),
           ),
-          Expanded(
-            child: Text(value),
-          ),
+          Expanded(child: Text(value)),
         ],
       ),
     );
   }
 }
-

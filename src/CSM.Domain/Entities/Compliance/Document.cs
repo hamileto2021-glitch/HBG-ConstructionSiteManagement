@@ -12,6 +12,16 @@ public class Document : TenantEntity
 
     public DocumentType DocumentType { get; set; }
 
+    public string? DrawingNumber { get; set; }
+
+    public string? SheetNumber { get; set; }
+
+    public DrawingDiscipline? Discipline { get; set; }
+
+    public DrawingStatus? DrawingStatus { get; set; }
+
+    public string? CurrentRevision { get; set; }
+
     public ICollection<DocumentVersion> Versions { get; set; }
         = new List<DocumentVersion>();
 

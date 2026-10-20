@@ -7,6 +7,8 @@ using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Identity;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CSM.Domain.Enums;
+using CSM.Infrastructure.Security;
 
 namespace CSM.Infrastructure.Services;
 
@@ -14,10 +16,14 @@ public sealed class ContractorService : IContractorService
 {
     private readonly ApplicationDbContext _dbContext;
 
+    private readonly IPermissionEvaluator _permissionEvaluator;
+
     public ContractorService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<ContractorResponse>> GetAllAsync(
@@ -29,7 +35,17 @@ public sealed class ContractorService : IContractorService
             currentUserId,
             cancellationToken);
 
-        EnsureCanRead(actor);
+        var canRead =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Contractor_View.ToString(),
+                cancellationToken);
+
+        if (!canRead)
+        {
+            throw new ContractorManagementException(
+                "You are not authorized to access contractors.");
+        }
 
         var query = _dbContext.Contractors
             .AsNoTracking()
@@ -66,7 +82,17 @@ public sealed class ContractorService : IContractorService
             currentUserId,
             cancellationToken);
 
-        EnsureCanRead(actor);
+        var canRead =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Contractor_View.ToString(),
+                cancellationToken);
+
+        if (!canRead)
+        {
+            throw new ContractorManagementException(
+                "You are not authorized to access contractors.");
+        }
 
         var contractor = await GetContractorAsync(
             contractorId,
@@ -88,7 +114,9 @@ public sealed class ContractorService : IContractorService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(
+            currentUserId,
+            cancellationToken);
 
         var companyId = GetActorCompanyId(actor);
 
@@ -169,7 +197,9 @@ public sealed class ContractorService : IContractorService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(
+            currentUserId,
+            cancellationToken);
 
         var contractor = await GetContractorAsync(
             contractorId,
@@ -270,33 +300,48 @@ public sealed class ContractorService : IContractorService
                 "Contractor was not found.");
     }
 
-    private static void EnsureCanRead(
-        User actor)
-    {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
-        {
-            return;
-        }
 
-        throw new ContractorManagementException(
-            "You are not authorized to access contractors.");
+private static void EnsureCanRead(
+    User actor)
+{
+    if (IsSuperAdmin(actor) ||
+        HasRole(actor, AppRoles.CompanyAdmin) ||
+        HasRole(actor, AppRoles.SiteManager) ||
+        HasRole(actor, AppRoles.Supervisor))
+    {
+        return;
     }
 
-    private static void EnsureCanManage(
-        User actor)
-    {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
-        {
-            return;
-        }
+    throw new ContractorManagementException(
+        "You are not authorized to access contractors.");
+}
 
+private async Task EnsureCanManageAsync(
+    Guid currentUserId,
+    CancellationToken cancellationToken)
+{
+    var actor = await GetActorAsync(
+        currentUserId,
+        cancellationToken);
+
+    if (IsSuperAdmin(actor) ||
+        HasRole(actor, AppRoles.CompanyAdmin))
+    {
+        return;
+    }
+
+    var canManage =
+        await _permissionEvaluator.HasPermissionAsync(
+            currentUserId,
+            GranularPermission.HRM_Contractor_Manage.ToString(),
+            cancellationToken);
+
+    if (!canManage)
+    {
         throw new ContractorManagementException(
             "You are not authorized to manage contractors.");
     }
+}
 
     private static Guid GetActorCompanyId(
         User actor)

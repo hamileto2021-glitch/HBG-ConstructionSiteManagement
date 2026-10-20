@@ -324,6 +324,41 @@ public sealed class BudgetLineService : IBudgetLineService
                 "Cost code was not found or does not belong to the current company.");
     }
 
+    public async Task DeleteAsync(
+        Guid currentUserId,
+        Guid budgetLineId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanModify(actor);
+
+        var line = await GetBudgetLineAsync(
+            budgetLineId,
+            cancellationToken);
+
+        EnsureCompanyAccess(
+            actor,
+            line.CompanyId);
+
+        var budget = await GetBudgetAsync(
+            line.BudgetId,
+            cancellationToken);
+
+        EnsureCompanyAccess(
+            actor,
+            budget.CompanyId);
+
+        EnsureBudgetEditable(budget);
+
+        line.IsDeleted = true;
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+    }
+
     private static void EnsureBudgetEditable(
         Budget budget)
     {

@@ -29,4 +29,9 @@ public interface IBudgetService
         Guid budgetId,
         ChangeBudgetStatusRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<BudgetResponse>> GetBySiteAsync(
+        Guid currentUserId,
+        Guid siteId,
+        CancellationToken cancellationToken = default);
 }

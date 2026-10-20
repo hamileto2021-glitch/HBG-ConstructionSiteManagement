@@ -6,6 +6,7 @@ using CSM.Domain.Entities.HRM;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
+using CSM.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
@@ -13,11 +14,14 @@ namespace CSM.Infrastructure.Services;
 public sealed class TimesheetService : ITimesheetService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public TimesheetService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<TimesheetResponse>> GetAllAsync(
@@ -44,6 +48,36 @@ public sealed class TimesheetService : ITimesheetService
 
             query = query.Where(
                 x => x.CompanyId == companyId);
+        }
+
+
+
+        var actorRoles = string.Join(
+            ",",
+            actor.UserRoles
+                .Where(x => !x.IsDeleted && !x.Role.IsDeleted)
+                .Select(x => x.Role.Name));
+
+        var authorizedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == currentUserId &&
+                x.IsActive)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (authorizedSiteIds.Count > 0)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            query = query.Where(x =>
+                _dbContext.SiteAssignments.Any(a =>
+                    a.EmployeeId == x.EmployeeId &&
+                    authorizedSiteIds.Contains(a.ConstructionSiteId) &&
+                    a.StartDate <= today &&
+                    (!a.EndDate.HasValue ||
+                     a.EndDate.Value >= today)));
         }
 
         if (employeeId.HasValue)
@@ -269,7 +303,17 @@ public sealed class TimesheetService : ITimesheetService
             currentUserId,
             cancellationToken);
 
-        EnsureCanApprove(actor);
+        var canApprove =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Timesheet_Approve.ToString(),
+                cancellationToken);
+
+        if (!canApprove)
+        {
+            throw new TimesheetManagementException(
+                "You are not authorized to approve timesheets.");
+        }
 
         if (request.Status !=
                 TimesheetStatus.Approved &&
@@ -358,6 +402,29 @@ public sealed class TimesheetService : ITimesheetService
             cancellationToken);
 
         return Map(timesheet);
+    }
+
+    public async Task<TimesheetResponse> GenerateAsync(
+        Guid currentUserId,
+        GenerateTimesheetRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+        EnsureCanManage(actor);
+
+        var start = new DateOnly(request.Year, request.Month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+
+        var createRequest = new CreateTimesheetRequest(
+            request.EmployeeId,
+            start,
+            end,
+            "Generated from approved attendance");
+
+        return await CreateAsync(
+            currentUserId,
+            createRequest,
+            cancellationToken);
     }
 
     private async Task RecalculateHoursAsync(
@@ -455,7 +522,9 @@ public sealed class TimesheetService : ITimesheetService
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -469,7 +538,9 @@ public sealed class TimesheetService : ITimesheetService
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

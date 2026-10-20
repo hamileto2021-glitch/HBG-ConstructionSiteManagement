@@ -92,6 +92,9 @@ class _MaterialRequestDetailScreenState
           _LineDraft(
             id: line.id,
             materialId: line.materialId,
+            materialCode: line.materialCode,
+            materialName: line.materialName,
+            unitOfMeasure: line.unitOfMeasure,
             quantity: line.requestedQuantity,
             remarks: line.remarks,
             approvedQuantity: line.approvedQuantity,
@@ -579,10 +582,16 @@ class _MaterialRequestDetailScreenState
                   label: 'Site',
                   value: request.siteName,
                 ),
+                _InfoRow(
+                  label: 'Requested By',
+                  value: request.requestedByName,
+                ),
                 if (request.projectName != null)
                   _InfoRow(
                     label: 'Project',
-                    value: request.projectName!,
+                    value: request.projectCode == null
+                        ? request.projectName!
+                        : '${request.projectCode} • ${request.projectName}',
                   ),
                 _InfoRow(
                   label: 'Priority',
@@ -812,6 +821,9 @@ class _RemarksDialogState extends State<_RemarksDialog> {
 class _LineDraft {
   _LineDraft({
     this.id,
+    this.materialCode = '',
+    this.materialName = '',
+    this.unitOfMeasure = '',
     String? materialId,
     double? quantity,
     String? remarks,
@@ -834,14 +846,19 @@ class _LineDraft {
           approvedQuantity.toString();
     }
   }
+
   final String? id;
+  final String materialCode;
+  final String materialName;
+  final String unitOfMeasure;
 
   final materialIdController = TextEditingController();
   final quantityController = TextEditingController();
   final remarksController = TextEditingController();
   final approvedQuantityController =
-      TextEditingController();
-void dispose() {
+  TextEditingController();
+
+  void dispose() {
     materialIdController.dispose();
     quantityController.dispose();
     remarksController.dispose();
@@ -898,25 +915,44 @@ class _LineCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: line.materialIdController,
-              enabled: editable,
-              decoration: const InputDecoration(
-                labelText: 'Material ID',
+            if (editable)
+              TextFormField(
+                controller: line.materialIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Material ID',
+                ),
+              )
+            else
+              _InfoRow(
+                label: 'Material',
+                value:
+                '${line.materialCode} • ${line.materialName}',
               ),
-            ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: line.quantityController,
-              enabled: editable,
-              decoration: const InputDecoration(
-                labelText: 'Requested Quantity',
+            if (!editable) ...[
+              _InfoRow(
+                label: 'Requested',
+                value:
+                '${line.quantityController.text} ${line.unitOfMeasure}',
               ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(
-                decimal: true,
+              _InfoRow(
+                label: 'Approved',
+                value:
+                '${line.approvedQuantityController.text} ${line.unitOfMeasure}',
               ),
-            ),
+            ] else
+              TextFormField(
+                controller: line.quantityController,
+                enabled: editable,
+                decoration: InputDecoration(
+                  labelText:
+                  'Requested Quantity (${line.unitOfMeasure})',
+                ),
+                keyboardType:
+                const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
             if (approvalMode) ...[
               const SizedBox(height: 12),
               TextFormField(

@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class CostCodesController : ControllerBase
 {
     private readonly ICostCodeService _costCodeService;
@@ -22,6 +22,7 @@ public sealed class CostCodesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Finance.CostCode.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<CostCodeResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -41,6 +42,7 @@ public sealed class CostCodesController : ControllerBase
     }
 
     [HttpGet("{costCodeId:guid}")]
+    [Authorize(Policy = "Finance.CostCode.View")]
     public async Task<ActionResult<CostCodeResponse>> GetById(
         Guid costCodeId,
         CancellationToken cancellationToken)
@@ -61,6 +63,7 @@ public sealed class CostCodesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Finance.CostCode.Manage")]
     public async Task<ActionResult<CostCodeResponse>> Create(
         CreateCostCodeRequest request,
         CancellationToken cancellationToken)
@@ -84,6 +87,7 @@ public sealed class CostCodesController : ControllerBase
     }
 
     [HttpPut("{costCodeId:guid}")]
+    [Authorize(Policy = "Finance.CostCode.Manage")]
     public async Task<ActionResult<CostCodeResponse>> Update(
         Guid costCodeId,
         UpdateCostCodeRequest request,
@@ -106,6 +110,7 @@ public sealed class CostCodesController : ControllerBase
     }
 
     [HttpPut("{costCodeId:guid}/active-status")]
+    [Authorize(Policy = "Finance.CostCode.Manage")]
     public async Task<ActionResult<CostCodeResponse>> ChangeActiveStatus(
         Guid costCodeId,
         ChangeCostCodeActiveStatusRequest request,
@@ -120,6 +125,59 @@ public sealed class CostCodesController : ControllerBase
                 cancellationToken);
 
             return Ok(costCode);
+        }
+        catch (CostCodeManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("active")]
+    [Authorize(Policy = "Finance.CostCode.View")]
+    public async Task<ActionResult<IReadOnlyCollection<CostCodeResponse>>> GetActive(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var costCodes = await _costCodeService.GetActiveAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(costCodes);
+        }
+        catch (CostCodeManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("~/api/ConstructionSites/{siteId:guid}/cost-codes")]
+    [Authorize(Policy = "Finance.CostCode.View")]
+    public async Task<ActionResult<List<CostCodeResponse>>> GetBySite(
+        Guid siteId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _costCodeService.GetBySiteAsync(
+            siteId,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "Finance.CostCode.Manage")]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _costCodeService.DeleteAsync(
+                GetCurrentUserId(),
+                id,
+                cancellationToken);
+
+            return NoContent();
         }
         catch (CostCodeManagementException ex)
         {

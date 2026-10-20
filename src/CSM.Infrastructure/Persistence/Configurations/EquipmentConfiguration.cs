@@ -39,7 +39,7 @@ public class EquipmentConfiguration :
         }).IsUnique();
 
         builder.HasOne(x => x.Vendor)
-            .WithMany(x => x.Equipment)
+            .WithMany(v => v.Equipments)
             .HasForeignKey(x => x.VendorId)
             .OnDelete(DeleteBehavior.Restrict);
 

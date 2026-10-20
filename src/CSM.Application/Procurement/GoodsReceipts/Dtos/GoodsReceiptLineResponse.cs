@@ -14,6 +14,9 @@ public sealed class GoodsReceiptLineResponse
 
     public decimal ReceivedQuantity { get; set; }
 
+    public decimal OrderedQuantity { get; set; }
+    public decimal RemainingQuantity { get; set; }
+
     public decimal AcceptedQuantity { get; set; }
 
     public decimal RejectedQuantity { get; set; }

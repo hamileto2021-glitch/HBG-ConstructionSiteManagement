@@ -10,18 +10,22 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
+    private readonly IPaymentReceiptPdfService _paymentReceiptPdfService;
 
     public PaymentsController(
-        IPaymentService paymentService)
+        IPaymentService paymentService,
+        IPaymentReceiptPdfService paymentReceiptPdfService)
     {
         _paymentService = paymentService;
+        _paymentReceiptPdfService = paymentReceiptPdfService;
     }
 
     [HttpGet]
+    [Authorize(Policy = "Finance.Payment.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<PaymentResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -41,6 +45,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpGet("{paymentId:guid}")]
+    [Authorize(Policy = "Finance.Payment.View")]
     public async Task<ActionResult<PaymentResponse>> GetById(
         Guid paymentId,
         CancellationToken cancellationToken)
@@ -56,11 +61,14 @@ public sealed class PaymentsController : ControllerBase
         }
         catch (PaymentManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPost]
+    [Authorize(Policy = "Finance.Payment.Manage")]
     public async Task<ActionResult<PaymentResponse>> Create(
         CreatePaymentRequest request,
         CancellationToken cancellationToken)
@@ -81,9 +89,18 @@ public sealed class PaymentsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = ex.Message,
+                detail = ex.InnerException?.Message
+            });
+        }
     }
 
     [HttpPut("{paymentId:guid}")]
+    [Authorize(Policy = "Finance.Payment.Manage")]
     public async Task<ActionResult<PaymentResponse>> Update(
         Guid paymentId,
         UpdatePaymentRequest request,
@@ -106,6 +123,7 @@ public sealed class PaymentsController : ControllerBase
     }
 
     [HttpPut("{paymentId:guid}/status")]
+    [Authorize(Policy = "Finance.Payment.Manage")]
     public async Task<ActionResult<PaymentResponse>> ChangeStatus(
         Guid paymentId,
         ChangePaymentStatusRequest request,
@@ -125,6 +143,68 @@ public sealed class PaymentsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpPost("{id:guid}/complete")]
+    [Authorize(Policy = "Finance.Payment.Manage")]
+    public async Task<IActionResult> Complete(Guid id)
+    {
+        await _paymentService.CompletePaymentAsync(
+            GetCurrentUserId(),
+            id);
+
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reverse")]
+    [Authorize(Policy = "Finance.Payment.Manage")]
+    public async Task<IActionResult> Reverse(Guid id)
+    {
+        await _paymentService.ReversePaymentAsync(
+            GetCurrentUserId(),
+            id);
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "Finance.Payment.Manage")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        await _paymentService.DeleteAsync(currentUserId, id);
+
+        return NoContent();
+    }
+
+    [HttpGet("company")]
+    [Authorize(Policy = "Finance.Payment.View")]
+    public async Task<ActionResult<IReadOnlyCollection<PaymentResponse>>> GetCompany(
+        CancellationToken cancellationToken)
+    {
+        var payments = await _paymentService.GetCompanyPaymentsAsync(
+            GetCurrentUserId(),
+            cancellationToken);
+
+        return Ok(payments);
+    }
+
+    [HttpGet("{id:guid}/print")]
+    [Authorize(Policy = "Finance.Payment.View")]
+    public async Task<IActionResult> Print(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var pdf = await _paymentReceiptPdfService.GenerateAsync(
+            GetCurrentUserId(),
+            id,
+            cancellationToken);
+
+        return File(
+            pdf,
+            "application/pdf",
+            $"Receipt-{id}.pdf");
     }
 
     private Guid GetCurrentUserId()

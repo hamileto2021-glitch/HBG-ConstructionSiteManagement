@@ -12,11 +12,15 @@ public sealed class MaterialRequestResponse
 
     public string SiteName { get; set; } = string.Empty;
 
+    public string RequestedByName { get; set; } = string.Empty;
+
     public Guid? ProjectId { get; set; }
 
     public string? ProjectCode { get; set; }
 
     public string? ProjectName { get; set; }
+
+
 
     public string RequestNumber { get; set; } = string.Empty;
 

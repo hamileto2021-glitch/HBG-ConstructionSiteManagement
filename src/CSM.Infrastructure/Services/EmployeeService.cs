@@ -22,6 +22,8 @@ public sealed class EmployeeService : IEmployeeService
     public async Task<IReadOnlyCollection<EmployeeResponse>> GetAllAsync(
         Guid currentUserId,
         EmployeeStatus? status = null,
+        EmployeeScope? employeeScope = null,
+        Guid? siteId = null,
         CancellationToken cancellationToken = default)
     {
         var actor = await GetActorAsync(
@@ -30,30 +32,96 @@ public sealed class EmployeeService : IEmployeeService
 
         EnsureCanRead(actor);
 
-        IQueryable<Employee> query =
-            _dbContext.Employees.AsNoTracking();
-
-        if (!IsSuperAdmin(actor))
+        if (HasRole(actor, AppRoles.Employee))
         {
-            var companyId = GetActorCompanyId(actor);
-
-            query = query.Where(
-                x => x.CompanyId == companyId);
+            if (!actor.EmployeeId.HasValue)
+            {
+                throw new EmployeeManagementException(
+                    "No employee record is linked to this user.");
+            }
         }
+
+
+IQueryable<Employee> query =
+    _dbContext.Employees.AsNoTracking();
+
+  if (HasRole(actor, AppRoles.Employee))
+  {
+      query = query.Where(
+          x => x.Id == actor.EmployeeId.Value);
+  }
+
+if (!IsSuperAdmin(actor))
+{
+    var companyId = GetActorCompanyId(actor);
+
+    query = query.Where(x => x.CompanyId == companyId);
+
+    if (HasRole(actor, AppRoles.HROfficer) ||
+        HasRole(actor, AppRoles.HrOfficer) ||
+        HasRole(actor, AppRoles.Supervisor))
+    {
+        var hasSiteAccess = await _dbContext.UserSiteAccesses
+            .AnyAsync(
+                x => x.UserId == actor.Id &&
+                     x.CompanyId == companyId &&
+                     x.IsActive &&
+                     !x.IsDeleted,
+                cancellationToken);
+
+        if (hasSiteAccess)
+        {
+            var authorizedSiteIds = _dbContext.UserSiteAccesses
+                .Where(
+                    x => x.UserId == actor.Id &&
+                         x.CompanyId == companyId &&
+                         x.IsActive &&
+                         !x.IsDeleted)
+                .Select(x => x.SiteId);
+
+
+query = query.Where(
+    employee =>
+        _dbContext.SiteAssignments.Any(
+            assignment =>
+                assignment.EmployeeId == employee.Id &&
+                authorizedSiteIds.Contains(
+                    assignment.ConstructionSiteId) &&
+                assignment.EndDate == null));
+
+        }
+    }
+}
+
+if (siteId.HasValue)
+{
+    query = query.Where(
+        employee =>
+            _dbContext.SiteAssignments.Any(
+                assignment =>
+                    assignment.EmployeeId == employee.Id &&
+                    assignment.ConstructionSiteId == siteId.Value &&
+                    assignment.EndDate == null));
+}
+
+
 
         if (status.HasValue)
         {
+            query = query.Where(x => x.Status == status.Value);
+        }
+
+        if (employeeScope.HasValue)
+        {
             query = query.Where(
-                x => x.Status == status.Value);
+                x => x.EmployeeScope == employeeScope.Value);
         }
 
         var employees = await query
             .OrderBy(x => x.EmployeeNumber)
             .ToListAsync(cancellationToken);
 
-        return employees
-            .Select(Map)
-            .ToArray();
+        return employees.Select(Map).ToArray();
     }
 
     public async Task<EmployeeResponse> GetByIdAsync(
@@ -90,6 +158,34 @@ public sealed class EmployeeService : IEmployeeService
         EnsureCanModify(actor);
 
         var companyId = GetActorCompanyId(actor);
+
+        if (request.EmployeeScope == EmployeeScope.Site)
+        {
+            if (!request.SiteId.HasValue ||
+                request.SiteId.Value == Guid.Empty)
+            {
+                throw new EmployeeManagementException(
+                    "A construction site is required for a site-scope employee.");
+            }
+
+            await EnsureCanAccessSiteAsync(
+                actor,
+                request.SiteId.Value,
+                cancellationToken);
+        }
+        else if (request.EmployeeScope == EmployeeScope.Company)
+        {
+            if (request.SiteId.HasValue)
+            {
+                throw new EmployeeManagementException(
+                    "A company-scope employee cannot have a site specified during creation.");
+            }
+        }
+        else
+        {
+            throw new EmployeeManagementException(
+                "Employee scope is invalid.");
+        }
 
         var employeeNumber = CleanRequired(
             request.EmployeeNumber,
@@ -144,6 +240,7 @@ public sealed class EmployeeService : IEmployeeService
             JobTitle = Clean(request.JobTitle),
             Department = Clean(request.Department),
             EmployeeType = request.EmployeeType,
+            EmployeeScope = request.EmployeeScope,
             Status = EmployeeStatus.Active,
             WageType = request.WageType,
             BaseWage = request.BaseWage,
@@ -158,6 +255,29 @@ public sealed class EmployeeService : IEmployeeService
         };
 
         _dbContext.Employees.Add(employee);
+
+        if (request.EmployeeScope == EmployeeScope.Site)
+        {
+            var siteId = request.SiteId!.Value;
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var assignment = new SiteAssignment
+            {
+                CompanyId = companyId,
+                Employee = employee,
+                ConstructionSiteId = siteId,
+                StartDate = request.HireDate > today
+                    ? request.HireDate
+                    : today,
+                EndDate = null,
+                IsPrimaryAssignment = true,
+                RoleAtSite = Clean(employee.JobTitle),
+                Remarks = "Created with employee record"
+            };
+
+            _dbContext.SiteAssignments.Add(assignment);
+        }
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -230,6 +350,8 @@ public sealed class EmployeeService : IEmployeeService
             Clean(request.Department);
         employee.EmployeeType =
             request.EmployeeType;
+        employee.EmployeeScope =
+            request.EmployeeScope;
         employee.WageType =
             request.WageType;
         employee.BaseWage =
@@ -338,6 +460,63 @@ public sealed class EmployeeService : IEmployeeService
                 "Employee was not found.");
     }
 
+    private async Task<List<Guid>> GetAuthorizedSiteIdsAsync(
+        User actor,
+        CancellationToken cancellationToken)
+    {
+        var companyId = GetActorCompanyId(actor);
+
+        return await _dbContext.UserSiteAccesses
+            .Where(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive &&
+                !x.IsDeleted)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task EnsureCanAccessSiteAsync(
+        User actor,
+        Guid siteId,
+        CancellationToken cancellationToken)
+    {
+        var companyId = GetActorCompanyId(actor);
+
+        var siteExists = await _dbContext.ConstructionSites
+            .AnyAsync(
+                x => x.Id == siteId &&
+                     x.CompanyId == companyId,
+                cancellationToken);
+
+        if (!siteExists)
+        {
+            throw new EmployeeManagementException(
+                "Construction site was not found in your company.");
+        }
+
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin))
+        {
+            return;
+        }
+
+        var hasAccess = await _dbContext.UserSiteAccesses
+            .AnyAsync(
+                x => x.UserId == actor.Id &&
+                     x.CompanyId == companyId &&
+                     x.SiteId == siteId &&
+                     x.IsActive,
+                cancellationToken);
+
+        if (!hasAccess)
+        {
+            throw new EmployeeManagementException(
+                "You are not authorized to manage employees for this site.");
+        }
+    }
+
     private static void EnsureCanRead(User actor)
     {
         if (IsSuperAdmin(actor))
@@ -347,7 +526,10 @@ public sealed class EmployeeService : IEmployeeService
 
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
@@ -359,7 +541,9 @@ public sealed class EmployeeService : IEmployeeService
     private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -572,6 +756,7 @@ public sealed class EmployeeService : IEmployeeService
             employee.JobTitle,
             employee.Department,
             employee.EmployeeType,
+            employee.EmployeeScope,
             employee.Status,
             employee.WageType,
             employee.BaseWage,

@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Leaves;
 using CSM.Application.HRM.Leaves.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class LeavesController : ControllerBase
 {
     private readonly ILeaveService _leaveService;
@@ -20,6 +19,7 @@ public sealed class LeavesController : ControllerBase
         _leaveService = leaveService;
     }
 
+    [Authorize(Policy = "HRM.Leave.View")]
     [HttpGet]
     public async Task<
         ActionResult<IReadOnlyCollection<LeaveResponse>>> GetAll(
@@ -46,6 +46,7 @@ public sealed class LeavesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Leave.View")]
     [HttpGet("{leaveRequestId:guid}")]
     public async Task<ActionResult<LeaveResponse>> GetById(
         Guid leaveRequestId,
@@ -67,6 +68,7 @@ public sealed class LeavesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Leave.Submit")]
     [HttpPost]
     public async Task<ActionResult<LeaveResponse>> Create(
         CreateLeaveRequest request,
@@ -94,6 +96,7 @@ public sealed class LeavesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Leave.Approve")]
     [HttpPut("{leaveRequestId:guid}/review")]
     public async Task<ActionResult<LeaveResponse>> Review(
         Guid leaveRequestId,
@@ -117,6 +120,7 @@ public sealed class LeavesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Leave.Submit")]
     [HttpPut("{leaveRequestId:guid}/cancel")]
     public async Task<ActionResult<LeaveResponse>> Cancel(
         Guid leaveRequestId,

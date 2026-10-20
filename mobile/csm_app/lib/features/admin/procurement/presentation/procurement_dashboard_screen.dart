@@ -18,6 +18,9 @@ import '../data/repositories/equipment_repository.dart';
 import 'equipment_list_screen.dart';
 import 'equipment_assignment_list_screen.dart';
 import 'equipment_maintenance_list_screen.dart';
+import '../equipment_fuel_logs/presentation/equipment_fuel_log_screen.dart';
+import '../equipment_hour_logs/presentation/equipment_hour_log_screen.dart';
+import '../equipment_utilization/presentation/equipment_utilization_screen.dart';
 
 
 class ProcurementDashboardScreen extends StatelessWidget {
@@ -167,6 +170,48 @@ class ProcurementDashboardScreen extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) =>
                     EquipmentMaintenanceListScreen(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _ModuleCard(
+          icon: Icons.local_gas_station_outlined,
+          title: 'Fuel Consumption Log',
+          description:
+          'Record fuel purchases, liters, suppliers, invoices, and fuel costs for equipment.',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EquipmentFuelLogScreen(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _ModuleCard(
+          icon: Icons.timer_outlined,
+          title: 'Hour Meter Log',
+          description:
+          'Track operating hours, meter readings, operators, projects, and daily equipment usage.',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EquipmentHourLogScreen(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _ModuleCard(
+          icon: Icons.analytics_outlined,
+          title: 'Utilization Dashboard',
+          description:
+          'View equipment utilization, fuel efficiency, downtime analysis, and maintenance KPIs.',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EquipmentUtilizationScreen(),
               ),
             );
           },

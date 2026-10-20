@@ -1,0 +1,920 @@
+@page "/reports"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using System.Net
+@using CSM.Web.Models.Reporting
+@using CSM.Web.Models.Sites
+@using CSM.Web.Services
+
+@inject IReportingService ReportingService
+@inject IProjectService ProjectService
+
+<PageTitle>Reports & Analytics</PageTitle>
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h2 class="mb-1">Reports & Analytics</h2>
+            <p class="text-muted mb-0">
+                @ScopeIntro
+            </p>
+        </div>
+
+        <button class="btn btn-outline-secondary"
+                @onclick="RefreshAsync"
+                disabled="@_busy">
+            <i class="bi bi-arrow-clockwise me-1"></i>
+            Refresh
+        </button>
+    </div>
+
+    <!-- Scope. Always visible, so an error never leaves the user stuck. -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Report Scope</label>
+
+                    <select class="form-select"
+                            @bind="_scope"
+                            @bind:after="ScopeChangedAsync">
+                        <option value="All">Company + all sites</option>
+                        <option value="Company">Company level (not tied to a site)</option>
+                        <option value="Site">Site</option>
+                    </select>
+                </div>
+
+                @if (_scope == "Site")
+                {
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">
+                            Construction Site
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_selectedSiteId"
+                                @bind:after="SiteChangedAsync">
+                            <option value="">-- Select Site --</option>
+
+                            @foreach (var site in VisibleSites)
+                            {
+                                <option value="@site.Id">
+                                    @site.Name (@site.SiteCode)
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="col-md-3">
+                    <div class="text-muted small">Current Scope</div>
+                    <div class="fw-semibold">@CurrentScopeLabel</div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_sitesError))
+    {
+        <div class="alert alert-warning">@_sitesError</div>
+    }
+
+    @if (_busy)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status"></div>
+            <div class="mt-2">Loading reports...</div>
+        </div>
+    }
+    else if (_scope == "Site" && !HasSelectedSite)
+    {
+        <div class="alert alert-info">
+            Select a construction site to see its reports.
+        </div>
+    }
+    else
+    {
+        <!-- Executive report (sites and projects only exist per site, so it is not shown for company level) -->
+        @if (_scope != "Company")
+        {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i class="bi bi-speedometer2 me-2"></i>
+                            Executive Report
+                        </h5>
+                        <small>
+                            @ExecutiveSubtitle
+                        </small>
+                    </div>
+
+                    <span class="badge bg-light text-dark">
+                        @CurrentScopeLabel
+                    </span>
+                </div>
+            </div>
+
+            <div class="card-body">
+
+                @if (!string.IsNullOrWhiteSpace(_executiveError))
+                {
+                    <div class="alert alert-danger mb-0">@_executiveError</div>
+                }
+                else if (Executive is not null)
+                {
+                    <div class="row g-3">
+
+                        @Tile("Construction Sites",
+                            SitesText(Executive),
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("Projects",
+                            Executive.TotalProjects.ToString("N0"),
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("Contract Value",
+                            Money(Executive.TotalContractValue),
+                            hint: "All projects",
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("Budget",
+                            Money(Executive.TotalBudget),
+                            hint: "Approved, active and closed budgets",
+                            col: "col-md-6 col-xl-3")
+
+                        @UsedTile(Executive.TotalBudget,
+                            Executive.TotalExpenses,
+                            "col-md-6 col-xl-3")
+
+                        @Tile("Invoiced to Clients",
+                            Money(Executive.TotalInvoices),
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("Collected",
+                            Money(Executive.TotalCompletedPayments),
+                            css: "text-success",
+                            hint: "Completed incoming payments",
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("Outstanding Invoices",
+                            Money(Executive.OutstandingInvoices),
+                            css: "text-warning",
+                            hint: "Unpaid balance of client invoices",
+                            col: "col-md-6 col-xl-3")
+
+                    </div>
+
+                    <hr class="my-4" />
+
+                    <div class="row g-4">
+
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold mb-3">Sites by Status</h6>
+
+                            @if (Executive.SitesByStatus.Count > 0)
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Status</th>
+                                                <th class="text-end">Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in Executive.SitesByStatus)
+                                            {
+                                                <tr>
+                                                    <td>@item.Key</td>
+                                                    <td class="text-end">@item.Value</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">
+                                    No site status data available.
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-lg-6">
+                            <h6 class="fw-bold mb-3">Projects by Status</h6>
+
+                            @if (Executive.ProjectsByStatus.Count > 0)
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Status</th>
+                                                <th class="text-end">Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in Executive.ProjectsByStatus)
+                                            {
+                                                <tr>
+                                                    <td>@item.Key</td>
+                                                    <td class="text-end">@item.Value</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">
+                                    No project status data available.
+                                </div>
+                            }
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        </div>
+
+        }
+
+        <!-- Financial report -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-success text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i class="bi bi-cash-stack me-2"></i>
+                            Financial Report
+                        </h5>
+                        <small>
+                            @FinancialSubtitle
+                        </small>
+                    </div>
+
+                    <span class="badge bg-light text-dark">
+                        @CurrentScopeLabel
+                    </span>
+                </div>
+            </div>
+
+            <div class="card-body">
+
+                @if (!string.IsNullOrWhiteSpace(_financialError))
+                {
+                    <div class="alert alert-danger mb-0">@_financialError</div>
+                }
+                else if (Summary is not null)
+                {
+                    <div class="row g-3">
+
+                        @Tile("Budget",
+                            Money(Summary.TotalBudget),
+                            hint: Split(f => f.TotalBudget, "Approved, active and closed budgets"))
+
+                        @Tile("Total Expenses",
+                            Money(Summary.TotalExpenses),
+                            css: "text-danger",
+                            hint: Split(f => f.TotalExpenses, "Approved and paid, including tax"))
+
+                        @UsedTile(Summary.TotalBudget, Summary.TotalExpenses, "col-md-6 col-xl-4")
+
+                        @Tile("Invoiced to Clients",
+                            Money(Summary.TotalInvoices),
+                            hint: "Client invoices, cancelled excluded")
+
+                        @Tile("Outstanding Receivables",
+                            Money(Summary.OutstandingReceivables),
+                            css: "text-warning",
+                            hint: "Unpaid balance, worked out invoice by invoice")
+
+                        @Tile("Outstanding Payables",
+                            Money(Summary.OutstandingPayables),
+                            css: "text-warning",
+                            hint: "Unpaid vendor bills, worked out bill by bill")
+
+                        @Tile("Cash In",
+                            Money(Summary.TotalCompletedPayments),
+                            css: "text-success",
+                            hint: "Completed incoming payments")
+
+                        @Tile("Total Expenditure",
+                            Money(Summary.TotalExpenditure),
+                            css: "text-danger",
+                            hint: "Outgoing payments plus petty cash spent")
+
+                        @Tile("Cash Balance",
+                            Money(Summary.Balance),
+                            css: BalanceClass(Summary.Balance),
+                            hint: "Cash in minus total expenditure")
+
+                        @Tile("Net Cash Flow",
+                            Money(Summary.NetCashFlow),
+                            css: BalanceClass(Summary.NetCashFlow),
+                            hint: "Payments in minus payments out, plus petty cash movement")
+
+                        @Tile("Petty Cash Balance",
+                            Money(Summary.PettyCashBalance),
+                            hint: "All petty cash accounts")
+
+                        @Tile("Petty Cash Spent",
+                            Money(Summary.TotalPettyCashOut),
+                            css: "text-danger")
+
+                        @Tile("Active Petty Cash Accounts",
+                            Summary.ActivePettyCashAccounts.ToString("N0"))
+
+                    </div>
+                }
+
+            </div>
+        </div>
+
+        <!-- Company breakdown: head office + every site, with a total that adds up -->
+        @if (_scope == "All" && _all is not null)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">
+                                <i class="bi bi-bar-chart-line me-2"></i>
+                                Breakdown by Site
+                            </h5>
+                            <small>
+                                Head office and each construction site. The
+                                total row is the company-wide figure above.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Site</th>
+                                    <th>Code</th>
+                                    <th class="text-end">Budget</th>
+                                    <th class="text-end">Expenses</th>
+                                    <th class="text-end">Used</th>
+                                    <th class="text-end">Invoiced</th>
+                                    <th class="text-end">Receivables</th>
+                                    <th class="text-end">Payables</th>
+                                    <th class="text-end">Cash In</th>
+                                    <th class="text-end">Expenditure</th>
+                                    <th class="text-end">Balance</th>
+                                    <th class="text-end">Petty Cash</th>
+                                    <th class="text-end">Petty Spent</th>
+                                    <th class="text-end">Accounts</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var row in BreakdownRows)
+                                {
+                                    @DataRow(row)
+                                }
+                            </tbody>
+
+                            <tfoot>
+                                @DataRow(TotalRow, bold: true)
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    @if (HasOtherRow)
+                    {
+                        <div class="text-muted small">
+                            "Other" is activity recorded against sites that no
+                            longer exist. It is included in the total.
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Future report modules -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Additional Management Reports</h5>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3">
+
+                    @Upcoming("bi-kanban", "Project Progress Report",
+                        "Planned versus actual progress, milestones and delays.")
+
+                    @Upcoming("bi-building", "Site Operations Report",
+                        "Site activity, materials, equipment and progress.")
+
+                    @Upcoming("bi-people", "HR Report",
+                        "Employees, attendance, timesheets, leave and payroll.")
+
+                    @Upcoming("bi-box-seam", "Procurement & Inventory",
+                        "Requests, purchase orders, receipts and stock.")
+
+                    @Upcoming("bi-shield-check", "Safety & Compliance",
+                        "Incidents, inspections, permits and corrective actions.")
+
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+
+    // Company scope data (kept while the user looks at a site).
+    private ExecutiveDashboardResponse? _allExecutive;
+    private AllFinancialSummaryResponse? _all;
+    private FinancialSummaryResponse? _companyLevelSummary;
+
+    // Site scope data.
+    private ExecutiveDashboardResponse? _siteExecutive;
+    private FinancialSummaryResponse? _siteSummary;
+
+    private List<SiteResponse> _sites = [];
+
+    private string _scope = "All";
+    private string _selectedSiteId = string.Empty;
+
+    private bool _busy = true;
+
+    // Each section reports its own problem, so one failure never blanks
+    // the page or hides the selectors.
+    private string? _sitesError;
+    private string? _executiveError;
+    private string? _financialError;
+
+    // What the two main sections show, for the current scope. For the company
+    // scope this is the company-wide total (head office + all sites), not the
+    // head-office-only record set.
+    // "All"     company + every site (the combined total)
+    // "Company" company-level records only, not tied to any site
+    // "Site"    one construction site
+    private ExecutiveDashboardResponse? Executive
+        => _scope == "All" ? _allExecutive
+         : _scope == "Site" ? _siteExecutive
+         : null;
+
+    private FinancialSummaryResponse? Summary
+        => _scope == "All" ? _all?.Total
+         : _scope == "Site" ? _siteSummary
+         : _companyLevelSummary;
+
+    private bool HasSelectedSite => Guid.TryParse(_selectedSiteId, out _);
+
+    // Only sites the user can open: the reporting service already limits the
+    // breakdown to those.
+    private List<SiteResponse> VisibleSites
+    {
+        get
+        {
+            if (_all is null)
+            {
+                return _sites;
+            }
+
+            var ids = _all.Sites
+                .Select(s => s.SiteId)
+                .ToHashSet();
+
+            return _sites
+                .Where(s => ids.Contains(s.Id))
+                .ToList();
+        }
+    }
+
+    private string CurrentScopeLabel
+        => _scope == "All" ? "Company + all sites"
+         : _scope == "Company" ? "Company level"
+         : _sites.FirstOrDefault(x => x.Id.ToString() == _selectedSiteId)?.Name
+           ?? "Select a construction site";
+
+    private string ScopeIntro
+        => _scope == "All" ? "Company-wide management reports and financial analytics."
+         : _scope == "Company" ? "Company-level financial records that are not tied to a construction site."
+         : $"{CurrentScopeLabel} management reports and financial analytics.";
+
+    private string ExecutiveSubtitle
+        => _scope == "All"
+            ? "Company-wide management overview"
+            : $"{CurrentScopeLabel} management overview";
+
+    private string FinancialSubtitle
+        => _scope == "All" ? "Company-wide financial position (company level and all sites)"
+         : _scope == "Company" ? "Budgets, expenses and payments not tied to a construction site"
+         : $"{CurrentScopeLabel} financial position";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _sites = await ProjectService.GetSitesAsync();
+        }
+        catch (Exception ex)
+        {
+            _sitesError = $"Failed to load construction sites. {FriendlyError(ex)}";
+        }
+
+        await LoadAllAsync();
+    }
+
+    private async Task ScopeChangedAsync()
+    {
+        ClearErrors();
+
+        if (_scope == "Site")
+        {
+            _siteExecutive = null;
+            _siteSummary = null;
+            return;
+        }
+
+        _selectedSiteId = string.Empty;
+
+        if (_scope == "All")
+        {
+            if (_allExecutive is null && _all is null)
+            {
+                await LoadAllAsync();
+            }
+        }
+        else if (_companyLevelSummary is null)
+        {
+            await LoadCompanyLevelAsync();
+        }
+    }
+
+    private async Task SiteChangedAsync()
+    {
+        ClearErrors();
+
+        if (!Guid.TryParse(_selectedSiteId, out var siteId))
+        {
+            _siteExecutive = null;
+            _siteSummary = null;
+            return;
+        }
+
+        await LoadSiteAsync(siteId);
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_scope == "Site" && Guid.TryParse(_selectedSiteId, out var siteId))
+        {
+            await LoadSiteAsync(siteId);
+        }
+        else if (_scope == "Company")
+        {
+            await LoadCompanyLevelAsync();
+        }
+        else
+        {
+            await LoadAllAsync();
+        }
+    }
+
+    private async Task LoadCompanyLevelAsync()
+    {
+        _busy = true;
+        ClearErrors();
+
+        _companyLevelSummary = null;
+
+        try
+        {
+            _companyLevelSummary = await ReportingService.GetFinancialSummaryAsync();
+        }
+        catch (HttpRequestException ex)
+            when (ex.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _financialError =
+                "Company-level figures are only visible to roles with company-wide access.";
+        }
+        catch (Exception ex)
+        {
+            _financialError = FriendlyError(ex);
+        }
+
+        _busy = false;
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _busy = true;
+        ClearErrors();
+
+        _allExecutive = null;
+        _all = null;
+
+        try
+        {
+            _allExecutive = await ReportingService.GetExecutiveDashboardAsync();
+        }
+        catch (Exception ex)
+        {
+            _executiveError = FriendlyError(ex);
+        }
+
+        // One call gives head office, every site and the company total.
+        try
+        {
+            _all = await ReportingService.GetAllFinancialSummariesAsync();
+        }
+        catch (Exception ex)
+        {
+            _financialError = FriendlyError(ex);
+        }
+
+        _busy = false;
+    }
+
+    private async Task LoadSiteAsync(Guid siteId)
+    {
+        _busy = true;
+        ClearErrors();
+
+        _siteExecutive = null;
+        _siteSummary = null;
+
+        try
+        {
+            _siteExecutive = await ReportingService.GetSiteExecutiveDashboardAsync(siteId);
+        }
+        catch (Exception ex)
+        {
+            _executiveError = FriendlyError(ex);
+        }
+
+        try
+        {
+            _siteSummary = await ReportingService.GetSiteFinancialSummaryAsync(siteId);
+        }
+        catch (Exception ex)
+        {
+            _financialError = FriendlyError(ex);
+        }
+
+        _busy = false;
+    }
+
+    private void ClearErrors()
+    {
+        _executiveError = null;
+        _financialError = null;
+    }
+
+    private static string FriendlyError(Exception ex)
+    {
+        if (ex is HttpRequestException { StatusCode: HttpStatusCode.Forbidden })
+        {
+            return "You don't have permission to view this report, " +
+                   "or you are not assigned to this site.";
+        }
+
+        return string.IsNullOrWhiteSpace(ex.Message)
+            ? "The report could not be loaded."
+            : ex.Message;
+    }
+
+    // ------------------------------------------------------------------
+    // Breakdown table
+    // ------------------------------------------------------------------
+
+    private sealed record Row(
+        string Name,
+        string Code,
+        decimal Budget,
+        decimal Expenses,
+        decimal Invoiced,
+        decimal Receivables,
+        decimal Payables,
+        decimal CashIn,
+        decimal Expenditure,
+        decimal Balance,
+        decimal PettyBalance,
+        decimal PettySpent,
+        int Accounts);
+
+    private static Row ToRow(string name, string code, FinancialSummaryResponse f)
+        => new(
+            name,
+            code,
+            f.TotalBudget,
+            f.TotalExpenses,
+            f.TotalInvoices,
+            f.OutstandingReceivables,
+            f.OutstandingPayables,
+            f.TotalCompletedPayments,
+            f.TotalExpenditure,
+            f.Balance,
+            f.PettyCashBalance,
+            f.TotalPettyCashOut,
+            f.ActivePettyCashAccounts);
+
+    private Row TotalRow
+        => ToRow("Total", string.Empty, _all!.Total);
+
+    // Head office first, then each site, then "Other" when the total holds
+    // activity that belongs to no listed site (sites that were deleted).
+    private List<Row> BreakdownRows
+    {
+        get
+        {
+            var rows = new List<Row>
+            {
+                ToRow("Head office (company level)", string.Empty, _all!.Company)
+            };
+
+            rows.AddRange(_all.Sites.Select(
+                s => ToRow(s.SiteName, s.SiteCode, s.Financial)));
+
+            if (OtherRow is { } other)
+            {
+                rows.Add(other);
+            }
+
+            return rows;
+        }
+    }
+
+    private bool HasOtherRow => OtherRow is not null;
+
+    private Row? OtherRow
+    {
+        get
+        {
+            if (_all is null)
+            {
+                return null;
+            }
+
+            var listed = new List<Row> { ToRow("", "", _all.Company) };
+            listed.AddRange(_all.Sites.Select(s => ToRow("", "", s.Financial)));
+
+            var total = TotalRow;
+
+            var other = new Row(
+                "Other (deleted sites)",
+                string.Empty,
+                total.Budget - listed.Sum(r => r.Budget),
+                total.Expenses - listed.Sum(r => r.Expenses),
+                total.Invoiced - listed.Sum(r => r.Invoiced),
+                total.Receivables - listed.Sum(r => r.Receivables),
+                total.Payables - listed.Sum(r => r.Payables),
+                total.CashIn - listed.Sum(r => r.CashIn),
+                total.Expenditure - listed.Sum(r => r.Expenditure),
+                total.Balance - listed.Sum(r => r.Balance),
+                total.PettyBalance - listed.Sum(r => r.PettyBalance),
+                total.PettySpent - listed.Sum(r => r.PettySpent),
+                total.Accounts - listed.Sum(r => r.Accounts));
+
+            var isEmpty =
+                Math.Abs(other.Budget) < 0.005m &&
+                Math.Abs(other.Expenses) < 0.005m &&
+                Math.Abs(other.Invoiced) < 0.005m &&
+                Math.Abs(other.Receivables) < 0.005m &&
+                Math.Abs(other.Payables) < 0.005m &&
+                Math.Abs(other.CashIn) < 0.005m &&
+                Math.Abs(other.Expenditure) < 0.005m &&
+                Math.Abs(other.PettyBalance) < 0.005m &&
+                Math.Abs(other.PettySpent) < 0.005m &&
+                other.Accounts == 0;
+
+            return isEmpty ? null : other;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private static string Money(decimal value) => value.ToString("N2");
+
+    // Under the combined view, show how a figure splits between the
+    // company-level (non-site) records and the sites.
+    private string Split(Func<FinancialSummaryResponse, decimal> pick, string fallback)
+        => _scope == "All" && _all is not null
+            ? $"Company level {Money(pick(_all.Company))} + sites {Money(pick(_all.Total) - pick(_all.Company))}"
+            : fallback;
+
+    private static string SitesText(ExecutiveDashboardResponse e)
+        => $"{e.ActiveSites:N0} active of {e.TotalSites:N0}";
+
+    private static string BalanceClass(decimal value)
+        => value < 0 ? "text-danger" : "text-success";
+
+    private static decimal UsedPercent(decimal budget, decimal expenses)
+        => budget <= 0m ? 0m : Math.Round(expenses / budget * 100m, 1);
+
+    // Same thresholds as the budget alerts: 80% warning, 100% limit reached.
+    private static string UsedClass(decimal percent)
+        => percent >= 100m ? "bg-danger"
+         : percent >= 80m ? "bg-warning"
+         : "bg-success";
+
+    private RenderFragment Tile(
+        string label,
+        string value,
+        string css = "",
+        string? hint = null,
+        string col = "col-md-6 col-xl-4") =>
+        @<div class="@col">
+            <div class="card h-100 border">
+                <div class="card-body">
+                    <div class="text-muted small">@label</div>
+                    <div class="fs-5 fw-bold @css">@value</div>
+                    @if (hint is not null)
+                    {
+                        <div class="text-muted small mt-1">@hint</div>
+                    }
+                </div>
+            </div>
+        </div>;
+
+    private RenderFragment UsedTile(decimal budget, decimal expenses, string col)
+    {
+        var percent = UsedPercent(budget, expenses);
+
+        return @<div class="@col">
+            <div class="card h-100 border">
+                <div class="card-body">
+                    <div class="text-muted small">Budget Used</div>
+                    <div class="fs-5 fw-bold">@percent.ToString("0.#")%</div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div class="progress-bar @UsedClass(percent)"
+                             role="progressbar"
+                             style="width: @(Math.Min(percent, 100m).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%">
+                        </div>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Expenses against budget
+                    </div>
+                </div>
+            </div>
+        </div>;
+    }
+
+    private RenderFragment DataRow(Row r, bool bold = false)
+    {
+        var used = UsedPercent(r.Budget, r.Expenses);
+
+        return @<tr class="@(bold ? "table-light fw-bold" : "")">
+            <td class="@(bold ? "" : "fw-semibold")">@r.Name</td>
+            <td>@r.Code</td>
+            <td class="text-end">@Money(r.Budget)</td>
+            <td class="text-end">@Money(r.Expenses)</td>
+            <td class="text-end">
+                @if (r.Budget > 0m)
+                {
+                    <span class="badge @UsedClass(used)">@used.ToString("0.#")%</span>
+                }
+                else
+                {
+                    <span class="text-muted">-</span>
+                }
+            </td>
+            <td class="text-end">@Money(r.Invoiced)</td>
+            <td class="text-end">@Money(r.Receivables)</td>
+            <td class="text-end">@Money(r.Payables)</td>
+            <td class="text-end text-success">@Money(r.CashIn)</td>
+            <td class="text-end text-danger">@Money(r.Expenditure)</td>
+            <td class="text-end @BalanceClass(r.Balance)">@Money(r.Balance)</td>
+            <td class="text-end">@Money(r.PettyBalance)</td>
+            <td class="text-end text-danger">@Money(r.PettySpent)</td>
+            <td class="text-end">@r.Accounts</td>
+        </tr>;
+    }
+
+    private RenderFragment Upcoming(string icon, string title, string text) =>
+        @<div class="col-md-6 col-lg-4">
+            <div class="card h-100 border">
+                <div class="card-body">
+                    <h6>
+                        <i class="bi @icon me-2"></i>
+                        @title
+                    </h6>
+                    <p class="text-muted small">@text</p>
+                    <button class="btn btn-outline-primary" disabled>
+                        Coming Next
+                    </button>
+                </div>
+            </div>
+        </div>;
+}

@@ -31,6 +31,7 @@ public sealed class PermitService : IPermitService
 
         var query = _dbContext.Permits
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .Where(x => !x.IsDeleted);
 
         if (!IsSuperAdmin(actor))
@@ -46,6 +47,7 @@ public sealed class PermitService : IPermitService
                 Id = x.Id,
                 CompanyId = x.CompanyId,
                 ConstructionSiteId = x.ConstructionSiteId,
+                ConstructionSiteName = x.ConstructionSite.Name,
                 ProjectId = x.ProjectId,
                 PermitNumber = x.PermitNumber,
                 PermitType = x.PermitType,
@@ -77,10 +79,10 @@ public sealed class PermitService : IPermitService
 
         var permit = await _dbContext.Permits
             .AsNoTracking()
+            .Include(x => x.ConstructionSite)
             .SingleOrDefaultAsync(
-                x =>
-                    x.Id == permitId &&
-                    !x.IsDeleted,
+                x => x.Id == permitId &&
+                     !x.IsDeleted,
                 cancellationToken)
             ?? throw new PermitManagementException(
                 "Permit was not found.");
@@ -474,38 +476,28 @@ public sealed class PermitService : IPermitService
             : value.Trim();
     }
 
-    private static PermitResponse Map(
-        Permit permit)
+    private static PermitResponse Map(Permit permit)
     {
         return new PermitResponse
         {
             Id = permit.Id,
             CompanyId = permit.CompanyId,
-            ConstructionSiteId =
-                permit.ConstructionSiteId,
+            ConstructionSiteId = permit.ConstructionSiteId,
+            ConstructionSiteName = permit.ConstructionSite?.Name ?? string.Empty,
             ProjectId = permit.ProjectId,
             PermitNumber = permit.PermitNumber,
             PermitType = permit.PermitType,
             Name = permit.Name,
-            IssuingAuthority =
-                permit.IssuingAuthority,
-            ApplicationDate =
-                permit.ApplicationDate,
-            IssueDate =
-                permit.IssueDate,
-            ExpiryDate =
-                permit.ExpiryDate,
+            IssuingAuthority = permit.IssuingAuthority,
+            ApplicationDate = permit.ApplicationDate,
+            IssueDate = permit.IssueDate,
+            ExpiryDate = permit.ExpiryDate,
             Status = permit.Status,
-            ExpiryAlertDays =
-                permit.ExpiryAlertDays,
-            Conditions =
-                permit.Conditions,
-            Notes =
-                permit.Notes,
-            CreatedAtUtc =
-                permit.CreatedAtUtc,
-            UpdatedAtUtc =
-                permit.UpdatedAtUtc
+            ExpiryAlertDays = permit.ExpiryAlertDays,
+            Conditions = permit.Conditions,
+            Notes = permit.Notes,
+            CreatedAtUtc = permit.CreatedAtUtc,
+            UpdatedAtUtc = permit.UpdatedAtUtc
         };
     }
 }

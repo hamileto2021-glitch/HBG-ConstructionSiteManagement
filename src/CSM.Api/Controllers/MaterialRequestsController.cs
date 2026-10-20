@@ -11,7 +11,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class MaterialRequestsController : ControllerBase
 {
     private readonly IMaterialRequestService _materialRequestService;
@@ -23,6 +23,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Procurement.MaterialRequest.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<MaterialRequestResponse>>> GetAll(
         [FromQuery] Guid? constructionSiteId,
@@ -52,6 +53,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpGet("{materialRequestId:guid}")]
+    [Authorize(Policy = "Procurement.MaterialRequest.View")]
     public async Task<ActionResult<MaterialRequestResponse>> GetById(
         Guid materialRequestId,
         CancellationToken cancellationToken)
@@ -76,6 +78,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Procurement.MaterialRequest.Submit")]
     public async Task<ActionResult<MaterialRequestResponse>> Create(
         [FromBody] CreateMaterialRequestRequest request,
         CancellationToken cancellationToken)
@@ -105,7 +108,29 @@ public sealed class MaterialRequestsController : ControllerBase
         }
     }
 
+    [HttpPost("{materialRequestId:guid}/make-draft")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Submit")]
+    public async Task<ActionResult<MaterialRequestResponse>> MakeDraft(
+        Guid materialRequestId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _materialRequestService.MakeDraftAsync(
+                GetCurrentUserId(),
+                materialRequestId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (MaterialRequestManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPut("{materialRequestId:guid}")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Submit")]
     public async Task<ActionResult<MaterialRequestResponse>> Update(
         Guid materialRequestId,
         [FromBody] UpdateMaterialRequestRequest request,
@@ -132,6 +157,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpPut("{materialRequestId:guid}/submit")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Submit")]
     public async Task<ActionResult<MaterialRequestResponse>> Submit(
         Guid materialRequestId,
         CancellationToken cancellationToken)
@@ -156,6 +182,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpPut("{materialRequestId:guid}/approve")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Approve")]
     public async Task<ActionResult<MaterialRequestResponse>> Approve(
         Guid materialRequestId,
         [FromBody] ApproveMaterialRequestRequest request,
@@ -182,6 +209,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpPut("{materialRequestId:guid}/reject")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Approve")]
     public async Task<ActionResult<MaterialRequestResponse>> Reject(
         Guid materialRequestId,
         [FromBody] MaterialRequestRemarksRequest request,
@@ -208,6 +236,7 @@ public sealed class MaterialRequestsController : ControllerBase
     }
 
     [HttpPut("{materialRequestId:guid}/cancel")]
+    [Authorize(Policy = "Procurement.MaterialRequest.Submit")]
     public async Task<ActionResult<MaterialRequestResponse>> Cancel(
         Guid materialRequestId,
         [FromBody] MaterialRequestRemarksRequest request,

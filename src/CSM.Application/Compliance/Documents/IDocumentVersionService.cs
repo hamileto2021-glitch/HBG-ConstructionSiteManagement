@@ -14,4 +14,10 @@ public interface IDocumentVersionService
         Guid documentId,
         CreateDocumentVersionRequest request,
         CancellationToken cancellationToken);
+
+    Task<(Stream Stream, string FileName, string? ContentType)> DownloadAsync(
+        Guid currentUserId,
+        Guid documentId,
+        Guid versionId,
+        CancellationToken cancellationToken);
 }

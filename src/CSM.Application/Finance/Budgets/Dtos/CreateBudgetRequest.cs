@@ -3,7 +3,7 @@ using CSM.Domain.Enums;
 namespace CSM.Application.Finance.Budgets.Dtos;
 
 public sealed record CreateBudgetRequest(
-    Guid ConstructionSiteId,
+    Guid? ConstructionSiteId,
     Guid? ProjectId,
     string BudgetNumber,
     string Name,

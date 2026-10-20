@@ -12,6 +12,10 @@ import 'expense_list_screen.dart';
 import 'invoice_list_screen.dart';
 import 'payment_list_screen.dart';
 import 'financial_summary_screen.dart';
+import '../data/repositories/petty_cash_repository.dart';
+import 'petty_cash_account_list_screen.dart';
+import 'package:intl/intl.dart';
+
 
 class FinancialDashboardScreen extends StatefulWidget {
   const FinancialDashboardScreen({super.key});
@@ -27,6 +31,12 @@ class _FinancialDashboardScreenState
   final _expenseRepository = ExpenseRepository();
   final _invoiceRepository = InvoiceRepository();
   final _paymentRepository = PaymentRepository();
+  final _pettyCashRepository = PettyCashRepository();
+  final NumberFormat _currency =
+  NumberFormat('#,##0.00');
+
+  String formatMoney(double value) =>
+      _currency.format(value);
 
   bool _loading = true;
 
@@ -121,37 +131,37 @@ class _FinancialDashboardScreenState
           children: [
             _SummaryCard(
               title: 'Budget',
-              value: _totalBudget,
+              value: formatMoney(_totalBudget),
               icon: Icons.account_balance_wallet,
               color: Colors.blue,
             ),
             _SummaryCard(
               title: 'Expenses',
-              value: _totalExpenses,
+              value: formatMoney(_totalExpenses),
               icon: Icons.receipt_long,
               color: Colors.red,
             ),
             _SummaryCard(
               title: 'Invoiced',
-              value: _totalInvoiced,
+              value: formatMoney(_totalInvoiced),
               icon: Icons.description,
               color: Colors.orange,
             ),
             _SummaryCard(
               title: 'Collected',
-              value: _totalCollected,
+              value: formatMoney(_totalCollected),
               icon: Icons.arrow_downward,
               color: Colors.green,
             ),
             _SummaryCard(
               title: 'Paid',
-              value: _totalPaid,
+              value: formatMoney(_totalPaid),
               icon: Icons.arrow_upward,
               color: Colors.deepOrange,
             ),
             _SummaryCard(
               title: 'Cash Flow',
-              value: _totalCollected - _totalPaid,
+              value: formatMoney(_totalCollected - _totalPaid),
               icon: Icons.trending_up,
               color: Colors.teal,
             ),
@@ -242,6 +252,22 @@ class _FinancialDashboardScreenState
         ),
 
         _ModuleCard(
+          icon: Icons.account_balance,
+          title: 'Petty Cash',
+          description:
+          'Manage site petty cash accounts, opening balances, and current balances.',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PettyCashAccountListScreen(
+                  repository: _pettyCashRepository,
+                ),
+              ),
+            );
+          },
+        ),
+
+        _ModuleCard(
           icon: Icons.analytics_outlined,
           title: 'Financial Summary',
           description:
@@ -269,10 +295,9 @@ class _SummaryCard extends StatelessWidget {
   });
 
   final String title;
-  final double value;
+  final String value;
   final IconData icon;
   final Color color;
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -291,7 +316,7 @@ class _SummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              value.toStringAsFixed(2),
+              value,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium

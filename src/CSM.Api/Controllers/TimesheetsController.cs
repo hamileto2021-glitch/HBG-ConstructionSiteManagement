@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Timesheets;
 using CSM.Application.HRM.Timesheets.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class TimesheetsController : ControllerBase
 {
     private readonly ITimesheetService _timesheetService;
@@ -21,6 +20,7 @@ public sealed class TimesheetsController : ControllerBase
         _timesheetService = timesheetService;
     }
 
+    [Authorize(Policy = "HRM.Timesheet.View")]
     [HttpGet]
     public async Task<
         ActionResult<IReadOnlyCollection<TimesheetResponse>>> GetAll(
@@ -47,6 +47,7 @@ public sealed class TimesheetsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Timesheet.View")]
     [HttpGet("{timesheetId:guid}")]
     public async Task<ActionResult<TimesheetResponse>> GetById(
         Guid timesheetId,
@@ -68,6 +69,7 @@ public sealed class TimesheetsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Timesheet.Submit")]
     [HttpPost]
     public async Task<ActionResult<TimesheetResponse>> Create(
         CreateTimesheetRequest request,
@@ -92,6 +94,7 @@ public sealed class TimesheetsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Timesheet.Submit")]
     [HttpPut("{timesheetId:guid}/submit")]
     public async Task<ActionResult<TimesheetResponse>> Submit(
         Guid timesheetId,
@@ -115,6 +118,7 @@ public sealed class TimesheetsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Timesheet.Approve")]
     [HttpPut("{timesheetId:guid}/review")]
     public async Task<ActionResult<TimesheetResponse>> Review(
         Guid timesheetId,
@@ -138,6 +142,8 @@ public sealed class TimesheetsController : ControllerBase
         }
     }
 
+
+    [Authorize(Policy = "HRM.Timesheet.Submit")]
     [HttpPut("{timesheetId:guid}/cancel")]
     public async Task<ActionResult<TimesheetResponse>> Cancel(
         Guid timesheetId,
@@ -154,6 +160,28 @@ public sealed class TimesheetsController : ControllerBase
                     cancellationToken);
 
             return Ok(timesheet);
+        }
+        catch (TimesheetManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // Generate
+    [Authorize(Policy = "HRM.Timesheet.Submit")]
+    [HttpPost("generate")]
+    public async Task<ActionResult<TimesheetResponse>> Generate(
+        GenerateTimesheetRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _timesheetService.GenerateAsync(
+                GetCurrentUserId(),
+                request,
+                cancellationToken);
+
+            return Ok(result);
         }
         catch (TimesheetManagementException ex)
         {

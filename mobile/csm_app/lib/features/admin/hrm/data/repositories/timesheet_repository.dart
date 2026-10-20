@@ -1,5 +1,7 @@
 import 'package:csm_app/core/network/api_client.dart';
 import '../models/timesheet.dart';
+import '../models/generate_timesheet_request.dart';
+
 
 class TimesheetRepository {
   TimesheetRepository({
@@ -112,6 +114,17 @@ class TimesheetRepository {
     );
 
     return Timesheet.fromJson(response);
+  }
+
+  Future<Timesheet> generate(
+      GenerateTimesheetRequest request,
+      ) async {
+    final json = await _apiClient.post(
+      '/Timesheets/generate',
+      body: request.toJson(),
+    );
+
+    return Timesheet.fromJson(json);
   }
 
   String _dateOnly(DateTime date) {

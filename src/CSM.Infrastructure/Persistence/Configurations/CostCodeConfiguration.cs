@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CSM.Infrastructure.Persistence.Configurations;
 
-public class CostCodeConfiguration :
-    IEntityTypeConfiguration<CostCode>
+public sealed class CostCodeConfiguration
+    : IEntityTypeConfiguration<CostCode>
 {
     public void Configure(EntityTypeBuilder<CostCode> builder)
     {
@@ -21,14 +21,20 @@ public class CostCodeConfiguration :
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.Property(x => x.Description)
+            .HasMaxLength(500);
+
         builder.HasIndex(x => new { x.CompanyId, x.Code })
             .IsUnique();
+
+        builder.HasOne(x => x.ConstructionSite)
+            .WithMany(x => x.CostCodes)
+            .HasForeignKey(x => x.ConstructionSiteId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.ParentCostCode)
             .WithMany(x => x.Children)
             .HasForeignKey(x => x.ParentCostCodeId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

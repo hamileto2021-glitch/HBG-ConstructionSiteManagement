@@ -35,4 +35,10 @@ public interface ISiteService
         Guid siteId,
         bool isActive,
         CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyCollection<SiteResponse>> GetAssignmentOptionsAsync(
+            Guid currentUserId,
+            CancellationToken cancellationToken = default);
+
+
 }

@@ -10,18 +10,22 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class ExpensesController : ControllerBase
 {
     private readonly IExpenseService _expenseService;
+    private readonly IAuthorizationService _authorizationService;
 
     public ExpensesController(
-        IExpenseService expenseService)
+        IExpenseService expenseService,
+        IAuthorizationService authorizationService)
     {
         _expenseService = expenseService;
+        _authorizationService = authorizationService;
     }
 
     [HttpGet]
+    [Authorize(Policy = "Finance.Expense.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<ExpenseResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -36,11 +40,38 @@ public sealed class ExpensesController : ControllerBase
         }
         catch (ExpenseManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("site/{constructionSiteId:guid}")]
+    [Authorize(Policy = "Finance.Expense.View")]
+    public async Task<
+        ActionResult<IReadOnlyCollection<ExpenseResponse>>> GetBySite(
+        Guid constructionSiteId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var expenses = await _expenseService.GetBySiteAsync(
+                GetCurrentUserId(),
+                constructionSiteId,
+                cancellationToken);
+
+            return Ok(expenses);
+        }
+        catch (ExpenseManagementException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpGet("{expenseId:guid}")]
+    [Authorize(Policy = "Finance.Expense.View")]
     public async Task<ActionResult<ExpenseResponse>> GetById(
         Guid expenseId,
         CancellationToken cancellationToken)
@@ -56,11 +87,14 @@ public sealed class ExpensesController : ControllerBase
         }
         catch (ExpenseManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPost]
+    [Authorize(Policy = "Finance.Expense.Submit")]
     public async Task<ActionResult<ExpenseResponse>> Create(
         CreateExpenseRequest request,
         CancellationToken cancellationToken)
@@ -79,11 +113,14 @@ public sealed class ExpensesController : ControllerBase
         }
         catch (ExpenseManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPut("{expenseId:guid}")]
+    [Authorize(Policy = "Finance.Expense.Submit")]
     public async Task<ActionResult<ExpenseResponse>> Update(
         Guid expenseId,
         UpdateExpenseRequest request,
@@ -101,7 +138,9 @@ public sealed class ExpensesController : ControllerBase
         }
         catch (ExpenseManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
@@ -111,6 +150,33 @@ public sealed class ExpensesController : ControllerBase
         ChangeExpenseStatusRequest request,
         CancellationToken cancellationToken)
     {
+        // Submitting or cancelling is the submitter's job. Approving,
+        // rejecting and marking paid need the approval permission.
+        // Status numbers match what the web app sends:
+        // 2 = Submitted, 6 = Cancelled; 3/4/5 = Approved/Rejected/Paid.
+        var target = (int)request.Status;
+        var submitterAction = target is 2 or 6;
+
+        // People who can approve may also submit or cancel.
+        var allowed =
+            (await _authorizationService.AuthorizeAsync(
+                User, "Finance.Expense.Approve")).Succeeded ||
+            (submitterAction &&
+             (await _authorizationService.AuthorizeAsync(
+                User, "Finance.Expense.Submit")).Succeeded);
+
+        if (!allowed)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    message = submitterAction
+                        ? "You don't have permission to submit or cancel expenses."
+                        : "You don't have permission to approve, reject or pay expenses."
+                });
+        }
+
         try
         {
             var expense = await _expenseService.ChangeStatusAsync(
@@ -123,7 +189,9 @@ public sealed class ExpensesController : ControllerBase
         }
         catch (ExpenseManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 

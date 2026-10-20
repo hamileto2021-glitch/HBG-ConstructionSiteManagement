@@ -10,37 +10,48 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class InvoicesController : ControllerBase
 {
     private readonly IInvoiceService _invoiceService;
+    private readonly IInvoicePdfService _invoicePdfService;
 
     public InvoicesController(
-        IInvoiceService invoiceService)
+        IInvoiceService invoiceService,
+        IInvoicePdfService invoicePdfService)
     {
         _invoiceService = invoiceService;
+        _invoicePdfService = invoicePdfService;
     }
 
     [HttpGet]
-    public async Task<
-        ActionResult<IReadOnlyCollection<InvoiceResponse>>> GetAll(
+    [Authorize(Policy = "Finance.Invoice.View")]
+    public async Task<ActionResult<IReadOnlyCollection<InvoiceResponse>>> GetAll(
+        [FromQuery] Guid siteId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var invoices = await _invoiceService.GetAllAsync(
-                GetCurrentUserId(),
-                cancellationToken);
+        var invoices = await _invoiceService.GetAllAsync(
+            GetCurrentUserId(),
+            siteId,
+            cancellationToken);
 
-            return Ok(invoices);
-        }
-        catch (InvoiceManagementException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(invoices);
+    }
+
+    [HttpGet("company")]
+    [Authorize(Policy = "Finance.Invoice.View")]
+    public async Task<ActionResult<IReadOnlyCollection<InvoiceResponse>>> GetCompany(
+        CancellationToken cancellationToken)
+    {
+        var invoices = await _invoiceService.GetCompanyInvoicesAsync(
+            GetCurrentUserId(),
+            cancellationToken);
+
+        return Ok(invoices);
     }
 
     [HttpGet("{invoiceId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.View")]
     public async Task<ActionResult<InvoiceResponse>> GetById(
         Guid invoiceId,
         CancellationToken cancellationToken)
@@ -61,6 +72,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult<InvoiceResponse>> Create(
         CreateInvoiceRequest request,
         CancellationToken cancellationToken)
@@ -84,6 +96,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPut("{invoiceId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult<InvoiceResponse>> Update(
         Guid invoiceId,
         UpdateInvoiceRequest request,
@@ -106,6 +119,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPut("{invoiceId:guid}/status")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult<InvoiceResponse>> ChangeStatus(
         Guid invoiceId,
         ChangeInvoiceStatusRequest request,
@@ -125,6 +139,53 @@ public sealed class InvoicesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpPut("{id:guid}/issue")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
+    public async Task<ActionResult<InvoiceResponse>> Issue(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+
+        var invoice = await _invoiceService.IssueAsync(
+            userId,
+            id,
+            cancellationToken);
+
+        return Ok(invoice);
+    }
+
+    [HttpPut("{id:guid}/cancel")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
+    public async Task<ActionResult<InvoiceResponse>> Cancel(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var invoice = await _invoiceService.CancelAsync(
+            GetCurrentUserId(),
+            id,
+            cancellationToken);
+
+        return Ok(invoice);
+    }
+
+    [HttpGet("{id:guid}/print")]
+    [Authorize(Policy = "Finance.Invoice.View")]
+    public async Task<IActionResult> Print(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var pdf = await _invoicePdfService.GenerateAsync(
+            GetCurrentUserId(),
+            id,
+            cancellationToken);
+
+        return File(
+            pdf,
+            "application/pdf",
+            $"Invoice-{id}.pdf");
     }
 
     private Guid GetCurrentUserId()

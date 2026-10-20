@@ -96,29 +96,35 @@ class Site {
 
   factory Site.fromJson(Map<String, dynamic> json) {
     return Site(
-      id: json['id'] as String,
-      companyId: json['companyId'] as String,
-      siteCode: json['siteCode'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      businessUnitId: json['businessUnitId'] as String?,
-      address: json['address'] as String?,
-      city: json['city'] as String?,
-      region: json['region'] as String?,
-      country: json['country'] as String?,
+      id: json['id']?.toString() ?? '',
+      companyId: json['companyId']?.toString() ?? '',
+      siteCode: json['siteCode']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+
+      description: json['description']?.toString(),
+      businessUnitId: json['businessUnitId']?.toString(),
+      address: json['address']?.toString(),
+      city: json['city']?.toString(),
+      region: json['region']?.toString(),
+      country: json['country']?.toString(),
+
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       geofenceRadiusMeters:
       (json['geofenceRadiusMeters'] as num?)?.toDouble(),
+
       plannedStartDate: _parseDate(json['plannedStartDate']),
       plannedEndDate: _parseDate(json['plannedEndDate']),
       actualStartDate: _parseDate(json['actualStartDate']),
       actualEndDate: _parseDate(json['actualEndDate']),
+
       status: SiteStatusX.fromJson(json['status']),
-      isActive: json['isActive'] as bool,
-      createdAtUtc: DateTime.parse(
-        json['createdAtUtc'] as String,
-      ),
+      isActive: json['isActive'] ?? true,
+
+      createdAtUtc: DateTime.tryParse(
+        json['createdAtUtc']?.toString() ?? '',
+      ) ??
+          DateTime.now(),
     );
   }
 

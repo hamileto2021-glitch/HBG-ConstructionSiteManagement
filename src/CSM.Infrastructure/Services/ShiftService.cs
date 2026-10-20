@@ -249,7 +249,9 @@ public sealed class ShiftService : IShiftService
 
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -261,7 +263,9 @@ public sealed class ShiftService : IShiftService
     private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

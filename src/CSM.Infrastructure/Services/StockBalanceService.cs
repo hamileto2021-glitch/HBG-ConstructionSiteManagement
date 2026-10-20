@@ -5,6 +5,7 @@ using CSM.Domain.Constants;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Procurement;
 using CSM.Infrastructure.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
@@ -29,17 +30,40 @@ public sealed class StockBalanceService : IStockBalanceService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanRead(actor);
 
         var query = BuildQuery();
 
-        if (!IsSuperAdmin(actor))
-        {
-            var companyId = GetActorCompanyId(actor);
 
-            query = query.Where(
-                x => x.CompanyId == companyId);
-        }
+if (!IsSuperAdmin(actor))
+{
+    var companyId = GetActorCompanyId(actor);
+
+    query = query.Where(
+        x => x.CompanyId == companyId);
+}
+
+if (HasRole(actor, AppRoles.SiteManager) ||
+    HasRole(actor, AppRoles.Accountant))
+{
+    var activeSiteIds = await _dbContext.UserSiteAccesses
+        .Where(access =>
+            access.UserId == actor.Id &&
+            access.CompanyId == actor.CompanyId &&
+            access.IsActive)
+        .Select(access => access.SiteId)
+        .Distinct()
+        .ToListAsync(cancellationToken);
+
+    if (activeSiteIds.Count > 0)
+    {
+        query = query.Where(
+            x => activeSiteIds.Contains(x.ConstructionSiteId));
+    }
+    // No active assignments: retain company-wide access,
+    // matching the existing Site Manager convention.
+}
+
 
         if (constructionSiteId.HasValue)
         {
@@ -87,6 +111,11 @@ public sealed class StockBalanceService : IStockBalanceService
             actor,
             record.CompanyId);
 
+        await EnsureSiteAccessAsync(
+            actor,
+            record.ConstructionSiteId,
+            cancellationToken);
+
         return Map(record);
     }
 
@@ -112,10 +141,85 @@ public sealed class StockBalanceService : IStockBalanceService
                 "Authenticated user was not found.");
     }
 
+    private async Task EnsureSiteAccessAsync(
+        User actor,
+        Guid constructionSiteId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor))
+        {
+            return;
+        }
+
+        if (!actor.CompanyId.HasValue)
+        {
+            throw new StockBalanceManagementException(
+                "Current user is not assigned to a company.");
+        }
+
+        var site = await _dbContext.ConstructionSites
+            .AsNoTracking()
+            .Where(x => x.Id == constructionSiteId)
+            .Select(x => new
+            {
+                x.Id,
+                x.CompanyId
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (site == null ||
+            site.CompanyId != actor.CompanyId.Value)
+        {
+            throw new StockBalanceManagementException(
+                "You are not authorized to access this construction site.");
+        }
+
+        if (HasRole(actor, AppRoles.CompanyAdmin))
+        {
+            return;
+        }
+
+        if (HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            var hasActiveAssignments =
+                await _dbContext.UserSiteAccesses
+                    .AnyAsync(access =>
+                        access.UserId == actor.Id &&
+                        access.CompanyId == site.CompanyId &&
+                        access.IsActive,
+                        cancellationToken);
+
+            if (!hasActiveAssignments)
+            {
+                // Match the existing SiteService behavior.
+                return;
+            }
+
+            var hasSiteAccess =
+                await _dbContext.UserSiteAccesses
+                    .AnyAsync(access =>
+                        access.UserId == actor.Id &&
+                        access.CompanyId == site.CompanyId &&
+                        access.SiteId == site.Id &&
+                        access.IsActive,
+                        cancellationToken);
+
+            if (hasSiteAccess)
+            {
+                return;
+            }
+        }
+
+        throw new StockBalanceManagementException(
+            "You are not assigned to this site.");
+    }
+
     private static void EnsureCanManage(User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
             HasRole(actor, AppRoles.SiteManager))
         {
             return;
@@ -124,6 +228,24 @@ public sealed class StockBalanceService : IStockBalanceService
         throw new StockBalanceManagementException(
             "You are not authorized to access stock balances.");
     }
+
+
+private static void EnsureCanRead(User actor)
+{
+    if (IsSuperAdmin(actor) ||
+        HasRole(actor, AppRoles.CompanyAdmin) ||
+        HasRole(actor, AppRoles.Accountant) ||
+        HasRole(actor, AppRoles.Storekeeper) ||
+        HasRole(actor, AppRoles.ProcurementOfficer) ||
+        HasRole(actor, AppRoles.SiteManager) ||
+        HasRole(actor, AppRoles.Supervisor))
+    {
+        return;
+    }
+
+    throw new StockBalanceManagementException(
+        "You are not authorized to view stock balances.");
+}
 
     private static void EnsureCompanyAccess(
         User actor,
@@ -157,7 +279,7 @@ public sealed class StockBalanceService : IStockBalanceService
     {
         return HasRole(
             actor,
-            AppRoles.SuperAdmin);
+            AppRoles.Administrator);
     }
 
     private static bool HasRole(

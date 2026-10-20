@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../data/models/employee.dart';
 import '../data/repositories/employee_repository.dart';
+import '../../sites/data/models/site.dart';
+import '../../sites/data/repositories/site_repository.dart';
+import '../data/repositories/site_assignment_repository.dart';
+
 
 class EmployeeCreateScreen extends StatefulWidget {
   const EmployeeCreateScreen({super.key, required this.repository});
@@ -31,6 +35,11 @@ class _EmployeeCreateScreenState extends State<EmployeeCreateScreen> {
   final _bankAccountController = TextEditingController();
   final _emergencyNameController = TextEditingController();
   final _emergencyPhoneController = TextEditingController();
+  final _siteRepository = SiteRepository();
+  final _siteAssignmentRepository = SiteAssignmentRepository();
+
+  List<Site> _sites = [];
+  Site? _selectedSite;
 
   DateTime? _dateOfBirth;
   DateTime? _hireDate;
@@ -40,6 +49,26 @@ class _EmployeeCreateScreenState extends State<EmployeeCreateScreen> {
 
   bool _isSaving = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSites();
+  }
+
+  Future<void> _loadSites() async {
+    try {
+      final sites = await _siteRepository.getAll();
+
+      if (!mounted) return;
+
+      setState(() {
+        _sites = sites;
+      });
+    } catch (_) {
+      // Optional: show error later
+    }
+  }
 
   @override
   void dispose() {
@@ -98,6 +127,13 @@ class _EmployeeCreateScreenState extends State<EmployeeCreateScreen> {
       return;
     }
 
+    if (_selectedSite == null) {
+      setState(() {
+        _errorMessage = 'Please select a construction site.';
+      });
+      return;
+    }
+
     final baseWage = double.tryParse(_baseWageController.text.trim());
 
     if (baseWage == null || baseWage < 0) {
@@ -134,6 +170,14 @@ class _EmployeeCreateScreenState extends State<EmployeeCreateScreen> {
         bankAccountNumber: _nullableText(_bankAccountController.text),
         emergencyContactName: _nullableText(_emergencyNameController.text),
         emergencyContactPhone: _nullableText(_emergencyPhoneController.text),
+      );
+
+      await _siteAssignmentRepository.create(
+        employeeId: employee.id,
+        constructionSiteId: _selectedSite!.id,
+        startDate: _hireDate!,
+        roleAtSite: _nullableText(_jobTitleController.text),
+        isPrimaryAssignment: true,
       );
 
       if (!mounted) {
@@ -297,6 +341,24 @@ class _EmployeeCreateScreenState extends State<EmployeeCreateScreen> {
             _buildTextField(
               controller: _departmentController,
               label: 'Department',
+            ),
+            DropdownButtonFormField<Site>(
+              initialValue: _selectedSite,
+              decoration: const InputDecoration(
+                labelText: 'Construction Site',
+                border: OutlineInputBorder(),
+              ),
+              items: _sites.map((site) {
+                return DropdownMenuItem(
+                  value: site,
+                  child: Text(site.name),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() => _selectedSite = value);
+              },
+              validator: (value) =>
+              value == null ? 'Construction site is required.' : null,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<EmployeeType>(

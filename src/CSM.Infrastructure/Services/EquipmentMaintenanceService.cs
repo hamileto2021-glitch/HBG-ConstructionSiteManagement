@@ -531,6 +531,7 @@ public sealed class EquipmentMaintenanceService :
             maintenance.Id,
             maintenance.CompanyId,
             maintenance.EquipmentId,
+
             maintenance.Equipment.EquipmentCode,
             maintenance.Equipment.Name,
             maintenance.MaintenanceType,

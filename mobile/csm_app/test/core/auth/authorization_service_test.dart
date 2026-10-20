@@ -5,9 +5,9 @@ import 'package:csm_app/core/auth/authorization_service.dart';
 
 void main() {
   group('AuthorizationService', () {
-    test('SuperAdmin can access all management policies', () {
+    test('Administrator can access all management policies', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.superAdmin},
+        roles: {AppRoles.administrator},
       );
 
       expect(authorization.canAccessProjectManagement(), isTrue);
@@ -19,38 +19,37 @@ void main() {
       expect(authorization.canAccessProcurementManagement(), isTrue);
     });
 
-    test('CompanyAdmin has verified company management access', () {
+    test('Project Manager has project and site access', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.companyAdmin},
+        roles: {AppRoles.projectManager},
       );
 
       expect(authorization.canAccessProjectManagement(), isTrue);
       expect(authorization.canAccessCompanyManagement(), isFalse);
-      expect(authorization.canAccessUserManagement(), isTrue);
+      expect(authorization.canAccessUserManagement(), isFalse);
       expect(authorization.canAccessSiteManagement(), isTrue);
-      expect(authorization.canAccessHrManagement(), isTrue);
-      expect(authorization.canAccessFinanceManagement(), isTrue);
-      expect(authorization.canAccessProcurementManagement(), isTrue);
+      expect(authorization.canAccessHrManagement(), isFalse);
+      expect(authorization.canAccessFinanceManagement(), isFalse);
+      expect(authorization.canAccessProcurementManagement(), isFalse);
     });
 
-    test('SiteManager can access site, procurement and project management',
-        () {
+    test('Site Engineer can access project and site management', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.siteManager},
+        roles: {AppRoles.siteEngineer},
       );
 
       expect(authorization.canAccessProjectManagement(), isTrue);
       expect(authorization.canAccessSiteManagement(), isTrue);
-      expect(authorization.canAccessProcurementManagement(), isTrue);
       expect(authorization.canAccessCompanyManagement(), isFalse);
       expect(authorization.canAccessUserManagement(), isFalse);
       expect(authorization.canAccessHrManagement(), isFalse);
       expect(authorization.canAccessFinanceManagement(), isFalse);
+      expect(authorization.canAccessProcurementManagement(), isFalse);
     });
 
-    test('Accountant can access finance management only', () {
+    test('Finance Officer can access finance only', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.accountant},
+        roles: {AppRoles.financeOfficer},
       );
 
       expect(authorization.canAccessFinanceManagement(), isTrue);
@@ -62,7 +61,7 @@ void main() {
       expect(authorization.canAccessProcurementManagement(), isFalse);
     });
 
-    test('HROfficer can access HR management only', () {
+    test('HR Officer can access HR only', () {
       const authorization = AuthorizationService(
         roles: {AppRoles.hrOfficer},
       );
@@ -76,23 +75,51 @@ void main() {
       expect(authorization.canAccessProcurementManagement(), isFalse);
     });
 
-    test('Supervisor can access site and project management', () {
+    test('Storekeeper can access procurement only', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.supervisor},
+        roles: {AppRoles.storekeeper},
       );
 
-      expect(authorization.canAccessProjectManagement(), isTrue);
-      expect(authorization.canAccessSiteManagement(), isTrue);
+      expect(authorization.canAccessProcurementManagement(), isTrue);
+      expect(authorization.canAccessProjectManagement(), isFalse);
       expect(authorization.canAccessCompanyManagement(), isFalse);
       expect(authorization.canAccessUserManagement(), isFalse);
+      expect(authorization.canAccessSiteManagement(), isFalse);
+      expect(authorization.canAccessHrManagement(), isFalse);
+      expect(authorization.canAccessFinanceManagement(), isFalse);
+    });
+
+    test('Procurement Officer can access procurement only', () {
+      const authorization = AuthorizationService(
+        roles: {AppRoles.procurementOfficer},
+      );
+
+      expect(authorization.canAccessProcurementManagement(), isTrue);
+      expect(authorization.canAccessProjectManagement(), isFalse);
+      expect(authorization.canAccessCompanyManagement(), isFalse);
+      expect(authorization.canAccessUserManagement(), isFalse);
+      expect(authorization.canAccessSiteManagement(), isFalse);
+      expect(authorization.canAccessHrManagement(), isFalse);
+      expect(authorization.canAccessFinanceManagement(), isFalse);
+    });
+
+    test('Equipment Manager has no legacy management access', () {
+      const authorization = AuthorizationService(
+        roles: {AppRoles.equipmentManager},
+      );
+
+      expect(authorization.canAccessProjectManagement(), isFalse);
+      expect(authorization.canAccessCompanyManagement(), isFalse);
+      expect(authorization.canAccessUserManagement(), isFalse);
+      expect(authorization.canAccessSiteManagement(), isFalse);
       expect(authorization.canAccessHrManagement(), isFalse);
       expect(authorization.canAccessFinanceManagement(), isFalse);
       expect(authorization.canAccessProcurementManagement(), isFalse);
     });
 
-    test('Employee has no management policy access', () {
+    test('Safety Officer has no legacy management access', () {
       const authorization = AuthorizationService(
-        roles: {AppRoles.employee},
+        roles: {AppRoles.safetyOfficer},
       );
 
       expect(authorization.canAccessProjectManagement(), isFalse);

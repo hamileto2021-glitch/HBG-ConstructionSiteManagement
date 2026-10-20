@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.Finance.InvoiceLines;
 using CSM.Application.Finance.InvoiceLines.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class InvoiceLinesController : ControllerBase
 {
     private readonly IInvoiceLineService _invoiceLineService;
@@ -22,6 +21,7 @@ public sealed class InvoiceLinesController : ControllerBase
     }
 
     [HttpGet("invoice/{invoiceId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<InvoiceLineResponse>>> GetByInvoice(
         Guid invoiceId,
@@ -43,6 +43,7 @@ public sealed class InvoiceLinesController : ControllerBase
     }
 
     [HttpGet("{invoiceLineId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.View")]
     public async Task<ActionResult<InvoiceLineResponse>> GetById(
         Guid invoiceLineId,
         CancellationToken cancellationToken)
@@ -63,6 +64,7 @@ public sealed class InvoiceLinesController : ControllerBase
     }
 
     [HttpPost("invoice/{invoiceId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult<InvoiceLineResponse>> Create(
         Guid invoiceId,
         CreateInvoiceLineRequest request,
@@ -88,6 +90,7 @@ public sealed class InvoiceLinesController : ControllerBase
     }
 
     [HttpPut("{invoiceLineId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult<InvoiceLineResponse>> Update(
         Guid invoiceLineId,
         UpdateInvoiceLineRequest request,
@@ -110,6 +113,7 @@ public sealed class InvoiceLinesController : ControllerBase
     }
 
     [HttpDelete("{invoiceLineId:guid}")]
+    [Authorize(Policy = "Finance.Invoice.Manage")]
     public async Task<ActionResult> Delete(
         Guid invoiceLineId,
         CancellationToken cancellationToken)

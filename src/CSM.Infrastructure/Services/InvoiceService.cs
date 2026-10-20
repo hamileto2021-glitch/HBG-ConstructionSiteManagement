@@ -7,6 +7,7 @@ using CSM.Domain.Entities.Identity;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using CSM.Application.Finance.Payments.Dtos;
 
 namespace CSM.Infrastructure.Services;
 
@@ -21,6 +22,7 @@ public sealed class InvoiceService : IInvoiceService
 
     public async Task<IReadOnlyCollection<InvoiceResponse>> GetAllAsync(
         Guid currentUserId,
+        Guid siteId,
         CancellationToken cancellationToken = default)
     {
         var actor = await GetActorAsync(
@@ -29,15 +31,17 @@ public sealed class InvoiceService : IInvoiceService
 
         EnsureCanRead(actor);
 
-        IQueryable<Invoice> query =
-            _dbContext.Invoices.AsNoTracking();
+        IQueryable<Invoice> query = _dbContext.Invoices
+            .AsNoTracking()
+            .Include(x => x.Project)
+            .Where(x => x.Project != null &&
+                        x.Project.ConstructionSiteId == siteId);
 
         if (!IsSuperAdmin(actor))
         {
             var companyId = GetActorCompanyId(actor);
 
-            query = query.Where(
-                x => x.CompanyId == companyId);
+            query = query.Where(x => x.CompanyId == companyId);
         }
 
         var invoices = await query
@@ -46,8 +50,36 @@ public sealed class InvoiceService : IInvoiceService
             .ToListAsync(cancellationToken);
 
         return invoices
-            .Select(Map)
+            .Select(invoice => Map(invoice))
             .ToArray();
+    }
+
+    public async Task<IReadOnlyCollection<InvoiceResponse>> GetCompanyInvoicesAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanRead(actor);
+
+        var companyId = GetActorCompanyId(actor);
+
+        var invoices = await _dbContext.Invoices
+            .AsNoTracking()
+            .Include(i => i.Vendor)
+            .Include(i => i.Project)
+            .Where(i =>
+                i.CompanyId == companyId &&
+                i.ConstructionSiteId == null &&
+                !i.IsDeleted)
+            .OrderByDescending(i => i.InvoiceDate)
+            .ToListAsync(cancellationToken);
+
+        return invoices
+            .Select(i => Map(i))
+            .ToList();
     }
 
     public async Task<InvoiceResponse> GetByIdAsync(
@@ -69,7 +101,11 @@ public sealed class InvoiceService : IInvoiceService
             actor,
             invoice.CompanyId);
 
-        return Map(invoice);
+        var paidAmount = invoice.Payments
+            .Where(p => p.Status == PaymentStatus.Completed)
+            .Sum(p => p.Amount);
+
+        return Map(invoice, paidAmount);
     }
 
     public async Task<InvoiceResponse> CreateAsync(
@@ -332,45 +368,60 @@ public sealed class InvoiceService : IInvoiceService
         CancellationToken cancellationToken)
     {
         return await _dbContext.Invoices
+            .Include(x => x.Payments)
             .SingleOrDefaultAsync(
-                x =>
-                    x.Id == invoiceId &&
-                    !x.IsDeleted,
+                x => x.Id == invoiceId &&
+                     !x.IsDeleted,
                 cancellationToken)
             ?? throw new InvoiceManagementException(
                 "Invoice was not found.");
     }
 
+    private async Task<decimal> GetPaidAmountAsync(
+        Guid invoiceId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Payments
+            .Where(x =>
+                x.InvoiceId == invoiceId &&
+                x.Status == PaymentStatus.Completed &&
+                !x.IsDeleted)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+    }
+
     private async Task EnsureReferencesBelongToCompanyAsync(
         Guid companyId,
-        Guid constructionSiteId,
+        Guid? constructionSiteId,
         Guid? projectId,
         Guid? vendorId,
         InvoiceType type,
         CancellationToken cancellationToken)
     {
-        var siteExists = await _dbContext.ConstructionSites
-            .AnyAsync(
-                x =>
-                    x.Id == constructionSiteId &&
-                    x.CompanyId == companyId &&
-                    !x.IsDeleted,
-                cancellationToken);
-
-        if (!siteExists)
+        // Construction Site (optional for company invoices)
+        if (constructionSiteId.HasValue)
         {
-            throw new InvoiceManagementException(
-                "Construction site was not found or does not belong to the current company.");
+            var siteExists = await _dbContext.ConstructionSites
+                .AnyAsync(
+                    x => x.Id == constructionSiteId.Value &&
+                         x.CompanyId == companyId &&
+                         !x.IsDeleted,
+                    cancellationToken);
+
+            if (!siteExists)
+            {
+                throw new InvoiceManagementException(
+                    "Construction site was not found or does not belong to the current company.");
+            }
         }
 
+        // Project
         if (projectId.HasValue)
         {
             var projectExists = await _dbContext.Projects
                 .AnyAsync(
-                    x =>
-                        x.Id == projectId.Value &&
-                        x.CompanyId == companyId &&
-                        !x.IsDeleted,
+                    x => x.Id == projectId.Value &&
+                         x.CompanyId == companyId &&
+                         !x.IsDeleted,
                     cancellationToken);
 
             if (!projectExists)
@@ -380,14 +431,14 @@ public sealed class InvoiceService : IInvoiceService
             }
         }
 
+        // Vendor
         if (vendorId.HasValue)
         {
             var vendorExists = await _dbContext.Vendors
                 .AnyAsync(
-                    x =>
-                        x.Id == vendorId.Value &&
-                        x.CompanyId == companyId &&
-                        !x.IsDeleted,
+                    x => x.Id == vendorId.Value &&
+                         x.CompanyId == companyId &&
+                         !x.IsDeleted,
                     cancellationToken);
 
             if (!vendorExists)
@@ -397,19 +448,81 @@ public sealed class InvoiceService : IInvoiceService
             }
         }
 
-        if (type == InvoiceType.VendorBill &&
-            !vendorId.HasValue)
+        if (type == InvoiceType.VendorBill && !vendorId.HasValue)
         {
             throw new InvoiceManagementException(
                 "Vendor is required for a Vendor Bill.");
         }
 
-        if (type == InvoiceType.ClientInvoice &&
-            vendorId.HasValue)
+        if (type == InvoiceType.ClientInvoice && vendorId.HasValue)
         {
             throw new InvoiceManagementException(
                 "Vendor must not be specified for a Client Invoice.");
         }
+    }
+
+    public async Task<InvoiceResponse> IssueAsync(
+        Guid currentUserId,
+        Guid invoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        EnsureCanModify(actor);
+
+        var invoice = await GetInvoiceAsync(
+            invoiceId,
+            cancellationToken);
+
+        EnsureCompanyAccess(actor, invoice.CompanyId);
+
+        if (invoice.Status != InvoiceStatus.Draft)
+            throw new InvoiceManagementException(
+                "Only Draft invoices can be issued.");
+
+        invoice.Status = InvoiceStatus.Issued;
+        invoice.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var paid = await GetPaidAmountAsync(
+            invoice.Id,
+            cancellationToken);
+
+        return Map(invoice, paid);
+    }
+
+    public async Task<InvoiceResponse> CancelAsync(
+        Guid currentUserId,
+        Guid invoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanModify(actor);
+
+        var invoice = await GetInvoiceAsync(invoiceId, cancellationToken);
+
+        EnsureCompanyAccess(actor, invoice.CompanyId);
+
+        var paid = await GetPaidAmountAsync(invoice.Id, cancellationToken);
+
+        if (paid > 0)
+            throw new InvoiceManagementException(
+                "Cannot cancel an invoice that has payments.");
+
+        if (invoice.Status == InvoiceStatus.Cancelled)
+            throw new InvoiceManagementException(
+                "Invoice is already cancelled.");
+
+        invoice.Status = InvoiceStatus.Cancelled;
+        invoice.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Map(invoice, paid);
     }
 
     private static void EnsureEditable(
@@ -579,9 +692,62 @@ public sealed class InvoiceService : IInvoiceService
                     roleName,
                     StringComparison.OrdinalIgnoreCase));
     }
+    private static void UpdateInvoiceStatus(Invoice invoice)
+    {
+        if (invoice.PaidAmount <= 0)
+        {
+            invoice.Status = InvoiceStatus.Issued;
+            return;
+        }
+
+        if (invoice.PaidAmount >= invoice.TotalAmount)
+        {
+            invoice.Status = InvoiceStatus.Paid;
+            return;
+        }
+
+        invoice.Status = InvoiceStatus.PartiallyPaid;
+    }
+
+
+
+    private static InvoiceResponse Map(Invoice invoice)
+    {
+        var paidAmount = invoice.Payments?
+            .Where(p => p.Status == PaymentStatus.Completed)
+            .Sum(p => p.Amount) ?? 0m;
+
+        return Map(invoice, paidAmount);
+    }
+    private static PaymentResponse MapPayment(Payment payment)
+    {
+        return new PaymentResponse(
+            payment.Id,
+            payment.CompanyId,
+            payment.ConstructionSiteId,
+            payment.ProjectId,
+            payment.InvoiceId,
+            payment.Invoice?.InvoiceNumber,
+            payment.VendorId,
+            payment.PayrollRecordId,
+            payment.PaymentNumber,
+            payment.PaymentDate,
+            payment.Direction,
+            payment.Amount,
+            payment.CurrencyCode,
+            payment.ExchangeRate,
+            payment.PaymentMethod,
+            payment.ReferenceNumber,
+            payment.Notes,
+            payment.Status,
+            payment.CreatedAtUtc,
+            payment.UpdatedAtUtc      // ← required final parameter
+        );
+    }
 
     private static InvoiceResponse Map(
-        Invoice invoice)
+        Invoice invoice,
+        decimal paidAmount)
     {
         return new InvoiceResponse(
             invoice.Id,
@@ -596,12 +762,20 @@ public sealed class InvoiceService : IInvoiceService
             invoice.Subtotal,
             invoice.TaxAmount,
             invoice.TotalAmount,
+            paidAmount,
+            invoice.TotalAmount - paidAmount,
             invoice.CurrencyCode,
             invoice.ExchangeRate,
             invoice.Status,
             invoice.Description,
             invoice.ExternalReference,
             invoice.CreatedAtUtc,
-            invoice.UpdatedAtUtc);
+            invoice.UpdatedAtUtc,   // ← comma required
+
+            invoice.Payments
+                .OrderByDescending(p => p.PaymentDate)
+                .Select(MapPayment)
+                .ToList()
+        );
     }
 }

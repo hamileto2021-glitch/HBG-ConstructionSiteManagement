@@ -11,7 +11,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class PurchaseOrdersController : ControllerBase
 {
     private readonly IPurchaseOrderService _purchaseOrderService;
@@ -23,6 +23,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Procurement.PurchaseOrder.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<PurchaseOrderResponse>>> GetAll(
         [FromQuery] Guid? constructionSiteId,
@@ -49,6 +50,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpGet("{purchaseOrderId:guid}")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.View")]
     public async Task<ActionResult<PurchaseOrderResponse>> GetById(
         Guid purchaseOrderId,
         CancellationToken cancellationToken)
@@ -70,6 +72,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Manage")]
     public async Task<ActionResult<PurchaseOrderResponse>> Create(
         [FromBody] CreatePurchaseOrderRequest request,
         CancellationToken cancellationToken)
@@ -94,6 +97,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPut("{purchaseOrderId:guid}")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Manage")]
     public async Task<ActionResult<PurchaseOrderResponse>> Update(
         Guid purchaseOrderId,
         [FromBody] UpdatePurchaseOrderRequest request,
@@ -117,6 +121,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost("{purchaseOrderId:guid}/submit")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Manage")]
     public async Task<ActionResult<PurchaseOrderResponse>> Submit(
         Guid purchaseOrderId,
         CancellationToken cancellationToken)
@@ -138,6 +143,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost("{purchaseOrderId:guid}/approve")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Approve")]
     public async Task<ActionResult<PurchaseOrderResponse>> Approve(
         Guid purchaseOrderId,
         CancellationToken cancellationToken)
@@ -159,6 +165,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost("{purchaseOrderId:guid}/send-to-vendor")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Manage")]
     public async Task<ActionResult<PurchaseOrderResponse>> SendToVendor(
         Guid purchaseOrderId,
         CancellationToken cancellationToken)
@@ -180,6 +187,7 @@ public sealed class PurchaseOrdersController : ControllerBase
     }
 
     [HttpPost("{purchaseOrderId:guid}/cancel")]
+    [Authorize(Policy = "Procurement.PurchaseOrder.Manage")]
     public async Task<ActionResult<PurchaseOrderResponse>> Cancel(
         Guid purchaseOrderId,
         CancellationToken cancellationToken)

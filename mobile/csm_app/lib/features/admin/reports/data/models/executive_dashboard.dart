@@ -1,52 +1,41 @@
 class ExecutiveDashboard {
   const ExecutiveDashboard({
-    required this.totalSites,
-    required this.activeSites,
-    required this.totalProjects,
-    required this.totalContractValue,
+    required this.activeProjects,
+    required this.completedProjects,
     required this.totalBudget,
     required this.totalExpenses,
-    required this.totalInvoices,
-    required this.totalCompletedPayments,
-    required this.outstandingInvoices,
-    required this.sitesByStatus,
-    required this.projectsByStatus,
+    required this.budgetUtilization,
+    required this.openDelays,
+    required this.totalEmployees,
+    required this.lowStockItems,
+    required this.openSafetyIncidents,
+    required this.generatedAtUtc,
   });
 
-  final int totalSites;
-  final int activeSites;
-  final int totalProjects;
-
-  final double totalContractValue;
+  final int activeProjects;
+  final int completedProjects;
   final double totalBudget;
   final double totalExpenses;
-  final double totalInvoices;
-  final double totalCompletedPayments;
-  final double outstandingInvoices;
-
-  final Map<String, int> sitesByStatus;
-  final Map<String, int> projectsByStatus;
+  final double budgetUtilization;
+  final int openDelays;
+  final int totalEmployees;
+  final int lowStockItems;
+  final int openSafetyIncidents;
+  final DateTime generatedAtUtc;
 
   factory ExecutiveDashboard.fromJson(Map<String, dynamic> json) {
     return ExecutiveDashboard(
-      totalSites: json['totalSites'] as int,
-      activeSites: json['activeSites'] as int,
-      totalProjects: json['totalProjects'] as int,
-      totalContractValue:
-      (json['totalContractValue'] as num).toDouble(),
+      activeProjects: json['activeProjects'],
+      completedProjects: json['completedProjects'],
       totalBudget: (json['totalBudget'] as num).toDouble(),
       totalExpenses: (json['totalExpenses'] as num).toDouble(),
-      totalInvoices: (json['totalInvoices'] as num).toDouble(),
-      totalCompletedPayments:
-      (json['totalCompletedPayments'] as num).toDouble(),
-      outstandingInvoices:
-      (json['outstandingInvoices'] as num).toDouble(),
-      sitesByStatus: Map<String, int>.from(
-        json['sitesByStatus'] as Map,
-      ),
-      projectsByStatus: Map<String, int>.from(
-        json['projectsByStatus'] as Map,
-      ),
+      budgetUtilization:
+      (json['budgetUtilization'] as num).toDouble(),
+      openDelays: json['openDelays'],
+      totalEmployees: json['totalEmployees'],
+      lowStockItems: json['lowStockItems'],
+      openSafetyIncidents: json['openSafetyIncidents'],
+      generatedAtUtc: DateTime.parse(json['generatedAtUtc']),
     );
   }
 }

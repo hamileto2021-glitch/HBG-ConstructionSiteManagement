@@ -24,7 +24,9 @@ public class BudgetLineConfiguration :
         {
             x.BudgetId,
             x.CostCodeId
-        }).IsUnique();
+        })
+        .IsUnique()
+        .HasFilter("[IsDeleted] = 0");
 
         builder.HasOne(x => x.Budget)
             .WithMany(x => x.Lines)

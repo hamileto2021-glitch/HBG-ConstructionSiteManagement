@@ -4,23 +4,25 @@ using CSM.Domain.Enums;
 
 namespace CSM.Domain.Entities.Notifications;
 
-public class Notification : TenantEntity
+public sealed class Notification : TenantEntity
 {
-    public Guid UserId { get; set; }
+    public Guid RecipientUserId { get; set; }
 
     public string Title { get; set; } = string.Empty;
 
     public string Message { get; set; } = string.Empty;
 
-    public NotificationType Type { get; set; } = NotificationType.Info;
+    public NotificationSeverity Severity { get; set; }
 
     public bool IsRead { get; set; }
 
     public DateTime? ReadAtUtc { get; set; }
 
-    public string? RelatedEntityType { get; set; }
+    public string? SourceEntityType { get; set; }
 
-    public Guid? RelatedEntityId { get; set; }
+    public Guid? SourceEntityId { get; set; }
 
-    public User User { get; set; } = null!;
+    public User RecipientUser { get; set; } = null!;
+
+    public string? LinkUrl { get; set; }
 }

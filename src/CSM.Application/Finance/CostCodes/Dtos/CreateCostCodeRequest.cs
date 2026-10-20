@@ -4,4 +4,5 @@ public sealed record CreateCostCodeRequest(
     string Code,
     string Name,
     string? Description,
-    Guid? ParentCostCodeId);
+    Guid? ParentCostCodeId,
+    Guid? ConstructionSiteId);

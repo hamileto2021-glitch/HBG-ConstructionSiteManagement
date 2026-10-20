@@ -1,4 +1,5 @@
 using CSM.Domain.Common;
+using CSM.Domain.Enums;
 
 namespace CSM.Domain.Entities.Projects;
 
@@ -16,9 +17,14 @@ public class Milestone : TenantEntity
 
     public DateOnly PlannedDate { get; set; }
 
-    public DateOnly? CompletedDate { get; set; }
+    public DateOnly? ActualDate { get; set; }
 
-    public bool IsCompleted { get; set; }
+    public MilestoneStatus Status { get; set; }
+        = MilestoneStatus.Pending;
+
+    public decimal ProgressPercentage { get; set; }
+
+    public string? Notes { get; set; }
 
     public Project Project { get; set; } = null!;
 

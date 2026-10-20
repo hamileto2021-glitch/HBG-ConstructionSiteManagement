@@ -12,6 +12,8 @@ import 'payroll_list_screen.dart';
 import 'site_assignment_list_screen.dart';
 import 'timesheet_list_screen.dart';
 import '../data/repositories/timesheet_repository.dart';
+import '../../payroll/salary_structure/presentation/salary_structure_screen.dart';
+
 
 class HrDashboardScreen extends StatelessWidget {
   const HrDashboardScreen({
@@ -103,7 +105,8 @@ class HrDashboardScreen extends StatelessWidget {
                 ),
               );
             },
-          ),          _buildModuleCard(
+          ),
+          _buildModuleCard(
             context,
             icon: Icons.access_time_outlined,
             title: 'Timesheets',
@@ -115,6 +118,22 @@ class HrDashboardScreen extends StatelessWidget {
                   builder: (_) => TimesheetListScreen(
                     repository: TimesheetRepository(),
                   ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+          _buildModuleCard(
+            context,
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Salary Structure',
+            description:
+            'Define employee salary, allowances, pension, and bank details.',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SalaryStructureScreen(),
                 ),
               );
             },

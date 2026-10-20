@@ -38,7 +38,7 @@ class _CostCodeListScreenState
 
     try {
       final costCodes =
-          await widget.repository.getAll();
+      await widget.repository.getAll();
 
       if (!mounted) return;
 
@@ -56,6 +56,30 @@ class _CostCodeListScreenState
     }
   }
 
+  String _parentDisplayName(
+      String? parentCostCodeId,
+      ) {
+    if (parentCostCodeId == null ||
+        parentCostCodeId.isEmpty) {
+      return '—';
+    }
+
+    CostCode? parent;
+
+    for (final costCode in _costCodes) {
+      if (costCode.id == parentCostCodeId) {
+        parent = costCode;
+        break;
+      }
+    }
+
+    if (parent == null) {
+      return '—';
+    }
+
+    return '${parent.code} - ${parent.name}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,16 +89,16 @@ class _CostCodeListScreenState
           IconButton(
             tooltip: 'Refresh',
             onPressed:
-                _isLoading ? null : _loadCostCodes,
+            _isLoading ? null : _loadCostCodes,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       floatingActionButton:
-          FloatingActionButton.extended(
+      FloatingActionButton.extended(
         onPressed: () async {
           final created =
-              await Navigator.of(context).push<bool>(
+          await Navigator.of(context).push<bool>(
             MaterialPageRoute(
               builder: (_) => CostCodeCreateScreen(
                 repository: widget.repository,
@@ -133,7 +157,7 @@ class _CostCodeListScreenState
         onRefresh: _loadCostCodes,
         child: ListView(
           physics:
-              const AlwaysScrollableScrollPhysics(),
+          const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(height: 120),
             Icon(
@@ -162,17 +186,23 @@ class _CostCodeListScreenState
         ),
         itemCount: _costCodes.length,
         itemBuilder: (context, index) {
+          final costCode = _costCodes[index];
+
           return _CostCodeCard(
-            costCode: _costCodes[index],
+            costCode: costCode,
+            parentDisplayName:
+            _parentDisplayName(
+              costCode.parentCostCodeId,
+            ),
             onTap: () async {
               final updated =
-                  await Navigator.of(context).push<bool>(
+              await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (_) =>
                       CostCodeDetailScreen(
-                    costCode: _costCodes[index],
-                    repository: widget.repository,
-                  ),
+                        costCode: costCode,
+                        repository: widget.repository,
+                      ),
                 ),
               );
 
@@ -190,10 +220,12 @@ class _CostCodeListScreenState
 class _CostCodeCard extends StatelessWidget {
   const _CostCodeCard({
     required this.costCode,
+    required this.parentDisplayName,
     required this.onTap,
   });
 
   final CostCode costCode;
+  final String parentDisplayName;
   final VoidCallback onTap;
 
   @override
@@ -209,7 +241,7 @@ class _CostCodeCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment:
-                CrossAxisAlignment.start,
+            CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -218,7 +250,7 @@ class _CostCodeCard extends StatelessWidget {
                     height: 48,
                     decoration: BoxDecoration(
                       borderRadius:
-                          BorderRadius.circular(12),
+                      BorderRadius.circular(12),
                       color: theme
                           .colorScheme
                           .primaryContainer,
@@ -234,7 +266,7 @@ class _CostCodeCard extends StatelessWidget {
                   Expanded(
                     child: Column(
                       crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      CrossAxisAlignment.start,
                       children: [
                         Text(
                           costCode.code,
@@ -249,9 +281,9 @@ class _CostCodeCard extends StatelessWidget {
                               .textTheme
                               .titleMedium
                               ?.copyWith(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
+                            fontWeight:
+                            FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -263,7 +295,7 @@ class _CostCodeCard extends StatelessWidget {
                           : 'Inactive',
                     ),
                     visualDensity:
-                        VisualDensity.compact,
+                    VisualDensity.compact,
                   ),
                 ],
               ),
@@ -271,13 +303,11 @@ class _CostCodeCard extends StatelessWidget {
               _InfoRow(
                 label: 'Description',
                 value:
-                    costCode.description ?? '—',
+                costCode.description ?? '—',
               ),
               _InfoRow(
                 label: 'Parent',
-                value:
-                    costCode.parentCostCodeId ??
-                        '—',
+                value: parentDisplayName,
               ),
               const SizedBox(height: 8),
               Row(
@@ -294,7 +324,7 @@ class _CostCodeCard extends StatelessWidget {
                         ? 'Active'
                         : 'Inactive',
                     style:
-                        theme.textTheme.bodyMedium,
+                    theme.textTheme.bodyMedium,
                   ),
                 ],
               ),
@@ -319,10 +349,10 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding:
-          const EdgeInsets.only(bottom: 6),
+      const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 100,

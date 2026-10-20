@@ -1,4 +1,5 @@
 using CSM.Domain.Common;
+using CSM.Domain.Entities.Organization;
 
 namespace CSM.Domain.Entities.Finance;
 
@@ -12,6 +13,10 @@ public class CostCode : TenantEntity
 
     public Guid? ParentCostCodeId { get; set; }
 
+    public Guid? ConstructionSiteId { get; set; }
+
+    public ConstructionSite? ConstructionSite { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public CostCode? ParentCostCode { get; set; }
@@ -24,4 +29,7 @@ public class CostCode : TenantEntity
 
     public ICollection<Expense> Expenses { get; set; }
         = new List<Expense>();
+
+    public ICollection<InvoiceLine> InvoiceLines { get; set; }
+        = new List<InvoiceLine>();
 }

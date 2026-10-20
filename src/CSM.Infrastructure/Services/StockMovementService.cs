@@ -50,6 +50,25 @@ public sealed class StockMovementService : IStockMovementService
                 x => x.CompanyId == companyId);
         }
 
+        if (HasRole(actor, AppRoles.SiteManager))
+        {
+            var activeSiteIds = await _dbContext.UserSiteAccesses
+                .Where(access =>
+                    access.UserId == actor.Id &&
+                    access.CompanyId == actor.CompanyId &&
+                    access.IsActive)
+                .Select(access => access.SiteId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (activeSiteIds.Count > 0)
+            {
+                query = query.Where(
+                    x => activeSiteIds.Contains(
+                        x.StockItem.ConstructionSiteId));
+            }
+        }
+
         if (constructionSiteId.HasValue)
         {
             query = query.Where(
@@ -99,7 +118,7 @@ public sealed class StockMovementService : IStockMovementService
                 cancellationToken);
 
         return records
-            .Select(Map)
+            .Select(record => Map(record))
             .ToArray();
     }
 
@@ -125,7 +144,70 @@ public sealed class StockMovementService : IStockMovementService
             actor,
             record.CompanyId);
 
-        return Map(record);
+        if (HasRole(actor, AppRoles.SiteManager))
+        {
+            var hasActiveAssignments =
+                await _dbContext.UserSiteAccesses
+                    .AnyAsync(access =>
+                        access.UserId == actor.Id &&
+                        access.CompanyId == record.CompanyId &&
+                        access.IsActive,
+                        cancellationToken);
+
+            if (hasActiveAssignments)
+            {
+                var hasSiteAccess =
+                    await _dbContext.UserSiteAccesses
+                        .AnyAsync(access =>
+                            access.UserId == actor.Id &&
+                            access.CompanyId == record.CompanyId &&
+                            access.SiteId ==
+                                record.StockItem.ConstructionSiteId &&
+                            access.IsActive,
+                            cancellationToken);
+
+                if (!hasSiteAccess)
+                {
+                    throw new StockMovementManagementException(
+                        "You are not assigned to this construction site.");
+                }
+            }
+        }
+
+        string? moveFrom = null;
+        string? moveTo = null;
+
+        if (record.ReferenceType == "StockTransfer")
+        {
+            if (record.MovementType == StockMovementType.TransferOut)
+            {
+                moveFrom = record.StockItem.ConstructionSite.Name;
+
+                moveTo = await _dbContext.StockMovements
+                    .AsNoTracking()
+                    .Include(x => x.StockItem)
+                        .ThenInclude(x => x.ConstructionSite)
+                    .Where(x => x.ReferenceId == record.Id)
+                    .Select(x => x.StockItem.ConstructionSite.Name)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+            else if (record.MovementType == StockMovementType.TransferIn &&
+                     record.ReferenceId.HasValue)
+            {
+                var source = await _dbContext.StockMovements
+                    .AsNoTracking()
+                    .Include(x => x.StockItem)
+                        .ThenInclude(x => x.ConstructionSite)
+                    .FirstOrDefaultAsync(
+                        x => x.Id == record.ReferenceId.Value,
+                        cancellationToken);
+
+                moveFrom = source?.StockItem.ConstructionSite.Name;
+                moveTo = record.StockItem.ConstructionSite.Name;
+            }
+        }
+
+        return Map(record, moveFrom, moveTo);
     }
 
     private IQueryable<StockMovement> BuildQuery()
@@ -156,7 +238,8 @@ public sealed class StockMovementService : IStockMovementService
         User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Storekeeper) ||
+            HasRole(actor, AppRoles.ProcurementOfficer) ||
             HasRole(actor, AppRoles.SiteManager))
         {
             return;
@@ -200,7 +283,7 @@ public sealed class StockMovementService : IStockMovementService
     {
         return HasRole(
             actor,
-            AppRoles.SuperAdmin);
+            AppRoles.Administrator);
     }
 
     private static bool HasRole(
@@ -231,7 +314,9 @@ public sealed class StockMovementService : IStockMovementService
     }
 
     private static StockMovementResponse Map(
-        StockMovement record)
+        StockMovement record,
+        string? moveFrom = null,
+        string? moveTo = null)
     {
         return new StockMovementResponse
         {
@@ -245,6 +330,9 @@ public sealed class StockMovementService : IStockMovementService
 
             SiteName =
                 record.StockItem.ConstructionSite.Name,
+
+                MoveFrom = moveFrom,
+                MoveTo = moveTo,
 
             MaterialId =
                 record.StockItem.MaterialId,

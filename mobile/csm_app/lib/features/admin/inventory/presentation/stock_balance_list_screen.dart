@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../data/models/stock_balance.dart';
 import '../data/repositories/stock_balance_repository.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
 
 class StockBalanceListScreen extends StatefulWidget {
   const StockBalanceListScreen({
@@ -69,6 +73,20 @@ class _StockBalanceListScreenState
   String _formatCost(double value) {
     return value.toStringAsFixed(2);
   }
+
+  int get _lowStockCount =>
+      _balances.where((e) => e.isLowStock).length;
+
+  int get _siteCount =>
+      _balances.map((e) => e.siteName).toSet().length;
+
+  double get _inventoryValue =>
+      _balances.fold(
+        0,
+            (sum, e) =>
+        sum +
+            (e.quantityOnHand * e.averageUnitCost),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -145,6 +163,111 @@ class _StockBalanceListScreenState
             ),
           ),
         ],
+      );
+    }
+
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _InventoryKpiCard(
+                  title: 'Materials',
+                  value: '${_balances.length}',
+                  icon: Icons.inventory_2,
+                  color: Colors.blue,
+                ),
+                _InventoryKpiCard(
+                  title: 'Low Stock',
+                  value: '$_lowStockCount',
+                  icon: Icons.warning_amber,
+                  color: Colors.red,
+                ),
+                _InventoryKpiCard(
+                  title: 'Sites',
+                  value: '$_siteCount',
+                  icon: Icons.location_city,
+                  color: Colors.green,
+                ),
+                _InventoryKpiCard(
+                  title: 'Value',
+                  value: _inventoryValue.toStringAsFixed(0),
+                  icon: Icons.account_balance_wallet,
+                  color: Colors.orange,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'Material',
+                  value: (r) => r['material'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Site',
+                  value: (r) => r['site'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Available',
+                  value: (r) => r['available'] as String,
+                  numeric: true,
+                ),
+                AdaptiveColumn(
+                  label: 'Unit',
+                  value: (r) => r['unit'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Status',
+                  value: (r) => r['status'] as String,
+                ),
+              ],
+              rows: _balances.map((balance) {
+                return {
+                  'item': balance,
+                  'material': balance.materialName,
+                  'site': balance.siteName,
+                  'available': _formatQuantity(balance.availableQuantity),
+                  'unit': balance.unitOfMeasure,
+                  'status':
+                  balance.isLowStock ? 'Low Stock' : 'Available',
+                };
+              }).toList(),
+              onRowTap: (row) {
+                final balance = row['item'] as StockBalance;
+
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: Text(balance.materialName),
+                    content: Text(
+                      'Site: ${balance.siteName}\n'
+                          'Available: ${_formatQuantity(balance.availableQuantity)} '
+                          '${balance.unitOfMeasure}',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       );
     }
 
@@ -319,6 +442,52 @@ class _BalanceValue extends StatelessWidget {
               : theme.textTheme.titleMedium,
         ),
       ],
+    );
+  }
+}
+
+class _InventoryKpiCard extends StatelessWidget {
+  const _InventoryKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              title,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

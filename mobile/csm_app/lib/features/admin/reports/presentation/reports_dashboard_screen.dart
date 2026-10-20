@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/auth/app_roles.dart';
+import '../../../../core/auth/authorization_service.dart';
 import '../data/models/executive_dashboard.dart';
-import '../data/models/financial_summary.dart';
 import '../data/repositories/reports_repository.dart';
+import 'tabs/equipment_report_tab.dart';
+import 'tabs/executive_report_tab.dart';
+import 'tabs/financial_report_tab.dart';
+import 'tabs/hr_report_tab.dart';
+import 'tabs/project_report_tab.dart';
 
 class ReportsDashboardScreen extends StatefulWidget {
-  const ReportsDashboardScreen({super.key});
+  const ReportsDashboardScreen({
+    super.key,
+    required this.roles,
+  });
+
+  final Set<String> roles;
 
   @override
   State<ReportsDashboardScreen> createState() =>
@@ -17,7 +28,6 @@ class _ReportsDashboardScreenState
   final _repository = ReportsRepository();
 
   ExecutiveDashboard? _executive;
-  FinancialSummary? _financial;
 
   bool _loading = true;
 
@@ -33,116 +43,22 @@ class _ReportsDashboardScreenState
     try {
       final executive =
       await _repository.getExecutiveDashboard();
-      final financial =
-      await _repository.getFinancialSummary();
 
-      _executive = executive;
-      _financial = financial;
+      if (!mounted) return;
+
+      setState(() {
+        _executive = executive;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
-    }
+      if (!mounted) return;
 
-    if (mounted) {
       setState(() => _loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
-  }
-
-  String money(double value) =>
-      value.toStringAsFixed(2);
-
-  Widget kpi(
-      String title,
-      String value,
-      IconData icon,
-      Color color,
-      ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.15),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight:
-                      FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget statusCard(
-      String title,
-      Map<String, int> data,
-      ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium,
-            ),
-            const Divider(),
-            ...data.entries.map(
-                  (e) => Padding(
-                padding:
-                const EdgeInsets.symmetric(
-                  vertical: 4,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(e.key),
-                    ),
-                    Text(
-                      e.value.toString(),
-                      style: const TextStyle(
-                        fontWeight:
-                        FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -155,118 +71,91 @@ class _ReportsDashboardScreenState
       );
     }
 
-    if (_executive == null || _financial == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text('Unable to load reports'),
+    if (_executive == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Reports')),
+        body: const Center(
+          child: Text('Unable to load dashboard'),
         ),
       );
     }
 
     final e = _executive!;
-    final f = _financial!;
+    final roles = widget.roles;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reports & Analytics'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              'Executive Dashboard',
-              style:
-              Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
+    final authorization = AuthorizationService(
+      roles: roles,
+    );
 
-            kpi(
-              'Construction Sites',
-              e.totalSites.toString(),
-              Icons.location_city,
-              Colors.blue,
-            ),
-            kpi(
-              'Active Sites',
-              e.activeSites.toString(),
-              Icons.check_circle,
-              Colors.green,
-            ),
-            kpi(
-              'Projects',
-              e.totalProjects.toString(),
-              Icons.assignment,
-              Colors.deepPurple,
-            ),
-            kpi(
-              'Contract Value',
-              money(e.totalContractValue),
-              Icons.account_balance,
-              Colors.indigo,
-            ),
+    final tabs = <Tab>[];
+    final pages = <Widget>[];
 
-            const SizedBox(height: 16),
+    // Executive
+    if (roles.contains(AppRoles.administrator) ||
+        roles.contains(AppRoles.projectManager)) {
+      tabs.add(const Tab(text: 'Executive'));
+      pages.add(
+        ExecutiveReportTab(
+          executive: e,
+        ),
+      );
+    }
 
-            Text(
-              'Financial Summary',
-              style:
-              Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
+    // Projects
+    if (authorization.canAccessProjectManagement()) {
+      tabs.add(const Tab(text: 'Projects'));
+      pages.add(const ProjectReportTab());
+    }
 
-            kpi(
-              'Total Budget',
-              money(f.totalBudget),
-              Icons.account_balance_wallet,
-              Colors.green,
-            ),
-            kpi(
-              'Expenses',
-              money(f.totalExpenses),
-              Icons.money_off,
-              Colors.red,
-            ),
-            kpi(
-              'Invoices',
-              money(f.totalInvoices),
-              Icons.receipt_long,
-              Colors.orange,
-            ),
-            kpi(
-              'Payments',
-              money(f.totalCompletedPayments),
-              Icons.payments,
-              Colors.teal,
-            ),
-            kpi(
-              'Receivables',
-              money(f.outstandingReceivables),
-              Icons.trending_up,
-              Colors.blue,
-            ),
-            kpi(
-              'Payables',
-              money(f.outstandingPayables),
-              Icons.trending_down,
-              Colors.deepOrange,
-            ),
+    // Financial
+    if (authorization.canAccessFinanceManagement()) {
+      tabs.add(const Tab(text: 'Financial'));
+      pages.add(const FinancialReportTab());
+    }
 
-            const SizedBox(height: 20),
+    // Equipment
+    if (authorization.canAccessEquipmentManagement()) {
+      tabs.add(const Tab(text: 'Equipment'));
+      pages.add(const EquipmentReportTab());
+    }
 
-            statusCard(
-              'Sites by Status',
-              e.sitesByStatus,
-            ),
+    // HR
+    if (authorization.canAccessHrManagement()) {
+      tabs.add(const Tab(text: 'HR'));
+      pages.add(const HrReportTab());
+    }
 
-            const SizedBox(height: 12),
+    // Storekeeper / Procurement
+    if (roles.contains(AppRoles.storekeeper) ||
+        roles.contains(AppRoles.procurementOfficer)) {
+      tabs.add(const Tab(text: 'Inventory'));
+      pages.add(const ProjectReportTab());
+    }
 
-            statusCard(
-              'Projects by Status',
-              e.projectsByStatus,
+    // Safety
+    if (roles.contains(AppRoles.safetyOfficer)) {
+      tabs.add(const Tab(text: 'Compliance'));
+      pages.add(const ProjectReportTab());
+    }
+
+    return DefaultTabController(
+      length: tabs.length,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Reports & Analytics'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _load,
             ),
           ],
+          bottom: TabBar(
+            isScrollable: true,
+            tabs: tabs,
+          ),
+        ),
+        body: TabBarView(
+          children: pages,
         ),
       ),
     );

@@ -1,0 +1,11 @@
+﻿{
+  "materialCode": "MAT-001",
+  "name": "Ordinary Portland Cement 42.5R",
+  "description": "50kg bag of OPC 42.5R cement for construction",
+  "category": "Cement",
+  "unitOfMeasure": "Bag",
+  "materialType": 0,
+  "defaultCostCodeId": null,
+  "standardUnitCost": 1325.5000,
+  "isActive": true
+}

@@ -126,25 +126,16 @@ class _AttendanceCheckInScreenState
   }
 
   Future<void> _checkIn() async {
-    if (_selectedEmployee == null) {
-      setState(() {
-        _errorMessage = 'Please select an employee.';
-      });
-      return;
-    }
-
-    if (_selectedSite == null) {
-      setState(() {
-        _errorMessage = 'Please select a construction site.';
-      });
-      return;
-    }
-
-    if (_position == null) {
-      setState(() {
-        _errorMessage =
-        'Please capture your current location before checking in.';
-      });
+    if (_selectedEmployee == null ||
+        _selectedSite == null ||
+        _position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Employee, Site and GPS location are required.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -154,6 +145,8 @@ class _AttendanceCheckInScreenState
     });
 
     try {
+      debugPrint('CHECK-IN STARTED');
+
       await widget.attendanceRepository.checkIn(
         employeeId: _selectedEmployee!.id,
         constructionSiteId: _selectedSite!.id,
@@ -167,26 +160,30 @@ class _AttendanceCheckInScreenState
             : _remarksController.text.trim(),
       );
 
-      if (!mounted) {
-        return;
-      }
+      debugPrint('CHECK-IN SUCCESS');
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Attendance check-in successful.'),
+          content: Text('Attendance checked in successfully.'),
         ),
       );
+    } catch (e) {
+      debugPrint('CHECK-IN ERROR: $e');
 
-      Navigator.of(context).pop(true);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _isLoading = false;
-        _errorMessage = error.toString();
+        _errorMessage = e.toString();
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
   }
 

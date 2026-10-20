@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.FinanceManagement)]
+[Authorize]
 public sealed class BudgetsController : ControllerBase
 {
     private readonly IBudgetService _budgetService;
@@ -22,6 +22,7 @@ public sealed class BudgetsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Finance.Budget.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<BudgetResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -40,16 +41,40 @@ public sealed class BudgetsController : ControllerBase
         }
     }
 
-    [HttpGet("{budgetId:guid}")]
+    [HttpGet("~/api/ConstructionSites/{siteId:guid}/budgets")]
+    [Authorize(Policy = "Finance.Budget.View")]
+    public async Task<ActionResult<IReadOnlyCollection<BudgetResponse>>> GetBySite(
+        Guid siteId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var budgets = await _budgetService.GetBySiteAsync(
+                GetCurrentUserId(),
+                siteId,
+                cancellationToken);
+
+            return Ok(budgets);
+        }
+        catch (BudgetManagementException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "Finance.Budget.View")]
     public async Task<ActionResult<BudgetResponse>> GetById(
-        Guid budgetId,
+        Guid id,
         CancellationToken cancellationToken)
     {
         try
         {
             var budget = await _budgetService.GetByIdAsync(
                 GetCurrentUserId(),
-                budgetId,
+                id,
                 cancellationToken);
 
             return Ok(budget);
@@ -60,7 +85,9 @@ public sealed class BudgetsController : ControllerBase
         }
     }
 
+
     [HttpPost]
+    [Authorize(Policy = "Finance.Budget.Manage")]
     public async Task<ActionResult<BudgetResponse>> Create(
         CreateBudgetRequest request,
         CancellationToken cancellationToken)
@@ -74,7 +101,7 @@ public sealed class BudgetsController : ControllerBase
 
             return CreatedAtAction(
                 nameof(GetById),
-                new { budgetId = budget.Id },
+                new { id = budget.Id },
                 budget);
         }
         catch (BudgetManagementException ex)
@@ -84,6 +111,7 @@ public sealed class BudgetsController : ControllerBase
     }
 
     [HttpPut("{budgetId:guid}")]
+    [Authorize(Policy = "Finance.Budget.Manage")]
     public async Task<ActionResult<BudgetResponse>> Update(
         Guid budgetId,
         UpdateBudgetRequest request,
@@ -101,11 +129,14 @@ public sealed class BudgetsController : ControllerBase
         }
         catch (BudgetManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 
     [HttpPut("{budgetId:guid}/status")]
+    [Authorize(Policy = "Finance.Budget.Manage")]
     public async Task<ActionResult<BudgetResponse>> ChangeStatus(
         Guid budgetId,
         ChangeBudgetStatusRequest request,
@@ -123,7 +154,9 @@ public sealed class BudgetsController : ControllerBase
         }
         catch (BudgetManagementException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
         }
     }
 

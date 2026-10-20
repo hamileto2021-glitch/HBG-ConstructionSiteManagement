@@ -11,8 +11,13 @@
 class Project {
   const Project({
     required this.id,
+
     required this.companyId,
+    required this.companyName,
+
     required this.constructionSiteId,
+    required this.constructionSiteName,
+
     required this.projectCode,
     required this.name,
     required this.contractValue,
@@ -28,6 +33,8 @@ class Project {
 
   final String id;
   final String companyId;
+  final String companyName;
+  final String constructionSiteName;
   final String constructionSiteId;
   final String projectCode;
   final String name;
@@ -44,8 +51,14 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
       id: json['id'] as String,
+
       companyId: json['companyId'] as String,
+      companyName: json['companyName'] as String,
+
       constructionSiteId: json['constructionSiteId'] as String,
+      constructionSiteName:
+      json['constructionSiteName'] as String,
+
       projectCode: json['projectCode'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,

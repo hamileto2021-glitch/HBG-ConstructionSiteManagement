@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../data/models/leave.dart';
@@ -23,6 +24,24 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   String? _error;
   List<Leave> _leaves = [];
 
+  int get _pending =>
+      _leaves
+          .where((e) => e.status == LeaveStatus.pending)
+          .length;
+
+  int get _approved =>
+      _leaves
+          .where((e) => e.status == LeaveStatus.approved)
+          .length;
+
+  int get _rejected =>
+      _leaves
+          .where((e) => e.status == LeaveStatus.rejected)
+          .length;
+
+  double get _leaveDays =>
+      _leaves.fold(0, (s, e) => s + e.numberOfDays);
+
   @override
   void initState() {
     super.initState();
@@ -38,18 +57,14 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     try {
       final leaves = await widget.repository.getAll();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _leaves = leaves;
         _isLoading = false;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _error = error.toString();
@@ -72,6 +87,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       await _loadLeaves();
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,7 +116,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   Widget _buildBody(BuildContext context) {
     if (_isLoading && _leaves.isEmpty) {
       return ListView(
-        children: [
+        children: const [
           SizedBox(
             height: 300,
             child: Center(
@@ -115,10 +131,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       return ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Icon(
-            Icons.error_outline,
-            size: 48,
-          ),
+          const Icon(Icons.error_outline, size: 48),
           const SizedBox(height: 16),
           Text(
             'Unable to load leave requests.',
@@ -144,36 +157,72 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       return ListView(
         children: const [
           SizedBox(height: 180),
+          Icon(Icons.event_busy_outlined, size: 64),
+          SizedBox(height: 16),
           Center(
-            child: Text(
-              'No leave requests found.',
-            ),
+            child: Text('No leave requests found.'),
           ),
         ],
       );
     }
 
-    return ListView.separated(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: _leaves.length,
-      separatorBuilder: (_, _) =>
-          const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        return _buildLeaveCard(
-          context,
-          _leaves[index],
-        );
-      },
+      children: [
+        _buildSummaryCards(),
+        const SizedBox(height: 16),
+        ..._leaves.map(
+              (leave) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildLeaveCard(context, leave),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.55,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _SummaryCard(
+          title: 'Pending',
+          value: '$_pending',
+          icon: Icons.pending_actions,
+          color: Colors.orange,
+        ),
+        _SummaryCard(
+          title: 'Approved',
+          value: '$_approved',
+          icon: Icons.check_circle,
+          color: Colors.green,
+        ),
+        _SummaryCard(
+          title: 'Rejected',
+          value: '$_rejected',
+          icon: Icons.cancel,
+          color: Colors.red,
+        ),
+        _SummaryCard(
+          title: 'Leave Days',
+          value: _leaveDays.toStringAsFixed(1),
+          icon: Icons.event,
+          color: Colors.blue,
+        ),
+      ],
     );
   }
 
   Future<void> _reviewLeave(
-    Leave leave,
-    LeaveStatus status,
-  ) async {
-    if (leave.status != LeaveStatus.pending) {
-      return;
-    }
+      Leave leave,
+      LeaveStatus status,
+      ) async {
+    if (leave.status != LeaveStatus.pending) return;
 
     var remarks = '';
 
@@ -192,21 +241,17 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
               labelText: 'Remarks',
               border: OutlineInputBorder(),
             ),
-            onChanged: (value) {
-              remarks = value;
-            },
+            onChanged: (value) => remarks = value,
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(true),
               child: Text(
                 status == LeaveStatus.approved
                     ? 'Approve'
@@ -218,29 +263,19 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       },
     );
 
-    if (confirmed != true || !mounted) {
-      return;
-    }
+    if (confirmed != true || !mounted) return;
 
     try {
       await widget.repository.review(
         leaveId: leave.id,
         status: status,
         remarks:
-            remarks.trim().isEmpty
-                ? null
-                : remarks.trim(),
+        remarks.trim().isEmpty ? null : remarks.trim(),
       );
-
-      if (!mounted) {
-        return;
-      }
 
       await _loadLeaves();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -252,23 +287,18 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
         ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Leave review failed: Cannot find an overload for "Replace" and the argument count: "3".',
-          ),
+          content: Text('Leave review failed: $error'),
         ),
       );
     }
   }
+
   Future<void> _cancelLeave(Leave leave) async {
-    if (leave.status != LeaveStatus.approved) {
-      return;
-    }
+    if (leave.status != LeaveStatus.approved) return;
 
     var remarks = '';
 
@@ -280,24 +310,20 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
           content: TextField(
             maxLines: 4,
             decoration: const InputDecoration(
-              labelText: 'Cancellation remarks',
+              labelText: 'Cancellation Remarks',
               border: OutlineInputBorder(),
             ),
-            onChanged: (value) {
-              remarks = value;
-            },
+            onChanged: (value) => remarks = value,
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(false),
               child: const Text('Close'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(true),
               child: const Text('Cancel Leave'),
             ),
           ],
@@ -305,101 +331,101 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       },
     );
 
-    if (confirmed != true || !mounted) {
-      return;
-    }
+    if (confirmed != true || !mounted) return;
 
     try {
       await widget.repository.cancel(
         leaveId: leave.id,
         remarks:
-            remarks.trim().isEmpty
-                ? null
-                : remarks.trim(),
+        remarks.trim().isEmpty ? null : remarks.trim(),
       );
-
-      if (!mounted) {
-        return;
-      }
 
       await _loadLeaves();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Leave cancelled successfully.',
-          ),
+          content: Text('Leave cancelled successfully.'),
         ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Leave cancellation failed: Cannot find an overload for "Replace" and the argument count: "3".',
-          ),
+          content: Text('Leave cancellation failed: $error'),
         ),
       );
     }
   }
+
   Widget _buildLeaveCard(
-    BuildContext context,
-    Leave leave,
-  ) {
+      BuildContext context,
+      Leave leave,
+      ) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.event_note_outlined),
+                const CircleAvatar(
+                  child: Icon(Icons.person),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    leave.employeeName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge,
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        leave.employeeName,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium,
+                      ),
+                      Text(
+                        leave.employeeNumber,
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium,
+                      ),
+                    ],
                   ),
                 ),
                 Chip(
+                  backgroundColor:
+                  _statusColor(leave.status)
+                      .withValues(alpha: 0.12),
                   label: Text(
                     _statusLabel(leave.status),
+                    style: TextStyle(
+                      color: _statusColor(leave.status),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             _InfoRow(
-              label: 'Employee',
-              value: leave.employeeNumber,
-            ),
-            _InfoRow(
-              label: 'Leave type',
+              label: 'Leave Type',
               value: leave.leaveType,
             ),
             _InfoRow(
-              label: 'Start date',
+              label: 'Start Date',
               value: _formatDate(leave.startDate),
             ),
             _InfoRow(
-              label: 'End date',
+              label: 'End Date',
               value: _formatDate(leave.endDate),
             ),
             _InfoRow(
               label: 'Days',
-              value: leave.numberOfDays
-                  .toStringAsFixed(1),
+              value: leave.numberOfDays.toStringAsFixed(1),
             ),
             if (leave.reason != null &&
                 leave.reason!.trim().isNotEmpty)
@@ -407,18 +433,29 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                 label: 'Reason',
                 value: leave.reason!,
               ),
+            if (leave.reviewedAtUtc != null) ...[
+              const Divider(),
+              _InfoRow(
+                label: 'Reviewed',
+                value: _formatDate(leave.reviewedAtUtc!),
+              ),
+            ],
+            if (leave.reviewRemarks != null &&
+                leave.reviewRemarks!.trim().isNotEmpty)
+              _InfoRow(
+                label: 'Remarks',
+                value: leave.reviewRemarks!,
+              ),
             if (leave.status == LeaveStatus.pending) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        _reviewLeave(
-                          leave,
-                          LeaveStatus.rejected,
-                        );
-                      },
+                      onPressed: () => _reviewLeave(
+                        leave,
+                        LeaveStatus.rejected,
+                      ),
                       icon: const Icon(Icons.close),
                       label: const Text('Reject'),
                     ),
@@ -426,12 +463,10 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () {
-                        _reviewLeave(
-                          leave,
-                          LeaveStatus.approved,
-                        );
-                      },
+                      onPressed: () => _reviewLeave(
+                        leave,
+                        LeaveStatus.approved,
+                      ),
                       icon: const Icon(Icons.check),
                       label: const Text('Approve'),
                     ),
@@ -440,13 +475,11 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
               ),
             ],
             if (leave.status == LeaveStatus.approved) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    _cancelLeave(leave);
-                  },
+                  onPressed: () => _cancelLeave(leave),
                   icon: const Icon(Icons.cancel_outlined),
                   label: const Text('Cancel Leave'),
                 ),
@@ -456,6 +489,19 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
         ),
       ),
     );
+  }
+
+  Color _statusColor(LeaveStatus status) {
+    switch (status) {
+      case LeaveStatus.pending:
+        return Colors.orange;
+      case LeaveStatus.approved:
+        return Colors.green;
+      case LeaveStatus.rejected:
+        return Colors.red;
+      case LeaveStatus.cancelled:
+        return Colors.grey;
+    }
   }
 
   String _statusLabel(LeaveStatus status) {
@@ -480,6 +526,44 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   }
 }
 
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall,
+            ),
+            Text(title),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   const _InfoRow({
     required this.label,
@@ -490,16 +574,15 @@ class _InfoRow extends StatelessWidget {
   final String value;
 
   @override
-  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+        CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 110,
             child: Text(
               label,
               style: Theme.of(context)
@@ -515,12 +598,3 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-

@@ -6,9 +6,11 @@ import '../data/repositories/stock_movement_repository.dart';
 import '../../procurement/data/repositories/material_repository.dart';
 import '../../sites/data/repositories/site_repository.dart';
 import '../data/repositories/stock_issue_repository.dart';
-import 'stock_issue_create_screen.dart';
+import 'stock_issue_list_screen.dart';
+
 import '../data/repositories/stock_return_repository.dart';
-import 'stock_return_create_screen.dart';
+import 'stock_return_list_screen.dart';
+
 import '../data/repositories/stock_transfer_repository.dart';
 import 'stock_transfer_create_screen.dart';
 import '../data/repositories/stock_adjustment_repository.dart';
@@ -82,12 +84,11 @@ class InventoryDashboardScreen extends StatelessWidget {
           description:
               'Issue materials from stock to construction sites or projects.',
           onTap: () {
-            Navigator.of(context).push(
+            Navigator.push(
+              context,
               MaterialPageRoute(
-                builder: (_) => StockIssueCreateScreen(
+                builder: (_) => StockIssueListScreen(
                   repository: StockIssueRepository(),
-                  materialRepository: MaterialRepository(),
-                  siteRepository: SiteRepository(),
                 ),
               ),
             );
@@ -137,12 +138,11 @@ class InventoryDashboardScreen extends StatelessWidget {
           description:
               'Record materials returned back into stock.',
           onTap: () {
-            Navigator.of(context).push(
+            Navigator.push(
+              context,
               MaterialPageRoute(
-                builder: (_) => StockReturnCreateScreen(
+                builder: (_) => StockReturnListScreen(
                   repository: StockReturnRepository(),
-                  stockMovementRepository:
-                      StockMovementRepository(),
                 ),
               ),
             );

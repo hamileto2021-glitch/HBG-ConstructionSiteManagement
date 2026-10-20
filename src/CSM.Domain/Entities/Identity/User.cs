@@ -34,6 +34,15 @@ public class User : AuditableEntity
 
     public Employee? Employee { get; set; }
 
+    public string PhoneNumber { get; set; } = string.Empty;
+
+    public string JobTitle { get; set; } = string.Empty;
+
+    public Guid? DefaultSiteId { get; set; }
+
+    public ICollection<UserSiteAccess> SiteAccesses { get; set; }
+        = new List<UserSiteAccess>();
+
     public ICollection<UserRole> UserRoles { get; set; }
         = new List<UserRole>();
 

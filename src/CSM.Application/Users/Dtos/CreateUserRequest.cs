@@ -7,4 +7,9 @@ public sealed record CreateUserRequest(
     string FirstName,
     string LastName,
     string TemporaryPassword,
-    IReadOnlyCollection<string> Roles);
+    string PhoneNumber,
+    string JobTitle,
+    Guid? DefaultSiteId,
+    IReadOnlyCollection<string> Roles,
+    IReadOnlyCollection<Guid> SiteIds
+);

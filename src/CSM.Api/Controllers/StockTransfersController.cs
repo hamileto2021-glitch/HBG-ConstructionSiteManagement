@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class StockTransfersController : ControllerBase
 {
     private readonly IStockTransferService _stockTransferService;
@@ -21,7 +21,18 @@ public sealed class StockTransfersController : ControllerBase
         _stockTransferService = stockTransferService;
     }
 
+    [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<List<StockTransferResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        var result = await _stockTransferService.GetAllAsync(cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<StockTransferResponse>> Create(
         CreateStockTransferRequest request,
         CancellationToken cancellationToken)
@@ -29,7 +40,7 @@ public sealed class StockTransfersController : ControllerBase
         try
         {
             var result = await _stockTransferService.CreateAsync(
-                GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 request,
                 cancellationToken);
 
@@ -44,17 +55,16 @@ public sealed class StockTransfersController : ControllerBase
         }
     }
 
-    private Guid GetCurrentUserId()
+    private Guid GetCurrentCompanyId()
     {
-        var value = User.FindFirstValue(
-            ClaimTypes.NameIdentifier);
+        var value = User.FindFirst("company_id")?.Value;
 
-        if (!Guid.TryParse(value, out var userId))
+        if (!Guid.TryParse(value, out var companyId))
         {
             throw new StockTransferManagementException(
-                "Invalid authenticated user.");
+                "Invalid authenticated company.");
         }
 
-        return userId;
+        return companyId;
     }
 }

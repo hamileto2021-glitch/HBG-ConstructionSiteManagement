@@ -32,11 +32,11 @@ class SyncManager extends ChangeNotifier {
       return _status;
     }
 
-    final online = await _connectivity.isOnline;
+    final online = await _connectivity.isOnline();
 
     if (!online) {
       _status = _status.copyWith(
-        state: SyncState.failed,
+        state: SyncState.offline,
         errorMessage: 'Device is offline.',
       );
       notifyListeners();
@@ -110,27 +110,55 @@ class SyncManager extends ChangeNotifier {
   }
 
   void startConnectivityMonitoring() {
-    if (_connectivitySubscription != null) {
-      return;
-    }
+    if (_connectivitySubscription != null) return;
+
+    unawaited(_updateConnectivityState());
 
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen(
-      (results) {
-        final isOnline = results.any(
-          (result) => result != ConnectivityResult.none,
-        );
+              (results) async {
+            final hasNetwork =
+            results.any((r) => r != ConnectivityResult.none);
 
-        if (isOnline) {
-          unawaited(synchronize());
-        }
-      },
-    );
+            if (!hasNetwork) {
+              final pending = await _queue.getPending(limit: 1000);
+
+              _status = _status.copyWith(
+                state: SyncState.offline,
+                pendingCount: pending.length,
+                errorMessage: 'Device is offline.',
+              );
+
+              notifyListeners();
+              return;
+            }
+
+            final online = await _connectivity.isOnline();
+
+            if (online) {
+              unawaited(synchronize());
+            }
+          },
+        );
   }
 
   Future<void> stopConnectivityMonitoring() async {
     await _connectivitySubscription?.cancel();
     _connectivitySubscription = null;
+  }
+
+  Future<void> _updateConnectivityState() async {
+    final online = await _connectivity.isOnline();
+    final pending = await _queue.getPending(limit: 1000);
+
+    _status = _status.copyWith(
+      state: online ? SyncState.completed : SyncState.offline,
+      pendingCount: pending.length,
+      errorMessage: online ? null : 'Device is offline.',
+      clearError: online,
+    );
+
+    notifyListeners();
   }
 
   @override

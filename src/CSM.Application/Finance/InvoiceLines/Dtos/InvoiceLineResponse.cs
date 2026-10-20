@@ -7,6 +7,7 @@ public sealed record InvoiceLineResponse(
     Guid? CostCodeId,
     string Description,
     decimal Quantity,
+    string UnitOfMeasure,
     decimal UnitPrice,
     decimal TaxAmount,
     decimal LineTotal,

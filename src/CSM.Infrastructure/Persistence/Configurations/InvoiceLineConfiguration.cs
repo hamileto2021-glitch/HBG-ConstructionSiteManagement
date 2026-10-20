@@ -32,5 +32,10 @@ public class InvoiceLineConfiguration :
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(x => !x.IsDeleted);
+
+        builder.HasOne(x => x.CostCode)
+            .WithMany(x => x.InvoiceLines)
+            .HasForeignKey(x => x.CostCodeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

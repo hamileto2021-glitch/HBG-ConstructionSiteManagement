@@ -1,5 +1,7 @@
 import 'sync_operation_handler.dart';
 import 'sync_queue_service.dart';
+import 'package:flutter/foundation.dart';
+
 
 class SyncResult {
   const SyncResult({
@@ -19,6 +21,7 @@ class SyncEngine {
 
   final SyncQueueStore _queue;
   final SyncOperationHandler _handler;
+
 
   bool _isRunning = false;
 
@@ -50,10 +53,36 @@ class SyncEngine {
           await _queue.remove(item.id);
           processed++;
         } catch (error) {
+          final message = error.toString();
+
+          debugPrint('========================');
+          debugPrint('SYNC FAILED');
+          debugPrint('Entity: ${item.entityType}');
+          debugPrint('ID: ${item.id}');
+          debugPrint('Error: $message');
+          debugPrint('Payload: ${item.payload}');
+          debugPrint('========================');
+
+          // Attendance duplicate
+          final isAttendanceDuplicate =
+          message.contains('already been recorded');
+
+          // Daily Progress duplicate
+          final isDailyProgressDuplicate =
+          message.contains('daily progress log already exists');
+
+          if (isAttendanceDuplicate || isDailyProgressDuplicate) {
+            debugPrint('Duplicate detected -> removing from queue');
+            await _queue.remove(item.id);
+            processed++;
+            continue;
+          }
+
           await _queue.markRetry(
             id: item.id,
-            error: error.toString(),
+            error: message,
           );
+
           failed++;
         }
       }

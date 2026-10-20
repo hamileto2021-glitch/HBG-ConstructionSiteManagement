@@ -95,7 +95,9 @@ class PurchaseOrder {
     required this.companyId,
     required this.constructionSiteId,
     required this.siteName,
+    this.siteCode,
     this.projectId,
+    this.projectCode,
     this.projectName,
     required this.vendorId,
     required this.vendorCode,
@@ -124,111 +126,115 @@ class PurchaseOrder {
 
   final String id;
   final String companyId;
+
   final String constructionSiteId;
   final String siteName;
+  final String? siteCode;
+
   final String? projectId;
+  final String? projectCode;
   final String? projectName;
+
   final String vendorId;
   final String vendorCode;
   final String vendorName;
+
   final String? materialRequestId;
   final String? materialRequestNumber;
+
   final String purchaseOrderNumber;
   final DateTime orderDate;
   final DateTime? expectedDeliveryDate;
+
   final String currencyCode;
   final double exchangeRate;
   final double subtotal;
   final double taxAmount;
   final double discountAmount;
   final double totalAmount;
+
   final PurchaseOrderStatus status;
+
   final String? deliveryAddress;
   final String? paymentTerms;
   final String? notes;
+
   final String? approvedBy;
   final DateTime? approvedAtUtc;
+
   final DateTime createdAtUtc;
   final DateTime? updatedAtUtc;
+
   final List<PurchaseOrderLine> lines;
 
   factory PurchaseOrder.fromJson(
-    Map<String, dynamic> json,
-  ) {
+      Map<String, dynamic> json,
+      ) {
     return PurchaseOrder(
       id: json['id'] as String,
       companyId: json['companyId'] as String,
-      constructionSiteId:
-          json['constructionSiteId'] as String,
+      constructionSiteId: json['constructionSiteId'] as String,
       siteName: json['siteName'] as String? ?? '',
+      siteCode: json['siteCode'] as String?,
       projectId: json['projectId'] as String?,
+      projectCode: json['projectCode'] as String?,
       projectName: json['projectName'] as String?,
       vendorId: json['vendorId'] as String,
       vendorCode: json['vendorCode'] as String? ?? '',
       vendorName: json['vendorName'] as String? ?? '',
-      materialRequestId:
-          json['materialRequestId'] as String?,
+      materialRequestId: json['materialRequestId'] as String?,
       materialRequestNumber:
-          json['materialRequestNumber'] as String?,
+      json['materialRequestNumber'] as String?,
       purchaseOrderNumber:
-          json['purchaseOrderNumber'] as String? ?? '',
-      orderDate: DateTime.parse(
-        json['orderDate'] as String,
-      ),
+      json['purchaseOrderNumber'] as String? ?? '',
+      orderDate: DateTime.parse(json['orderDate'] as String),
       expectedDeliveryDate:
-          json['expectedDeliveryDate'] == null
-              ? null
-              : DateTime.parse(
-                  json['expectedDeliveryDate'] as String,
-                ),
-      currencyCode:
-          json['currencyCode'] as String? ?? '',
+      json['expectedDeliveryDate'] == null
+          ? null
+          : DateTime.parse(
+        json['expectedDeliveryDate'] as String,
+      ),
+      currencyCode: json['currencyCode'] as String? ?? '',
       exchangeRate:
-          (json['exchangeRate'] as num).toDouble(),
-      subtotal:
-          (json['subtotal'] as num).toDouble(),
-      taxAmount:
-          (json['taxAmount'] as num).toDouble(),
+      (json['exchangeRate'] as num).toDouble(),
+      subtotal: (json['subtotal'] as num).toDouble(),
+      taxAmount: (json['taxAmount'] as num).toDouble(),
       discountAmount:
-          (json['discountAmount'] as num).toDouble(),
+      (json['discountAmount'] as num).toDouble(),
       totalAmount:
-          (json['totalAmount'] as num).toDouble(),
+      (json['totalAmount'] as num).toDouble(),
       status: _statusFromValue(json['status']),
-      deliveryAddress:
-          json['deliveryAddress'] as String?,
-      paymentTerms:
-          json['paymentTerms'] as String?,
+      deliveryAddress: json['deliveryAddress'] as String?,
+      paymentTerms: json['paymentTerms'] as String?,
       notes: json['notes'] as String?,
       approvedBy: json['approvedBy'] as String?,
-      approvedAtUtc:
-          json['approvedAtUtc'] == null
-              ? null
-              : DateTime.parse(
-                  json['approvedAtUtc'] as String,
-                ),
+      approvedAtUtc: json['approvedAtUtc'] == null
+          ? null
+          : DateTime.parse(
+        json['approvedAtUtc'] as String,
+      ),
       createdAtUtc: DateTime.parse(
         json['createdAtUtc'] as String,
       ),
-      updatedAtUtc:
-          json['updatedAtUtc'] == null
-              ? null
-              : DateTime.parse(
-                  json['updatedAtUtc'] as String,
-                ),
+      updatedAtUtc: json['updatedAtUtc'] == null
+          ? null
+          : DateTime.parse(
+        json['updatedAtUtc'] as String,
+      ),
       lines:
-          (json['lines'] as List<dynamic>? ?? [])
-              .map(
-                (item) => PurchaseOrderLine.fromJson(
-                  item as Map<String, dynamic>,
-                ),
-              )
-              .toList(),
+      (json['lines'] as List<dynamic>? ?? [])
+          .map(
+            (e) => PurchaseOrderLine.fromJson(
+          e as Map<String, dynamic>,
+        ),
+      )
+          .toList(),
     );
   }
 
   static PurchaseOrderStatus _statusFromValue(
-    dynamic value,
-  ) {
+      dynamic value,
+      ) {
     if (value is num) {
       switch (value.toInt()) {
         case 1:
@@ -262,39 +268,31 @@ class PurchaseOrder {
       case 'draft':
       case '1':
         return PurchaseOrderStatus.draft;
-
       case 'pendingapproval':
       case '2':
         return PurchaseOrderStatus.pendingApproval;
-
       case 'approved':
       case '3':
         return PurchaseOrderStatus.approved;
-
       case 'senttovendor':
       case '4':
         return PurchaseOrderStatus.sentToVendor;
-
       case 'partiallydelivered':
       case '5':
         return PurchaseOrderStatus.partiallyDelivered;
-
       case 'delivered':
       case '6':
         return PurchaseOrderStatus.delivered;
-
       case 'closed':
       case '7':
         return PurchaseOrderStatus.closed;
-
       case 'cancelled':
       case 'canceled':
       case '8':
         return PurchaseOrderStatus.cancelled;
-
       default:
         throw FormatException(
-          'Unknown purchase order status: ',
+          'Unknown purchase order status: $value',
         );
     }
   }

@@ -22,6 +22,7 @@ public sealed class DailyProgressLogsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Projects.DailyProgress.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<DailyProgressLogResponse>>> GetAll(
         [FromQuery] Guid projectId,
@@ -47,6 +48,7 @@ public sealed class DailyProgressLogsController : ControllerBase
     }
 
     [HttpGet("{logId:guid}")]
+    [Authorize(Policy = "Projects.DailyProgress.View")]
     public async Task<ActionResult<DailyProgressLogResponse>> GetById(
         Guid logId,
         CancellationToken cancellationToken)
@@ -67,6 +69,7 @@ public sealed class DailyProgressLogsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Projects.DailyProgress.Create")]
     public async Task<ActionResult<DailyProgressLogResponse>> Create(
         CreateDailyProgressLogRequest request,
         CancellationToken cancellationToken)
@@ -90,6 +93,7 @@ public sealed class DailyProgressLogsController : ControllerBase
     }
 
     [HttpPut("{logId:guid}")]
+    [Authorize(Policy = "Projects.DailyProgress.Create")]
     public async Task<ActionResult<DailyProgressLogResponse>> Update(
         Guid logId,
         UpdateDailyProgressLogRequest request,

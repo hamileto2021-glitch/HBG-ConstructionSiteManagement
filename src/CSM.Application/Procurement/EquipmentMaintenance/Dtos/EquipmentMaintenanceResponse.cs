@@ -4,6 +4,7 @@ public sealed record EquipmentMaintenanceResponse(
     Guid Id,
     Guid CompanyId,
     Guid EquipmentId,
+
     string EquipmentCode,
     string EquipmentName,
     string MaintenanceType,

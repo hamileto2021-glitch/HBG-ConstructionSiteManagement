@@ -23,13 +23,21 @@ using CSM.Application.Finance.InvoiceLines;
 using CSM.Application.Finance.Payments;
 using CSM.Application.Reporting;
 using CSM.Application.Notifications;
+using CSM.Application.Projects.DailySiteDiaries;
+using CSM.Application.Projects.DailyProgressPhotos;
+using CSM.Application.Projects.Equipment;
 using System.Security.Claims;
 using System.Text;
 using CSM.Application.Common.Security;
 using CSM.Application.Compliance.SafetyIncidents;
+using CSM.Application.Features.Compliance.SafetyObservations.Services;
+using CSM.Infrastructure.Features.Compliance.SafetyObservations;
 using CSM.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
+using CSM.Domain.Enums;
 using CSM.Infrastructure.Security;
-
+using CSM.Infrastructure.Features.Compliance.NonConformanceReports;
+using CSM.Infrastructure.Features.Compliance.QualityChecklists;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -59,9 +67,22 @@ using CSM.Application.HRM.Timesheets;
 using CSM.Application.HRM.Payroll;
 using CSM.Application.Inventory.StockTransfers;
 using CSM.Application.Inventory.StockBalances;
+using CSM.Application.Finance.PettyCashAccounts;
+using CSM.Application.Finance.PettyCashTransactions;
+using CSM.Application.CompanySettings;
+using CSM.Application.Payroll;
+using CSM.Application.Payroll.Calculations;
+using CSM.Application.Common.Backup;
 
-
-
+using CSM.Application.Common.Audit;
+using CSM.Application.Projects.ProjectDelays;
+using CSM.Application.Projects.ProjectMilestones;
+using CSM.Application.Projects.WbsTasks;
+using CSM.Application.Projects.Progress;
+using CSM.Application.Projects.ResourceAssignments;
+using CSM.Application.Dashboard;
+using CSM.Application.Roles;
+using CSM.Application.Projects.DailyProgressTaskEntries;
 
 namespace CSM.Infrastructure;
 
@@ -117,9 +138,13 @@ public static class DependencyInjection
             IDailyProgressLogService,
             DailyProgressLogService>();
         services.AddScoped<IProjectPhaseService, ProjectPhaseService>();
+        services.AddScoped<IProjectEquipmentService, ProjectEquipmentService>();
+        services.AddScoped<IDailyProgressPhotoService, DailyProgressPhotoService>();
         services.AddScoped<IMilestoneService, MilestoneService>();
         services.AddScoped<IWorkTaskService, WorkTaskService>();
         services.AddScoped<IShiftService, ShiftService>();
+        services.AddScoped<IProjectDelayService, ProjectDelayService>();
+        services.AddScoped<IDailyProgressTaskEntryService, DailyProgressTaskEntryService>();
 
         services.AddScoped<
             ISiteAssignmentService,
@@ -136,6 +161,7 @@ public static class DependencyInjection
         services.AddScoped<IEquipmentService, EquipmentService>();
         services.AddScoped<IEquipmentAssignmentService, EquipmentAssignmentService>();
         services.AddScoped<IEquipmentMaintenanceService, EquipmentMaintenanceService>();
+        services.AddScoped<EquipmentTimesheetService>();
         services.AddScoped<
             IEquipmentDowntimeService,
             EquipmentDowntimeService>();
@@ -147,12 +173,18 @@ services.AddScoped<IDocumentVersionService, DocumentVersionService>();
 services.AddScoped<IPermitService, PermitService>();
 services.AddScoped<IInspectionService, InspectionService>();
 services.AddScoped<ISafetyIncidentService, SafetyIncidentService>();
+services.AddScoped<ISafetyObservationService, SafetyObservationService>();
+services.AddScoped<NonConformanceReportService>();
+services.AddScoped<QualityChecklistService>();
         services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
         services.AddScoped<IMaterialRequestService, MaterialRequestService>();
         services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
     services.AddScoped<IStockReturnService, StockReturnService>();
     services.AddScoped<IStockMovementService, StockMovementService>();
     services.AddScoped<IStockIssueService, StockIssueService>();
+    services.AddScoped<
+        ILowStockNotificationService,
+        LowStockNotificationService>();
     services.AddScoped<
         IDailyMaterialUsageService,
         DailyMaterialUsageService>();
@@ -165,11 +197,39 @@ services.AddScoped<ISafetyIncidentService, SafetyIncidentService>();
         services.AddScoped<IBudgetService, BudgetService>();
         services.AddScoped<IBudgetLineService, BudgetLineService>();
         services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<ISalaryStructureService, SalaryStructureService>();
+        services.AddScoped<IPayrollCalculationService, PayrollCalculationService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoiceLineService, InvoiceLineService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IPettyCashAccountService, PettyCashAccountService>();
+        services.AddScoped<
+            IPettyCashTransactionService,
+            PettyCashTransactionService>();
+        services.AddScoped<
+            CSM.Application.Finance.Summaries.IFinancialSummaryService,
+            CSM.Infrastructure.Services.FinancialSummaryService>();
         services.AddScoped<IReportingService, ReportingService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IDailySiteDiaryService, DailySiteDiaryService>();
+        services.AddScoped<ICompanySettingsService, CompanySettingsService>();
+        services.AddScoped<IBackupService, BackupService>();
+        services.AddScoped<IAuditService, AuditService>();
+services.AddScoped<IAuditQueryService, AuditQueryService>();
+services.AddScoped<IProjectDelayService, ProjectDelayService>();
+services.AddScoped<IProjectMilestoneService, ProjectMilestoneService>();
+services.AddScoped<IWbsTaskService, WbsTaskService>();
+services.AddScoped<IProjectProgressService, ProjectProgressService>();
+services.AddScoped<ITaskResourceAssignmentService, TaskResourceAssignmentService>();
+services.AddScoped<IExecutiveDashboardService, ExecutiveDashboardService>();
+services.AddScoped<IRolePermissionService, RolePermissionService>();
+services.AddScoped<
+    IAuthorizationHandler,
+    PermissionAuthorizationHandler>();
+services.AddScoped<IPermissionEvaluator, PermissionEvaluator>();
+services.AddScoped<INotificationPublisher, NotificationPublisher>();
+services.AddScoped<IBudgetAlertService, BudgetAlertService>();
+
 
         services
             .AddAuthentication(options =>
@@ -242,7 +302,570 @@ services.AddScoped<ISafetyIncidentService, SafetyIncidentService>();
                AppPolicies.ProjectManagement,
                policy => policy.RequireRole(
                    AppPolicies.ProjectManagementRoles));
+
+                   options.AddPolicy(
+                       AppPolicies.ReportManagement,
+                       policy => policy.RequireRole(
+                           AppPolicies.ReportManagementRoles));
+
+                     options.AddPolicy(
+                         "Users.View",
+                         policy =>
+                         {
+                             policy.RequireAuthenticatedUser();
+                             policy.AddRequirements(
+                                 new PermissionRequirement(
+                                     GranularPermission.Users_View.ToString()));
+                         });
+
+                         options.AddPolicy(
+                             "Users.Create",
+                             policy =>
+                             {
+                                 policy.RequireAuthenticatedUser();
+                                 policy.AddRequirements(
+                                     new PermissionRequirement(
+                                         GranularPermission.Users_Create.ToString()));
+                             });
+
+                             options.AddPolicy(
+                                 "Users.Edit",
+                                 policy =>
+                                 {
+                                     policy.RequireAuthenticatedUser();
+                                     policy.AddRequirements(
+                                         new PermissionRequirement(
+                                             GranularPermission.Users_Edit.ToString()));
+                                 });
+
+                                 options.AddPolicy(
+                                     "Users.Delete",
+                                     policy =>
+                                     {
+                                         policy.RequireAuthenticatedUser();
+                                         policy.AddRequirements(
+                                             new PermissionRequirement(
+                                                 GranularPermission.Users_Delete.ToString()));
+                                     });
+
+                                     options.AddPolicy(
+                                         "Sites.View",
+                                         policy =>
+                                         {
+                                             policy.RequireAuthenticatedUser();
+                                             policy.AddRequirements(
+                                                 new PermissionRequirement(
+                                                     GranularPermission.Sites_View.ToString()));
+                                         });
+
+                                         options.AddPolicy(
+                                             "Sites.Manage",
+                                             policy =>
+                                             {
+                                                 policy.RequireAuthenticatedUser();
+                                                 policy.AddRequirements(
+                                                     new PermissionRequirement(
+                                                         GranularPermission.Sites_Manage.ToString()));
+                                             });
+
+                                             options.AddPolicy(
+                                                 "Projects.View",
+                                                 policy =>
+                                                 {
+                                                     policy.RequireAuthenticatedUser();
+                                                     policy.AddRequirements(
+                                                         new PermissionRequirement(
+                                                             GranularPermission.Projects_View.ToString()));
+                                                 });
+
+                                             options.AddPolicy(
+                                                 "Projects.Manage",
+                                                 policy =>
+                                                 {
+                                                     policy.RequireAuthenticatedUser();
+                                                     policy.AddRequirements(
+                                                         new PermissionRequirement(
+                                                             GranularPermission.Projects_Manage.ToString()));
+                                                 });
+
+
+options.AddPolicy(
+    "Projects.DailyProgress.View",
+    policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(
+            new PermissionRequirement(
+                GranularPermission.Projects_DailyProgress_View
+                    .ToString()));
+    });
+
+options.AddPolicy(
+    "Projects.DailyProgress.Create",
+    policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(
+            new PermissionRequirement(
+                GranularPermission.Projects_DailyProgress_Create
+                    .ToString()));
+    });
+
+
+                                                 options.AddPolicy(
+                                                     "Finance.CostCode.View",
+                                                     policy =>
+                                                     {
+                                                         policy.RequireAuthenticatedUser();
+                                                         policy.AddRequirements(
+                                                             new PermissionRequirement(
+                                                                 GranularPermission.Finance_CostCode_View.ToString()));
+                                                     });
+
+                                                 options.AddPolicy(
+                                                     "Finance.CostCode.Manage",
+                                                     policy =>
+                                                     {
+                                                         policy.RequireAuthenticatedUser();
+                                                         policy.AddRequirements(
+                                                             new PermissionRequirement(
+                                                                 GranularPermission.Finance_CostCode_Manage.ToString()));
+                                                     });
+
+                                                 options.AddPolicy(
+                                                     "Finance.Budget.View",
+                                                     policy =>
+                                                     {
+                                                         policy.RequireAuthenticatedUser();
+                                                         policy.AddRequirements(
+                                                             new PermissionRequirement(
+                                                                 GranularPermission.Finance_Budget_View.ToString()));
+                                                     });
+
+                                                 options.AddPolicy(
+                                                     "Finance.Budget.Manage",
+                                                     policy =>
+                                                     {
+                                                         policy.RequireAuthenticatedUser();
+                                                         policy.AddRequirements(
+                                                             new PermissionRequirement(
+                                                                 GranularPermission.Finance_Budget_Manage.ToString()));
+                                                     });
+
+                                                     options.AddPolicy(
+                                                         "Finance.Invoice.View",
+                                                         policy =>
+                                                         {
+                                                             policy.RequireAuthenticatedUser();
+                                                             policy.AddRequirements(
+                                                                 new PermissionRequirement(
+                                                                     GranularPermission.Finance_Invoice_View.ToString()));
+                                                         });
+                                                         options.AddPolicy(
+                                                                                                                              "Finance.Invoice.Manage",
+                                                                                                                              policy =>
+                                                                                                                              {
+                                                                                                                                  policy.RequireAuthenticatedUser();
+                                                                                                                                  policy.AddRequirements(
+                                                                                                                                      new PermissionRequirement(
+                                                                                                                                          GranularPermission.Finance_Invoice_Manage.ToString()));
+                                                                                                                              });
+
+
+
+                                                     options.AddPolicy(
+                                                         "Finance.Payment.View",
+                                                         policy =>
+                                                         {
+                                                             policy.RequireAuthenticatedUser();
+                                                             policy.AddRequirements(
+                                                                 new PermissionRequirement(
+                                                                     GranularPermission.Finance_Payment_View.ToString()));
+                                                         });
+
+                                                     options.AddPolicy(
+                                                         "Finance.Payment.Manage",
+                                                         policy =>
+                                                         {
+                                                             policy.RequireAuthenticatedUser();
+                                                             policy.AddRequirements(
+                                                                 new PermissionRequirement(
+                                                                     GranularPermission.Finance_Payment_Manage.ToString()));
+                                                         });
+
+                                                         options.AddPolicy(
+                                                             "Finance.Expense.View",
+                                                             policy =>
+                                                             {
+                                                                 policy.RequireAuthenticatedUser();
+                                                                 policy.AddRequirements(
+                                                                     new PermissionRequirement(
+                                                                         GranularPermission.Finance_Expense_View.ToString()));
+                                                             });
+
+                                                         options.AddPolicy(
+                                                             "Finance.Expense.Submit",
+                                                             policy =>
+                                                             {
+                                                                 policy.RequireAuthenticatedUser();
+                                                                 policy.AddRequirements(
+                                                                     new PermissionRequirement(
+                                                                         GranularPermission.Finance_Expense_Submit.ToString()));
+                                                             });
+
+                                                         options.AddPolicy(
+                                                             "Finance.Expense.Approve",
+                                                             policy =>
+                                                             {
+                                                                 policy.RequireAuthenticatedUser();
+                                                                 policy.AddRequirements(
+                                                                     new PermissionRequirement(
+                                                                         GranularPermission.Finance_Expense_Approve.ToString()));
+                                                             });
+
+                                                             options.AddPolicy(
+                                                                 "Finance.PettyCash.View",
+                                                                 policy =>
+                                                                 {
+                                                                     policy.RequireAuthenticatedUser();
+                                                                     policy.AddRequirements(
+                                                                         new PermissionRequirement(
+                                                                             GranularPermission.Finance_PettyCash_View.ToString()));
+                                                                 });
+
+                                                             options.AddPolicy(
+                                                                 "Finance.PettyCash.Manage",
+                                                                 policy =>
+                                                                 {
+                                                                     policy.RequireAuthenticatedUser();
+                                                                     policy.AddRequirements(
+                                                                         new PermissionRequirement(
+                                                                             GranularPermission.Finance_PettyCash_Manage.ToString()));
+                                                                 });
+
+
+
+
+                                                                 options.AddPolicy(
+                                                                     "Procurement.Inventory.View",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Procurement_Inventory_View.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Procurement.Inventory.Adjust",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Procurement_Inventory_Adjust.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Procurement.PurchaseOrder.View",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Procurement_PurchaseOrder_View.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Procurement.PurchaseOrder.Manage",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Procurement_PurchaseOrder_Manage.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Procurement.PurchaseOrder.Approve",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Procurement_PurchaseOrder_Approve.ToString()));
+                                                                     });
+
+                                                                options.AddPolicy(
+                                                                    "Procurement.MaterialRequest.View",
+                                                                    policy =>
+                                                                    {
+                                                                        policy.RequireAuthenticatedUser();
+                                                                        policy.AddRequirements(
+                                                                            new PermissionRequirement(
+                                                                                GranularPermission.Procurement_MaterialRequest_View.ToString()));
+                                                                    });
+
+                                                                options.AddPolicy(
+                                                                    "Procurement.MaterialRequest.Submit",
+                                                                    policy =>
+                                                                    {
+                                                                        policy.RequireAuthenticatedUser();
+                                                                        policy.AddRequirements(
+                                                                            new PermissionRequirement(
+                                                                                GranularPermission.Procurement_MaterialRequest_Submit.ToString()));
+                                                                    });
+
+                                                                options.AddPolicy(
+                                                                    "Procurement.MaterialRequest.Approve",
+                                                                    policy =>
+                                                                    {
+                                                                        policy.RequireAuthenticatedUser();
+                                                                        policy.AddRequirements(
+                                                                            new PermissionRequirement(
+                                                                                GranularPermission.Procurement_MaterialRequest_Approve.ToString()));
+                                                                    });
+
+                                                           options.AddPolicy(
+                                                               "Procurement.Vendor.View",
+                                                               policy =>
+                                                               {
+                                                                   policy.RequireAuthenticatedUser();
+                                                                   policy.AddRequirements(
+                                                                       new PermissionRequirement(
+                                                                           GranularPermission.Procurement_Vendor_View.ToString()));
+                                                               });
+
+                                                     options.AddPolicy(
+                                                         "Procurement.Inventory.View",
+                                                         policy =>
+                                                         {
+                                                             policy.RequireAuthenticatedUser();
+                                                             policy.AddRequirements(
+                                                                 new PermissionRequirement(
+                                                                     GranularPermission.Procurement_Inventory_View.ToString()));
+                                                         });
+
+                                                                 options.AddPolicy(
+                                                                     "Reports.View",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Reports_View.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Reports.FinancialSummary.View",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Reports_FinancialSummary_View.ToString()));
+                                                                     });
+
+                                                                 options.AddPolicy(
+                                                                     "Reports.Export",
+                                                                     policy =>
+                                                                     {
+                                                                         policy.RequireAuthenticatedUser();
+                                                                         policy.AddRequirements(
+                                                                             new PermissionRequirement(
+                                                                                 GranularPermission.Reports_Export.ToString()));
+                                                                     });
+        options.AddPolicy(
+            "HRM.Payroll.View",
+            policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(
+                    new PermissionRequirement(
+                        GranularPermission.HRM_Payroll_View.ToString()));
+            });
+
+        options.AddPolicy(
+            "HRM.Payroll.Approve",
+            policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(
+                    new PermissionRequirement(
+                        GranularPermission.HRM_Payroll_Approve.ToString()));
+            });
+
+            options.AddPolicy(
+                "HRM.SiteAssignment.View",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(
+                        new PermissionRequirement(
+                            GranularPermission.HRM_SiteAssignment_View.ToString()));
+                });
+
+            options.AddPolicy(
+                "HRM.SiteAssignment.Manage",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(
+                        new PermissionRequirement(
+                            GranularPermission.HRM_SiteAssignment_Manage.ToString()));
+                });
+
+
+                options.AddPolicy(
+                     "HRM.Employee.View",
+                     policy =>
+                     {
+                         policy.RequireAuthenticatedUser();
+                         policy.AddRequirements(
+                             new PermissionRequirement(
+                                 GranularPermission.HRM_Employee_View.ToString()));
+                     });
+
+                 options.AddPolicy(
+                     "HRM.Employee.Manage",
+                     policy =>
+                     {
+                         policy.RequireAuthenticatedUser();
+                         policy.AddRequirements(
+                             new PermissionRequirement(
+                                 GranularPermission.HRM_Employee_Manage.ToString()));
+                     });
+
+                 options.AddPolicy("HRM.Attendance.View", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Attendance_View.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Attendance.Submit", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Attendance_Submit.ToString()));
+                 });
+
+                 // Also used by timesheet review and attendance override.
+                 options.AddPolicy("HRM.Attendance.Approve", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Attendance_Approve.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Attendance.Override", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Attendance_Override.ToString()));
+                 });
+
+                 // ---- Leave ----
+                 options.AddPolicy("HRM.Leave.View", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Leave_View.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Leave.Submit", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Leave_Submit.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Leave.Approve", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Leave_Approve.ToString()));
+                 });
+
+                 // ---- Shifts ----
+                 options.AddPolicy("HRM.Shift.View", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Shift_View.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Shift.Submit", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Shift_Submit.ToString()));
+                 });
+
+                 // ---- Contractors ----
+                 options.AddPolicy("HRM.Contractor.View", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Contractor_View.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Contractor.Manage", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(new PermissionRequirement(
+                         GranularPermission.HRM_Contractor_Manage.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Timesheet.View", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(
+                         new PermissionRequirement(
+                             GranularPermission.HRM_Timesheet_View.ToString()));
+                 });
+
+                 options.AddPolicy("HRM.Timesheet.Submit", policy =>
+                 {
+                     policy.RequireAuthenticatedUser();
+                     policy.AddRequirements(
+                         new PermissionRequirement(
+                             GranularPermission.HRM_Timesheet_Submit.ToString()));
+                 });
+
+            options.AddPolicy("HRM.Timesheet.Approve", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(
+                    new PermissionRequirement(
+                        GranularPermission.HRM_Timesheet_Approve.ToString()));
+            });
+
+            options.AddPolicy(
+                "Equipment.View",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(
+                        new PermissionRequirement(
+                            GranularPermission.Equipment_View.ToString()));
+                });
+
+            options.AddPolicy(
+                "Equipment.Manage",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(
+                        new PermissionRequirement(
+                            GranularPermission.Equipment_Manage.ToString()));
+                });
+
+
+
         });
+
+
 
 
         return services;

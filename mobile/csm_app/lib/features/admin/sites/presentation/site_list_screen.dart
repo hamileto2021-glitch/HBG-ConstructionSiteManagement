@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
 
 import '../data/models/site.dart';
 import '../data/repositories/site_repository.dart';
@@ -131,14 +133,65 @@ class _SiteListScreenState
             )
                 : RefreshIndicator(
               onRefresh: _load,
-              child: ListView.builder(
+              child: AppBreakpoints.isDesktop(context)
+                  ? SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: AdaptiveDataTable(
+                  columns: [
+                    AdaptiveColumn(
+                      label: 'Site',
+                      value: (r) => r['name'] as String,
+                    ),
+                    AdaptiveColumn(
+                      label: 'Code',
+                      value: (r) => r['code'] as String,
+                    ),
+                    AdaptiveColumn(
+                      label: 'City',
+                      value: (r) => r['city'] as String,
+                    ),
+                    AdaptiveColumn(
+                      label: 'Status',
+                      value: (r) => r['status'] as String,
+                    ),
+                  ],
+                  rows: _filtered
+                      .map(
+                        (site) => {
+                      'id': site.id,
+                      'name': site.name,
+                      'code': site.siteCode,
+                      'city': site.city ?? '-',
+                      'status': site.status.displayName,
+                      'site': site,
+                    },
+                  )
+                      .toList(),
+                  onRowTap: (row) async {
+                    final site = row['site'] as Site;
+
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SiteDetailScreen(
+                          siteId: site.id,
+                          repository: widget.repository,
+                        ),
+                      ),
+                    );
+
+                    _load();
+                  },
+                ),
+              )
+                  : ListView.builder(
                 itemCount: _filtered.length,
                 itemBuilder: (context, index) {
                   final site = _filtered[index];
 
                   return Card(
-                    margin:
-                    const EdgeInsets.symmetric(
+                    margin: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 6,
                     ),
@@ -180,13 +233,15 @@ class _SiteListScreenState
                         site.isActive
                             ? Icons.chevron_right
                             : Icons.cancel,
-                        color: site.isActive ? Colors.green : Colors.red,
+                        color: site.isActive
+                            ? Colors.green
+                            : Colors.red,
                       ),
-                    )
+                    ),
                   );
                 },
               ),
-            ),
+            )
           ),
         ],
       ),

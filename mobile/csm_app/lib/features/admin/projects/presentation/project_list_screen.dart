@@ -4,12 +4,21 @@ import '../data/models/project.dart';
 import '../data/repositories/project_repository.dart';
 import 'project_details_screen.dart';
 import 'project_create.dart';
+import 'package:intl/intl.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+import '../../../../responsive/breakpoints.dart';
+import 'progress/project_progress_dashboard_screen.dart';
+
+
 
 class ProjectListScreen extends StatefulWidget {
   const ProjectListScreen({
     super.key,
     required this.repository,
+    this.initialStatus,
   });
+
+  final ProjectStatus? initialStatus;
 
   final ProjectRepository repository;
 
@@ -18,13 +27,21 @@ class ProjectListScreen extends StatefulWidget {
 }
 
 class _ProjectListScreenState extends State<ProjectListScreen> {
+  ProjectStatus? _selectedStatus;
+
+  List<Project> _projects = [];
   bool _isLoading = true;
   String? _errorMessage;
-  List<Project> _projects = const [];
+
+
+
 
   @override
   void initState() {
     super.initState();
+
+    _selectedStatus = widget.initialStatus;
+
     _loadProjects();
   }
 
@@ -37,12 +54,14 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     try {
       final projects = await widget.repository.getAll();
 
-      if (!mounted) {
-        return;
-      }
+      final filtered = _selectedStatus == null
+          ? projects
+          : projects
+          .where((p) => p.status == _selectedStatus)
+          .toList();
 
       setState(() {
-        _projects = projects;
+        _projects = filtered;
         _isLoading = false;
       });
     } catch (error) {
@@ -118,34 +137,39 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
+      return SafeArea(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 48,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Unable to load projects.',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    _errorMessage!,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: _loadProjects,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Unable to load projects.',
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: _loadProjects,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
-            ],
+            ),
           ),
         ),
       );
@@ -175,7 +199,78 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
     return RefreshIndicator(
       onRefresh: _refreshProjects,
-      child: ListView.separated(
+      child: AppBreakpoints.isDesktop(context)
+          ? SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: AdaptiveDataTable(
+          columns: [
+            AdaptiveColumn(
+              label: 'Project',
+              value: (r) => r['name'] as String,
+            ),
+            AdaptiveColumn(
+              label: 'Code',
+              value: (r) => r['code'] as String,
+            ),
+            AdaptiveColumn(
+              label: 'Status',
+              value: (r) => r['status'] as String,
+            ),
+            AdaptiveColumn(
+              label: 'Progress',
+              value: (r) => '${r['progress']}%',
+            ),
+            AdaptiveColumn(
+              label: 'Actions',
+              cell: (row) {
+                final project = row['project'] as Project;
+
+                return IconButton(
+                  icon: const Icon(Icons.analytics_outlined),
+                  tooltip: 'Project Progress',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProjectProgressDashboardScreen(
+                          projectId: project.id,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+          rows: _projects
+              .map(
+                (p) => {
+              'id': p.id,
+              'name': p.name,
+              'code': p.projectCode,
+              'status': p.status.name,
+              'progress': p.progressPercentage.toStringAsFixed(1),
+              'project': p,
+            },
+          )
+              .toList(),
+          onRowTap: (row) {
+            final project = row['project'] as Project;
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProjectDetailsScreen(
+                  project: project,
+                  repository: widget.repository,
+                ),
+              ),
+            );
+          },
+        ),
+      )
+          : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _projects.length,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -198,6 +293,12 @@ class _ProjectCard extends StatelessWidget {
 
   final Project project;
   final ProjectRepository repository;
+
+  static final NumberFormat _currency =
+  NumberFormat('#,##0.00');
+
+  String _formatMoney(double value) =>
+      _currency.format(value);
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +339,27 @@ class _ProjectCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _StatusChip(status: project.status),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _StatusChip(status: project.status),
+                    const SizedBox(height: 6),
+                    IconButton(
+                      icon: const Icon(Icons.analytics_outlined),
+                      tooltip: 'Project Progress',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProjectProgressDashboardScreen(
+                              projectId: project.id,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ],
             ),
             if (project.description != null &&
@@ -269,7 +390,7 @@ class _ProjectCard extends StatelessWidget {
             const SizedBox(height: 16),
             _InfoRow(
               label: 'Contract value',
-              value: project.contractValue.toStringAsFixed(2),
+              value: _formatMoney(project.contractValue),
             ),
             _InfoRow(
               label: 'Planned start',

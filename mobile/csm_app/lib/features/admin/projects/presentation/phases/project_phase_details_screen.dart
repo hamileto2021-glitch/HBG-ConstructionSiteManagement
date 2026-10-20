@@ -10,6 +10,9 @@ import '../milestones/milestone_list_screen.dart';
 import '../../data/models/milestones/milestone.dart';
 import '../../data/models/work_task.dart';
 
+
+
+
 class ProjectPhaseDetailsScreen extends StatefulWidget {
   const ProjectPhaseDetailsScreen({
     super.key,
@@ -305,8 +308,7 @@ class _ProjectPhaseDetailsScreenState
               ),
             _buildHeader(context),
             const SizedBox(height: 16),
-            _buildHeader(context),
-            const SizedBox(height: 16),
+
             _buildProgressCard(context),
             const SizedBox(height: 16),
             _buildStatusManagementCard(context),
@@ -316,8 +318,6 @@ class _ProjectPhaseDetailsScreenState
             _buildWorkTasksCard(context),
             const SizedBox(height: 16),
             _buildInformationCard(context),
-            const SizedBox(height: 16),
-            _buildDatesCard(context),
             const SizedBox(height: 16),
             _buildDatesCard(context),
           ],
@@ -634,7 +634,7 @@ class _ProjectPhaseDetailsScreenState
 
     final blocked = _workTasks
         .where(
-          (task) => task.status == WorkTaskStatus.blocked,
+          (task) => task.status == WorkTaskStatus.onHold,
     )
         .length;
 

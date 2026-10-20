@@ -33,7 +33,8 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
 
         EnsureCanManage(actor);
 
-        var query = BuildQuery();
+        var query = BuildQuery()
+            .AsSplitQuery();
 
         if (!IsSuperAdmin(actor))
         {
@@ -610,6 +611,7 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
     {
         return _dbContext.PurchaseOrders
             .AsNoTracking()
+            .AsSplitQuery()   // ← Add only this line
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
             .Include(x => x.Vendor)
@@ -617,8 +619,7 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             .Include(x => x.Lines)
                 .ThenInclude(x => x.Material)
             .Include(x => x.Lines)
-                .ThenInclude(x => x.CostCode)
-            .AsQueryable();
+                .ThenInclude(x => x.CostCode);
     }
 
     private async Task<PurchaseOrder> GetPurchaseOrderAsync(

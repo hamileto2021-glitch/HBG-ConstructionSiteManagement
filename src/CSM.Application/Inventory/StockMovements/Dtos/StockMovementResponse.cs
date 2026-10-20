@@ -41,5 +41,8 @@ public sealed class StockMovementResponse
     public string? ReferenceNumber { get; set; }
 
     public string? Remarks { get; set; }
+
+    public string? MoveFrom { get; set; }
+    public string? MoveTo { get; set; }
 }
 

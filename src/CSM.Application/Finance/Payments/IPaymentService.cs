@@ -29,4 +29,23 @@ public interface IPaymentService
         Guid paymentId,
         ChangePaymentStatusRequest request,
         CancellationToken cancellationToken = default);
+
+    Task CompletePaymentAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task ReversePaymentAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<PaymentResponse>> GetCompanyPaymentsAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default);
 }

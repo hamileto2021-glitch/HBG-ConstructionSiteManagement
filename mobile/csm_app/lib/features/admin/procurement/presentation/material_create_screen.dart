@@ -2,6 +2,9 @@ import 'package:flutter/material.dart' hide MaterialType;
 
 import '../data/models/material.dart';
 import '../data/repositories/material_repository.dart';
+import '../data/models/material_lookup.dart';
+
+
 
 class MaterialCreateScreen extends StatefulWidget {
   const MaterialCreateScreen({
@@ -23,22 +26,60 @@ class _MaterialCreateScreenState
   final _materialCodeController = TextEditingController();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _categoryController = TextEditingController();
-  final _unitOfMeasureController = TextEditingController();
+
   final _defaultCostCodeIdController = TextEditingController();
   final _standardUnitCostController = TextEditingController();
 
   bool _isActive = true;
   bool _isSaving = false;
-  MaterialType _materialType = MaterialType.bulk;
 
+  List<MaterialLookup> _categories = [];
+  List<MaterialLookup> _units = [];
+  List<MaterialLookup> _materialTypes = [];
+
+  String? _selectedCategory;
+  String? _selectedUnit;
+  String? _selectedMaterialType;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLookups();
+  }
+
+  Future<void> _loadLookups() async {
+    try {
+      final categories = await widget.repository.getCategories();
+      final units = await widget.repository.getUnits();
+      final types = await widget.repository.getMaterialTypes();
+
+      if (!mounted) return;
+
+      setState(() {
+        _categories = categories;
+        _units = units;
+        _materialTypes = types;
+
+        if (categories.isNotEmpty) {
+          _selectedCategory = categories.first.value;
+        }
+
+        if (units.isNotEmpty) {
+          _selectedUnit = units.first.value;
+        }
+
+        if (types.isNotEmpty) {
+          _selectedMaterialType = types.first.value;
+        }
+      });
+    } catch (_) {}
+  }
   @override
   void dispose() {
     _materialCodeController.dispose();
     _nameController.dispose();
     _descriptionController.dispose();
-    _categoryController.dispose();
-    _unitOfMeasureController.dispose();
+
     _defaultCostCodeIdController.dispose();
     _standardUnitCostController.dispose();
     super.dispose();
@@ -77,11 +118,14 @@ class _MaterialCreateScreenState
             _descriptionController.text.trim().isEmpty
                 ? null
                 : _descriptionController.text.trim(),
-        category:
-            _categoryController.text.trim(),
-        unitOfMeasure:
-            _unitOfMeasureController.text.trim(),
-        materialType: _materialType,
+          category: _selectedCategory!,
+          unitOfMeasure: _selectedUnit!,
+        materialType: MaterialType.values.firstWhere(
+              (e) =>
+          e.name.toLowerCase() ==
+              (_selectedMaterialType ?? 'Bulk').toLowerCase(),
+          orElse: () => MaterialType.bulk,
+        ),
         defaultCostCodeId:
             _defaultCostCodeIdController.text
                     .trim()
@@ -179,69 +223,71 @@ class _MaterialCreateScreenState
                   TextInputAction.next,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _categoryController,
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Category',
                 border: OutlineInputBorder(),
               ),
-              textInputAction:
-                  TextInputAction.next,
-              validator: (value) {
-                if (value == null ||
-                    value.trim().isEmpty) {
-                  return 'Category is required.';
-                }
-
-                return null;
-              },
+              items: _categories
+                  .map(
+                    (e) => DropdownMenuItem(
+                  value: e.value,
+                  child: Text(e.name),
+                ),
+              )
+                  .toList(),
+              validator: (v) =>
+              v == null ? 'Category is required.' : null,
+              onChanged: (v) => setState(() {
+                _selectedCategory = v;
+              }),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _unitOfMeasureController,
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _selectedUnit,
               decoration: const InputDecoration(
                 labelText: 'Unit of Measure',
                 border: OutlineInputBorder(),
               ),
-              textInputAction:
-                  TextInputAction.next,
-              validator: (value) {
-                if (value == null ||
-                    value.trim().isEmpty) {
-                  return 'Unit of measure is required.';
-                }
-
-                return null;
-              },
+              items: _units
+                  .map(
+                    (e) => DropdownMenuItem(
+                  value: e.value,
+                  child: Text(e.name),
+                ),
+              )
+                  .toList(),
+              validator: (v) => v == null
+                  ? 'Unit of measure is required.'
+                  : null,
+              onChanged: (v) => setState(() {
+                _selectedUnit = v;
+              }),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<MaterialType>(
-              initialValue: _materialType,
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _selectedMaterialType,
               decoration: const InputDecoration(
                 labelText: 'Material Type',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: MaterialType.bulk,
-                  child: Text('Bulk'),
+              items: _materialTypes
+                  .map(
+                    (e) => DropdownMenuItem(
+                  value: e.value,
+                  child: Text(e.name),
                 ),
-                DropdownMenuItem(
-                  value: MaterialType.rebarLinear,
-                  child: Text('Rebar Linear'),
-                ),
-              ],
-              onChanged: _isSaving
-                  ? null
-                  : (value) {
-                      if (value == null) {
-                        return;
-                      }
-
-                      setState(() {
-                        _materialType = value;
-                      });
-                    },
+              )
+                  .toList(),
+              validator: (v) =>
+              v == null ? 'Material type is required.' : null,
+              onChanged: (v) => setState(() {
+                _selectedMaterialType = v;
+              }),
             ),
             const SizedBox(height: 16),
             TextFormField(

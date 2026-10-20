@@ -1,18 +1,91 @@
-﻿
 enum WorkTaskStatus {
   notStarted,
   inProgress,
-  blocked,
   onHold,
   completed,
-  cancelled,
+  cancelled;
+
+  String get displayName {
+    switch (this) {
+      case WorkTaskStatus.notStarted:
+        return 'Not Started';
+      case WorkTaskStatus.inProgress:
+        return 'In Progress';
+      case WorkTaskStatus.onHold:
+        return 'On Hold';
+      case WorkTaskStatus.completed:
+        return 'Completed';
+      case WorkTaskStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  factory WorkTaskStatus.fromJson(String value) {
+    switch (value.toLowerCase()) {
+      case 'inprogress':
+        return WorkTaskStatus.inProgress;
+      case 'onhold':
+        return WorkTaskStatus.onHold;
+      case 'completed':
+        return WorkTaskStatus.completed;
+      case 'cancelled':
+        return WorkTaskStatus.cancelled;
+      default:
+        return WorkTaskStatus.notStarted;
+    }
+  }
 }
 
-enum TaskPriority {
+enum Priority {
   low,
   normal,
   high,
-  critical,
+  critical;
+
+  String get displayName {
+    switch (this) {
+      case Priority.low:
+        return 'Low';
+      case Priority.normal:
+        return 'Normal';
+      case Priority.high:
+        return 'High';
+      case Priority.critical:
+        return 'Critical';
+    }
+  }
+
+  factory Priority.fromJson(String value) {
+    switch (value.toLowerCase()) {
+      case 'low':
+        return Priority.low;
+      case 'high':
+        return Priority.high;
+      case 'critical':
+        return Priority.critical;
+      default:
+        return Priority.normal;
+    }
+  }
+}
+
+class WorkTaskDependency {
+  const WorkTaskDependency({
+    required this.workTaskId,
+    required this.dependsOnTaskId,
+  });
+
+  final String workTaskId;
+  final String dependsOnTaskId;
+
+  factory WorkTaskDependency.fromJson(
+      Map<String, dynamic> json,
+      ) {
+    return WorkTaskDependency(
+      workTaskId: json['workTaskId'],
+      dependsOnTaskId: json['dependsOnTaskId'],
+    );
+  }
 }
 
 class WorkTask {
@@ -31,7 +104,7 @@ class WorkTask {
     required this.progressPercentage,
     required this.priority,
     required this.status,
-    required this.createdAtUtc,
+    required this.dependencies,
   });
 
   final String id;
@@ -46,84 +119,43 @@ class WorkTask {
   final DateTime? actualStartDate;
   final DateTime? actualEndDate;
   final double progressPercentage;
-  final TaskPriority priority;
+  final Priority priority;
   final WorkTaskStatus status;
-  final DateTime createdAtUtc;
+  final List<WorkTaskDependency> dependencies;
 
   factory WorkTask.fromJson(Map<String, dynamic> json) {
     return WorkTask(
-      id: json['id'] as String,
-      projectId: json['projectId'] as String,
-      projectPhaseId: json['projectPhaseId'] as String?,
-      milestoneId: json['milestoneId'] as String?,
-      taskNumber: json['taskNumber'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String?,
-      plannedStartDate: _parseDate(json['plannedStartDate']),
-      plannedEndDate: _parseDate(json['plannedEndDate']),
-      actualStartDate: _parseDate(json['actualStartDate']),
-      actualEndDate: _parseDate(json['actualEndDate']),
+      id: json['id'],
+      projectId: json['projectId'],
+      projectPhaseId: json['projectPhaseId'],
+      milestoneId: json['milestoneId'],
+      taskNumber: json['taskNumber'],
+      title: json['title'],
+      description: json['description'],
+      plannedStartDate: json['plannedStartDate'] == null
+          ? null
+          : DateTime.parse(json['plannedStartDate']),
+      plannedEndDate: json['plannedEndDate'] == null
+          ? null
+          : DateTime.parse(json['plannedEndDate']),
+      actualStartDate: json['actualStartDate'] == null
+          ? null
+          : DateTime.parse(json['actualStartDate']),
+      actualEndDate: json['actualEndDate'] == null
+          ? null
+          : DateTime.parse(json['actualEndDate']),
       progressPercentage:
-          (json['progressPercentage'] as num?)?.toDouble() ?? 0,
-      priority: _parsePriority(json['priority']),
-      status: _parseStatus(json['status']),
-      createdAtUtc: DateTime.parse(
-        json['createdAtUtc'] as String,
-      ),
+      (json['progressPercentage'] as num).toDouble(),
+      priority: Priority.fromJson(json['priority']),
+      status: WorkTaskStatus.fromJson(json['status']),
+      dependencies:
+      (json['dependencies'] as List<dynamic>? ?? [])
+          .map(
+            (e) => WorkTaskDependency.fromJson(
+          e as Map<String, dynamic>,
+        ),
+      )
+          .toList(),
     );
-  }
-
-  static DateTime? _parseDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
-
-    return DateTime.tryParse(value.toString());
-  }
-
-  static TaskPriority _parsePriority(dynamic value) {
-    final name = value.toString().split('.').last;
-
-    switch (name) {
-      case 'low':
-      case 'Low':
-        return TaskPriority.low;
-      case 'high':
-      case 'High':
-        return TaskPriority.high;
-      case 'critical':
-      case 'Critical':
-        return TaskPriority.critical;
-      case 'normal':
-      case 'Normal':
-      default:
-        return TaskPriority.normal;
-    }
-  }
-
-  static WorkTaskStatus _parseStatus(dynamic value) {
-    final name = value.toString().split('.').last;
-
-    switch (name) {
-      case 'inProgress':
-      case 'InProgress':
-        return WorkTaskStatus.inProgress;
-      case 'blocked':
-      case 'Blocked':
-        return WorkTaskStatus.blocked;
-      case 'onHold':
-      case 'OnHold':
-        return WorkTaskStatus.onHold;
-      case 'completed':
-      case 'Completed':
-        return WorkTaskStatus.completed;
-      case 'cancelled':
-      case 'Cancelled':
-        return WorkTaskStatus.cancelled;
-      case 'notStarted':
-      case 'NotStarted':
-      default:
-        return WorkTaskStatus.notStarted;
-    }
   }
 }

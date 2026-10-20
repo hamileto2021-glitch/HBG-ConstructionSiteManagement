@@ -3,9 +3,20 @@ import 'package:flutter/material.dart';
 import '../data/models/payment.dart';
 import '../data/repositories/payment_repository.dart';
 import '../data/repositories/invoice_repository.dart';
-import '../../procurement/data/repositories/vendor_repository.dart';
-import '../data/models/invoice.dart';
+
 import '../../procurement/data/models/vendor.dart';
+import '../../procurement/data/repositories/vendor_repository.dart';
+
+import '../../projects/data/models/project.dart';
+import '../../projects/data/repositories/project_repository.dart';
+
+import '../../sites/data/models/site.dart';
+import '../../sites/data/repositories/site_repository.dart';
+
+import '../data/models/invoice.dart';
+
+
+
 
 class PaymentCreateScreen extends StatefulWidget {
   const PaymentCreateScreen({
@@ -34,15 +45,22 @@ class _PaymentCreateScreenState
   final _notesController = TextEditingController();
 
   final DateTime _paymentDate = DateTime.now();
+
   PaymentDirection _direction =
       PaymentDirection.incoming;
 
   final String _currency = 'ETB';
+
   String? _paymentMethod;
 
+  List<Site> _sites = [];
+  List<Project> _projects = [];
+  List<Project> _filteredProjects = [];
   List<Invoice> _invoices = [];
   List<Vendor> _vendors = [];
 
+  String? _selectedSite;
+  String? _selectedProject;
   String? _selectedInvoice;
   String? _selectedVendor;
 
@@ -56,6 +74,9 @@ class _PaymentCreateScreenState
     'Mobile Money',
   ];
 
+  final _siteRepository = SiteRepository();
+  final _projectRepository = ProjectRepository();
+
   @override
   void initState() {
     super.initState();
@@ -64,34 +85,50 @@ class _PaymentCreateScreenState
 
   Future<void> _loadData() async {
     try {
-      final invoices =
-      await widget.invoiceRepository.getAll();
-      final vendors =
-      await widget.vendorRepository.getAll();
+      final results = await Future.wait([
+        _siteRepository.getAll(),
+        _projectRepository.getAll(),
+        widget.invoiceRepository.getAll(),
+        widget.vendorRepository.getAll(),
+      ]);
 
       if (!mounted) return;
 
       setState(() {
-        _invoices = invoices;
-        _vendors = vendors;
+        _sites = results[0] as List<Site>;
+        _projects = results[1] as List<Project>;
+        _invoices = results[2] as List<Invoice>;
+        _vendors = results[3] as List<Vendor>;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
-
       setState(() => _loading = false);
     }
   }
 
+  void _onSiteChanged(String? siteId) {
+    setState(() {
+      _selectedSite = siteId;
+      _selectedProject = null;
+
+      _filteredProjects = _projects
+          .where(
+            (p) => p.constructionSiteId == siteId,
+      )
+          .toList();
+    });
+  }
+
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
 
     try {
       await widget.repository.create(
+        constructionSiteId: _selectedSite!,
+        projectId: _selectedProject,
         invoiceId: _selectedInvoice,
         vendorId: _selectedVendor,
         paymentNumber: _numberController.text.trim(),
@@ -111,7 +148,6 @@ class _PaymentCreateScreenState
       );
 
       if (!mounted) return;
-
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -176,6 +212,58 @@ class _PaymentCreateScreenState
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _selectedSite,
+              decoration: const InputDecoration(
+                labelText: 'Construction Site',
+                border: OutlineInputBorder(),
+              ),
+              items: _sites
+                  .map(
+                    (s) => DropdownMenuItem(
+                  value: s.id,
+                      child: Text(
+                        '${s.siteCode} - ${s.name}',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                ),
+              )
+                  .toList(),
+              validator: (v) =>
+              v == null ? 'Select a site' : null,
+              onChanged: _onSiteChanged,
+            ),
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _selectedProject,
+              decoration: const InputDecoration(
+                labelText: 'Project (Optional)',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('None'),
+                ),
+                ..._filteredProjects.map(
+                      (p) => DropdownMenuItem(
+                    value: p.id,
+                    child: Text(
+                      '${p.projectCode} - ${p.name}',
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: (v) =>
+                  setState(() => _selectedProject = v),
+            ),
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _selectedInvoice,
               decoration: const InputDecoration(
                 labelText: 'Invoice',
@@ -199,6 +287,7 @@ class _PaymentCreateScreenState
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _selectedVendor,
               decoration: const InputDecoration(
                 labelText: 'Vendor',
@@ -212,7 +301,9 @@ class _PaymentCreateScreenState
                 ..._vendors.map(
                       (e) => DropdownMenuItem(
                     value: e.id,
-                    child: Text(e.name),
+                    child: Text(
+                      '${e.vendorCode} - ${e.name}',
+                    ),
                   ),
                 ),
               ],

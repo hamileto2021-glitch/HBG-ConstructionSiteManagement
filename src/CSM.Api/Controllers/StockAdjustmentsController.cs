@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class StockAdjustmentsController : ControllerBase
 {
     private readonly IStockAdjustmentService _stockAdjustmentService;
@@ -21,7 +21,20 @@ public sealed class StockAdjustmentsController : ControllerBase
         _stockAdjustmentService = stockAdjustmentService;
     }
 
+    [HttpGet]
+    [Authorize(Policy = "Procurement.Inventory.View")]
+    public async Task<ActionResult<List<StockAdjustmentResponse>>> GetAll(
+        CancellationToken cancellationToken)
+    {
+        var result = await _stockAdjustmentService.GetAllAsync(
+            GetCurrentUserId(),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost]
+    [Authorize(Policy = "Procurement.Inventory.Adjust")]
     public async Task<ActionResult<StockAdjustmentResponse>> Create(
         CreateStockAdjustmentRequest request,
         CancellationToken cancellationToken)

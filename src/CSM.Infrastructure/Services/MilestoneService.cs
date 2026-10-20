@@ -123,8 +123,8 @@ public sealed class MilestoneService : IMilestoneService
             Name = request.Name.Trim(),
             Description = Clean(request.Description),
             PlannedDate = request.PlannedDate,
-            CompletedDate = null,
-            IsCompleted = false
+            ActualDate = null,
+            Status = MilestoneStatus.Pending
         };
 
         var executionStrategy =
@@ -176,7 +176,7 @@ public sealed class MilestoneService : IMilestoneService
 
         EnsureProjectCanBeModified(project);
 
-        if (milestone.IsCompleted)
+        if (milestone.Status == MilestoneStatus.Completed)
         {
             throw new MilestoneManagementException(
                 "A completed milestone cannot be edited. Reopen it first.");
@@ -231,14 +231,13 @@ public sealed class MilestoneService : IMilestoneService
 
         EnsureProjectCanBeModified(project);
 
-        if (milestone.IsCompleted)
+        if (milestone.Status == MilestoneStatus.Completed)
         {
             return Map(milestone);
         }
 
-        milestone.IsCompleted = true;
-        milestone.CompletedDate =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+        milestone.Status = MilestoneStatus.Completed;
+        milestone.ActualDate = DateOnly.FromDateTime(DateTime.UtcNow);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -269,13 +268,13 @@ public sealed class MilestoneService : IMilestoneService
 
         EnsureProjectCanBeModified(project);
 
-        if (!milestone.IsCompleted)
+        if (milestone.Status != MilestoneStatus.Completed)
         {
             return Map(milestone);
         }
 
-        milestone.IsCompleted = false;
-        milestone.CompletedDate = null;
+        milestone.Status = MilestoneStatus.Pending;
+        milestone.ActualDate = null;
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -512,8 +511,8 @@ public sealed class MilestoneService : IMilestoneService
             milestone.Name,
             milestone.Description,
             milestone.PlannedDate,
-            milestone.CompletedDate,
-            milestone.IsCompleted,
+            milestone.ActualDate,
+            milestone.Status == MilestoneStatus.Completed,
             milestone.CreatedAtUtc);
     }
 }

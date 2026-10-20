@@ -4,6 +4,11 @@ import '../data/models/material.dart';
 import '../data/repositories/material_repository.dart';
 import 'material_create_screen.dart';
 import 'material_detail_screen.dart';
+import '../../../../responsive/breakpoints.dart';
+import '../../../../shared/widgets/adaptive_data_table.dart';
+
+
+
 
 class MaterialListScreen extends StatefulWidget {
   const MaterialListScreen({
@@ -167,11 +172,95 @@ class _MaterialListScreenState
       );
     }
 
+    if (AppBreakpoints.isDesktop(context)) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.7,
+              children: [
+                _MaterialKpiCard(
+                  title: 'Materials',
+                  value: '${_materials.length}',
+                  icon: Icons.inventory_2,
+                  color: Colors.blue,
+                ),
+                _MaterialKpiCard(
+                  title: 'Categories',
+                  value: '$_categoryCount',
+                  icon: Icons.category,
+                  color: Colors.green,
+                ),
+                _MaterialKpiCard(
+                  title: 'Rebar',
+                  value: '$_rebarCount',
+                  icon: Icons.straighten,
+                  color: Colors.deepPurple,
+                ),
+                _MaterialKpiCard(
+                  title: 'Units',
+                  value: '$_unitCount',
+                  icon: Icons.square_foot,
+                  color: Colors.orange,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            AdaptiveDataTable(
+              columns: [
+                AdaptiveColumn(
+                  label: 'Material',
+                  value: (r) => r['name'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Code',
+                  value: (r) => r['code'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Category',
+                  value: (r) => r['category'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Unit',
+                  value: (r) => r['unit'] as String,
+                ),
+                AdaptiveColumn(
+                  label: 'Status',
+                  value: (r) => r['status'] as String,
+                ),
+              ],
+              rows: _materials.map((m) {
+                return {
+                  'item': m,
+                  'name': m.name,
+                  'code': m.materialCode,
+                  'category': m.category,
+                  'unit': m.unitOfMeasure,
+                  'status': m.isActive ? 'Active' : 'Inactive',
+                };
+              }).toList(),
+              onRowTap: (row) {
+                final material = row['item'] as Material;
+                _openDetailScreen(material);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _materials.length,
-      separatorBuilder: (_, _) =>
-          const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         return _buildMaterialCard(
           context,
@@ -251,8 +340,65 @@ class _MaterialListScreenState
     );
   }
 
+
+
   String _money(double amount) {
     return amount.toStringAsFixed(2);
+  }
+
+
+
+
+
+  int get _categoryCount =>
+      _materials.map((e) => e.category).toSet().length;
+
+  int get _unitCount =>
+      _materials.map((e) => e.unitOfMeasure).toSet().length;
+
+  int get _rebarCount =>
+      _materials
+          .where((e) => e.category.toLowerCase().contains('rebar'))
+          .length;
+}
+
+class _MaterialKpiCard extends StatelessWidget {
+  const _MaterialKpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withValues(alpha: 0.12),
+              child: Icon(icon, color: color),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(title),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -22,23 +22,23 @@ public class NotificationConfiguration :
             .HasMaxLength(2000)
             .IsRequired();
 
-        builder.Property(x => x.Type)
+        builder.Property(x => x.Severity)
             .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
 
-        builder.Property(x => x.RelatedEntityType)
+        builder.Property(x => x.SourceEntityType)
             .HasMaxLength(100);
 
-        builder.HasOne(x => x.User)
+        builder.HasOne(x => x.RecipientUser)
             .WithMany()
-            .HasForeignKey(x => x.UserId)
+            .HasForeignKey(x => x.RecipientUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new
         {
             x.CompanyId,
-            x.UserId,
+            x.RecipientUserId,
             x.IsRead,
             x.CreatedAtUtc
         });

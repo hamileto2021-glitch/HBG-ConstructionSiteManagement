@@ -38,13 +38,54 @@ public sealed class SiteAssignmentService : ISiteAssignmentService
                 .Include(x => x.Employee)
                 .Include(x => x.ConstructionSite);
 
-        if (!IsSuperAdmin(actor))
+
+if (!IsSuperAdmin(actor))
+{
+    var companyId = GetActorCompanyId(actor);
+
+    query = query.Where(
+        x => x.CompanyId == companyId);
+
+    var isSiteScopedUser =
+        HasRole(actor, AppRoles.HROfficer) ||
+        HasRole(actor, AppRoles.HrOfficer) ||
+        HasRole(actor, AppRoles.SiteManager) ||
+        HasRole(actor, AppRoles.Supervisor);
+
+    if (isSiteScopedUser)
+    {
+        var hasActiveSiteAccess =
+            await _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .AnyAsync(
+                    access =>
+                        access.UserId == currentUserId &&
+                        access.CompanyId == companyId &&
+                        access.IsActive &&
+                        !access.IsDeleted,
+                    cancellationToken);
+
+        if (hasActiveSiteAccess)
         {
-            var companyId = GetActorCompanyId(actor);
+            var authorizedSiteIds =
+                _dbContext.UserSiteAccesses
+                    .AsNoTracking()
+                    .Where(
+                        access =>
+                            access.UserId == currentUserId &&
+                            access.CompanyId == companyId &&
+                            access.IsActive &&
+                            !access.IsDeleted)
+                    .Select(access => access.SiteId);
 
             query = query.Where(
-                x => x.CompanyId == companyId);
+                assignment =>
+                    authorizedSiteIds.Contains(
+                        assignment.ConstructionSiteId));
         }
+    }
+}
+
 
         if (employeeId.HasValue)
         {
@@ -385,7 +426,9 @@ public sealed class SiteAssignmentService : ISiteAssignmentService
 
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
-            HasRole(actor, AppRoles.Supervisor))
+            HasRole(actor, AppRoles.Supervisor) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }
@@ -397,7 +440,9 @@ public sealed class SiteAssignmentService : ISiteAssignmentService
     private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.HrOfficer) ||
+            HasRole(actor, AppRoles.HROfficer))
         {
             return;
         }

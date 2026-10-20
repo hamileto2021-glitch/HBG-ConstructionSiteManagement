@@ -1,31 +1,36 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Employees;
 using CSM.Application.HRM.Employees.Dtos;
 using CSM.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Application.Common.Audit;
 
 namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class EmployeesController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;
+    private readonly IAuditService _auditService;
 
     public EmployeesController(
-        IEmployeeService employeeService)
+        IEmployeeService employeeService,
+        IAuditService auditService)
     {
         _employeeService = employeeService;
+        _auditService = auditService;
     }
 
     [HttpGet]
+    [Authorize(Policy = "HRM.Employee.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<EmployeeResponse>>> GetAll(
         [FromQuery] EmployeeStatus? status,
+        [FromQuery] EmployeeScope? employeeScope,
         CancellationToken cancellationToken)
     {
         try
@@ -34,6 +39,8 @@ public sealed class EmployeesController : ControllerBase
                 await _employeeService.GetAllAsync(
                     GetCurrentUserId(),
                     status,
+                    employeeScope,
+                    null,
                     cancellationToken);
 
             return Ok(employees);
@@ -46,6 +53,7 @@ public sealed class EmployeesController : ControllerBase
     }
 
     [HttpGet("{employeeId:guid}")]
+    [Authorize(Policy = "HRM.Employee.View")]
     public async Task<ActionResult<EmployeeResponse>> GetById(
         Guid employeeId,
         CancellationToken cancellationToken)
@@ -68,6 +76,7 @@ public sealed class EmployeesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "HRM.Employee.Manage")]
     public async Task<ActionResult<EmployeeResponse>> Create(
         CreateEmployeeRequest request,
         CancellationToken cancellationToken)
@@ -79,6 +88,17 @@ public sealed class EmployeesController : ControllerBase
                     GetCurrentUserId(),
                     request,
                     cancellationToken);
+
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "HRM",
+                "Create",
+                "Employee",
+                employee.Id.ToString(),
+                $"Created employee {employee.EmployeeNumber}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -93,6 +113,7 @@ public sealed class EmployeesController : ControllerBase
     }
 
     [HttpPut("{employeeId:guid}")]
+    [Authorize(Policy = "HRM.Employee.Manage")]
     public async Task<ActionResult<EmployeeResponse>> Update(
         Guid employeeId,
         UpdateEmployeeRequest request,
@@ -107,6 +128,17 @@ public sealed class EmployeesController : ControllerBase
                     request,
                     cancellationToken);
 
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "HRM",
+                "Update",
+                "Employee",
+                employee.Id.ToString(),
+                $"Updated employee {employee.EmployeeNumber}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
+
             return Ok(employee);
         }
         catch (EmployeeManagementException ex)
@@ -117,6 +149,7 @@ public sealed class EmployeesController : ControllerBase
     }
 
     [HttpPut("{employeeId:guid}/status")]
+    [Authorize(Policy = "HRM.Employee.Manage")]
     public async Task<ActionResult<EmployeeResponse>> ChangeStatus(
         Guid employeeId,
         ChangeEmployeeStatusRequest request,
@@ -130,6 +163,17 @@ public sealed class EmployeesController : ControllerBase
                     employeeId,
                     request,
                     cancellationToken);
+
+            await _auditService.LogAsync(
+                GetCurrentUserId(),
+                User.Identity?.Name ?? "System",
+                "HRM",
+                "Status Change",
+                "Employee",
+                employee.Id.ToString(),
+                $"Changed status to {request.Status}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken);
 
             return Ok(employee);
         }

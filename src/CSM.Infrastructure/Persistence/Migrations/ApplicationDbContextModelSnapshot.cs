@@ -22,6 +22,71 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("CSM.Domain.Entities.Audit.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Compliance.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -44,6 +109,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CurrentRevision")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -52,6 +120,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Discipline")
+                        .HasColumnType("int");
 
                     b.Property<string>("DocumentNumber")
                         .IsRequired()
@@ -62,6 +133,12 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DrawingNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DrawingStatus")
+                        .HasColumnType("int");
 
                     b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
@@ -100,6 +177,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<string>("RelatedEntityType")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SheetNumber")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StoragePath")
                         .IsRequired()
@@ -394,6 +474,104 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("InspectionChecklistItems", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.NonConformanceReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AssignedToEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ClosedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CorrectiveAction")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NcrNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PreventiveAction")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("RaisedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReportedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RootCause")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToEmployeeId");
+
+                    b.HasIndex("ConstructionSiteId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("RaisedById");
+
+                    b.ToTable("NonConformanceReports");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Compliance.Permit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -483,6 +661,110 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Permits", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.QualityChecklist", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConstructionSiteId");
+
+                    b.ToTable("QualityChecklists");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.QualityChecklistItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsMandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("QualityChecklistId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Requirement")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QualityChecklistId");
+
+                    b.ToTable("QualityChecklistItems");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Compliance.SafetyIncident", b =>
@@ -597,6 +879,326 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("SafetyIncidents", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.SafetyObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ImmediateAction")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ObservationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ObservationNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ObserverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("PositiveObservation")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RecommendedAction")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RiskLevel")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConstructionSiteId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ObserverId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("SafetyObservations");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentFuelLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EquipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FuelType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Liters")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MeterReading")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("RefueledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SiteName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.ToTable("EquipmentFuelLogs");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentHourLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Activity")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CurrentMeterReading")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EquipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("HoursWorked")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LoggedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OperatorEmployeeId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OperatorName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("PreviousMeterReading")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProjectName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.ToTable("EquipmentHourLogs");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentTimesheet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Activity")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("BreakMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<Guid>("EquipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OperatorName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Shift")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("WorkedHours")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.ToTable("EquipmentTimesheets");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Budget", b =>
                 {
                     b.Property<Guid>("Id")
@@ -617,7 +1219,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("ConstructionSiteId")
+                    b.Property<Guid?>("ConstructionSiteId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -737,7 +1339,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.HasIndex("CostCodeId");
 
                     b.HasIndex("BudgetId", "CostCodeId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("BudgetLines", (string)null);
                 });
@@ -756,6 +1359,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -769,7 +1375,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -792,6 +1399,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConstructionSiteId");
 
                     b.HasIndex("ParentCostCodeId");
 
@@ -820,7 +1429,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("ConstructionSiteId")
+                    b.Property<Guid?>("ConstructionSiteId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("CostCodeId")
@@ -877,6 +1486,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal>("TaxAmount")
                         .HasPrecision(19, 4)
                         .HasColumnType("decimal(19,4)");
@@ -915,7 +1527,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("ConstructionSiteId")
+                    b.Property<Guid?>("ConstructionSiteId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -958,6 +1570,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uniqueidentifier");
@@ -1054,6 +1669,10 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasPrecision(19, 4)
                         .HasColumnType("decimal(19,4)");
 
+                    b.Property<string>("UnitOfMeasure")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(19, 4)
                         .HasColumnType("decimal(19,4)");
@@ -1084,6 +1703,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("decimal(19,4)");
 
                     b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ConstructionSiteId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -1133,6 +1755,12 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<Guid?>("PayrollRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("ReferenceNumber")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1153,7 +1781,13 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConstructionSiteId");
+
                     b.HasIndex("InvoiceId");
+
+                    b.HasIndex("PayrollRecordId");
+
+                    b.HasIndex("ProjectId");
 
                     b.HasIndex("VendorId");
 
@@ -1161,6 +1795,150 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Payments", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Finance.PettyCashAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CurrentBalance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("ConstructionSiteId");
+
+                    b.ToTable("PettyCashAccounts");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Finance.PettyCashTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BalanceBefore")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CostCodeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PettyCashAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReferenceNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("TransactionDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CostCodeId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("PettyCashAccountId");
+
+                    b.ToTable("PettyCashTransactions");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Vendor", b =>
@@ -1500,6 +2278,11 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("EmployeeScope")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("EmployeeType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1609,6 +2392,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Reason")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("ReviewRemarks")
                         .HasColumnType("nvarchar(max)");
@@ -1812,6 +2598,78 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("PayrollRecords", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.HRM.SalaryStructure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BankAccountNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("BasicSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("HousingAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("OvertimeMultiplier")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("PensionPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("PositionAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TransportAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("SalaryStructures");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.HRM.Shift", b =>
@@ -2150,6 +3008,50 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("Roles", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.RoleGranularPermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RoleGranularPermissions", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.RolePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RolePermissions", (string)null);
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Identity.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2163,6 +3065,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("DefaultSiteId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("DeletedAtUtc")
@@ -2193,6 +3098,10 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("JobTitle")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("LastLoginAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2217,6 +3126,10 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2233,6 +3146,42 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyId", "IsActive");
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.UserAudit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("PerformedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TargetUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("PerformedAtUtc");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.ToTable("UserAudits", (string)null);
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Identity.UserRole", b =>
@@ -2278,6 +3227,60 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("UserRoles", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.UserSiteAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("CompanyId", "UserId", "SiteId")
+                        .IsUnique();
+
+                    b.ToTable("UserSiteAccesses", (string)null);
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Notifications.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2305,6 +3308,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LinkUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -2313,10 +3319,18 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ReadAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("RelatedEntityId")
+                    b.Property<Guid>("RecipientUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("RelatedEntityType")
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("SourceEntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceEntityType")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -2325,25 +3339,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("RecipientUserId");
 
-                    b.HasIndex("CompanyId", "UserId", "IsRead", "CreatedAtUtc");
+                    b.HasIndex("CompanyId", "RecipientUserId", "IsRead", "CreatedAtUtc");
 
                     b.ToTable("Notifications", (string)null);
                 });
@@ -2433,6 +3439,18 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DefaultLanguage")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2443,38 +3461,125 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("EmployeePrefix")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("FiscalYearStartMonth")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int>("LateGraceMinutes")
+                        .HasColumnType("int");
+
                     b.Property<string>("LegalName")
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("LogoUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("LunchBreakMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MeasurementUnit")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("NotifyDailyProgress")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NotifyLowInventory")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NotifyMaintenance")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NotifyPermitExpiry")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NumberFormat")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("OvertimeAfterHours")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PrimaryColor")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProjectPrefix")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PurchaseOrderPrefix")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RegistrationNumber")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("SecondaryColor")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShortName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StockIssuePrefix")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TaxIdentificationNumber")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TaxNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Website")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WeekendDays")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkEndTime")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkStartTime")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -2604,7 +3709,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("DailyProgressLogId")
+                    b.Property<Guid?>("DailyProgressLogId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateOnly>("Date")
@@ -2797,8 +3902,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("AssignmentNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
@@ -2825,12 +3930,12 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal?>("MeterReadingAtAssignment")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("decimal(19,4)");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("MeterReadingAtRelease")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("decimal(19,4)");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uniqueidentifier");
@@ -2839,7 +3944,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -2851,12 +3957,9 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ConstructionSiteId");
 
+                    b.HasIndex("EquipmentId");
+
                     b.HasIndex("ProjectId");
-
-                    b.HasIndex("CompanyId", "AssignmentNumber")
-                        .IsUnique();
-
-                    b.HasIndex("EquipmentId", "ConstructionSiteId", "AssignedAtUtc");
 
                     b.ToTable("EquipmentAssignments", (string)null);
                 });
@@ -3301,9 +4404,13 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedBy");
+
                     b.HasIndex("ConstructionSiteId");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("RequestedBy");
 
                     b.HasIndex("CompanyId", "RequestNumber")
                         .IsUnique();
@@ -3754,6 +4861,65 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("StockMovements", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressEquipmentEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DailyProgressTaskEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EquipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EquipmentName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("HoursUsed")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("OperatorName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailyProgressTaskEntryId");
+
+                    b.ToTable("DailyProgressEquipmentEntries");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3847,7 +5013,67 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("DailyProgressLogs", (string)null);
                 });
 
-            modelBuilder.Entity("CSM.Domain.Entities.Projects.Milestone", b =>
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DailySiteDiaryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UploadedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailySiteDiaryId");
+
+                    b.ToTable("DailyProgressPhotos", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressTaskEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -3856,8 +5082,249 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateOnly?>("CompletedDate")
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DailyProgressLogId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("EquipmentHours")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LabourCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ProgressPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WorkCompleted")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("WorkTaskId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailyProgressLogId");
+
+                    b.HasIndex("WorkTaskId");
+
+                    b.ToTable("DailyProgressTaskEntries");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailySiteDiary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DelayReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("DiaryDate")
                         .HasColumnType("date");
+
+                    b.Property<int>("EquipmentInUse")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SafetyObservation")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Temperature")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Weather")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WorkPerformed")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("WorkforceCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("CompanyId", "SiteId", "DiaryDate")
+                        .IsUnique();
+
+                    b.ToTable("DailySiteDiaries", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.Equipment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EquipmentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRented")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Manufacturer")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly?>("NextMaintenanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProjectEquipment", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.EquipmentAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("AssignedDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ConstructionSiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EquipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OperatorName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProjectId1")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ReleasedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConstructionSiteId");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("ProjectId1");
+
+                    b.ToTable("ProjectEquipmentAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.Milestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ActualDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -3872,32 +5339,42 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("bit");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("MilestoneNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateOnly>("PlannedDate")
                         .HasColumnType("date");
+
+                    b.Property<decimal>("ProgressPercentage")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ProjectId1")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("ProjectPhaseId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -3909,12 +5386,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProjectId");
 
+                    b.HasIndex("ProjectId1");
+
                     b.HasIndex("ProjectPhaseId");
 
                     b.HasIndex("CompanyId", "MilestoneNumber")
                         .IsUnique();
 
-                    b.ToTable("Milestones", (string)null);
+                    b.HasIndex("CompanyId", "ProjectId", "MilestoneNumber")
+                        .IsUnique();
+
+                    b.ToTable("ProjectMilestones", (string)null);
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Projects.Project", b =>
@@ -3998,6 +5480,79 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.ToTable("Projects", (string)null);
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.ProjectDelay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActionTaken")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DelayDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DelayDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ResolvedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("CompanyId", "ProjectId", "DelayDate");
+
+                    b.ToTable("ProjectDelays", (string)null);
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Projects.ProjectPhase", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4077,6 +5632,168 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectPhases", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.TaskResourceAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ActualHours")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateOnly>("AssignedDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("PlannedHours")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("WbsTaskId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("WbsTaskId");
+
+                    b.ToTable("TaskResourceAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.WbsTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ActualFinishDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("ActualHours")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateOnly?>("ActualStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("AssignedEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal>("EstimatedHours")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("MilestoneId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly>("PlannedFinishDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PlannedStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ProgressPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaskCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedEmployeeId");
+
+                    b.HasIndex("MilestoneId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("CompanyId", "ProjectId", "TaskCode")
+                        .IsUnique();
+
+                    b.ToTable("WbsTasks", (string)null);
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Projects.WorkTask", b =>
@@ -4257,6 +5974,39 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Inspection");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.NonConformanceReport", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.HRM.Employee", "AssignedToEmployee")
+                        .WithMany()
+                        .HasForeignKey("AssignedToEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany()
+                        .HasForeignKey("ConstructionSiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "RaisedBy")
+                        .WithMany()
+                        .HasForeignKey("RaisedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedToEmployee");
+
+                    b.Navigation("ConstructionSite");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("RaisedBy");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Compliance.Permit", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
@@ -4273,6 +6023,28 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("ConstructionSite");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.QualityChecklist", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany()
+                        .HasForeignKey("ConstructionSiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ConstructionSite");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.QualityChecklistItem", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Compliance.QualityChecklist", "QualityChecklist")
+                        .WithMany("Items")
+                        .HasForeignKey("QualityChecklistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QualityChecklist");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Compliance.SafetyIncident", b =>
@@ -4300,13 +6072,76 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.SafetyObservation", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany()
+                        .HasForeignKey("ConstructionSiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.HRM.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId");
+
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "Observer")
+                        .WithMany()
+                        .HasForeignKey("ObserverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId");
+
+                    b.Navigation("ConstructionSite");
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Observer");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentFuelLog", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Procurement.Equipment", "Equipment")
+                        .WithMany("FuelLogs")
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentHourLog", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Procurement.Equipment", "Equipment")
+                        .WithMany("HourLogs")
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Equipment.EquipmentTimesheet", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Procurement.Equipment", "Equipment")
+                        .WithMany()
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Equipment");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Budget", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
                         .WithMany("Budgets")
                         .HasForeignKey("ConstructionSiteId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
                         .WithMany("Budgets")
@@ -4339,10 +6174,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CSM.Domain.Entities.Finance.CostCode", b =>
                 {
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany("CostCodes")
+                        .HasForeignKey("ConstructionSiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CSM.Domain.Entities.Finance.CostCode", "ParentCostCode")
                         .WithMany("Children")
                         .HasForeignKey("ParentCostCodeId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ConstructionSite");
 
                     b.Navigation("ParentCostCode");
                 });
@@ -4352,8 +6194,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
                         .WithMany("Expenses")
                         .HasForeignKey("ConstructionSiteId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CSM.Domain.Entities.Finance.CostCode", "CostCode")
                         .WithMany("Expenses")
@@ -4385,8 +6226,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
                         .WithMany("Invoices")
                         .HasForeignKey("ConstructionSiteId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
                         .WithMany("Invoices")
@@ -4408,7 +6248,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("CSM.Domain.Entities.Finance.InvoiceLine", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Finance.CostCode", "CostCode")
-                        .WithMany()
+                        .WithMany("InvoiceLines")
                         .HasForeignKey("CostCodeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -4425,19 +6265,86 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Payment", b =>
                 {
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany()
+                        .HasForeignKey("ConstructionSiteId");
+
                     b.HasOne("CSM.Domain.Entities.Finance.Invoice", "Invoice")
                         .WithMany("Payments")
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CSM.Domain.Entities.HRM.PayrollRecord", "PayrollRecord")
+                        .WithMany()
+                        .HasForeignKey("PayrollRecordId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId");
 
                     b.HasOne("CSM.Domain.Entities.Finance.Vendor", "Vendor")
                         .WithMany()
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("ConstructionSite");
+
                     b.Navigation("Invoice");
 
+                    b.Navigation("PayrollRecord");
+
+                    b.Navigation("Project");
+
                     b.Navigation("Vendor");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Finance.PettyCashAccount", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Organization.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
+                        .WithMany()
+                        .HasForeignKey("ConstructionSiteId");
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ConstructionSite");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Finance.PettyCashTransaction", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId");
+
+                    b.HasOne("CSM.Domain.Entities.Finance.CostCode", "CostCode")
+                        .WithMany()
+                        .HasForeignKey("CostCodeId");
+
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Finance.PettyCashAccount", "PettyCashAccount")
+                        .WithMany("Transactions")
+                        .HasForeignKey("PettyCashAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("CostCode");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("PettyCashAccount");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.HRM.Attendance", b =>
@@ -4499,6 +6406,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.HRM.SalaryStructure", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.HRM.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.HRM.SiteAssignment", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
@@ -4540,6 +6458,28 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.RoleGranularPermission", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Identity.Role", "Role")
+                        .WithMany("GranularPermissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.RolePermission", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Identity.Role", "Role")
+                        .WithMany("Permissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Identity.User", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Organization.Company", "Company")
@@ -4555,6 +6495,25 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Company");
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.UserAudit", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "TargetUser")
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("TargetUser");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Identity.UserRole", b =>
@@ -4576,15 +6535,34 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("CSM.Domain.Entities.Notifications.Notification", b =>
+            modelBuilder.Entity("CSM.Domain.Entities.Identity.UserSiteAccess", b =>
                 {
-                    b.HasOne("CSM.Domain.Entities.Identity.User", "User")
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "Site")
                         .WithMany()
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "User")
+                        .WithMany("SiteAccesses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Site");
+
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Notifications.Notification", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "RecipientUser")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RecipientUser");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Organization.BusinessUnit", b =>
@@ -4627,8 +6605,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.HasOne("CSM.Domain.Entities.Projects.DailyProgressLog", "DailyProgressLog")
                         .WithMany()
                         .HasForeignKey("DailyProgressLogId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CSM.Domain.Entities.Identity.User", "LoggedByUser")
                         .WithMany()
@@ -4654,7 +6631,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("CSM.Domain.Entities.Procurement.Equipment", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Finance.Vendor", "Vendor")
-                        .WithMany("Equipment")
+                        .WithMany("Equipments")
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -4664,7 +6641,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("CSM.Domain.Entities.Procurement.EquipmentAssignment", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
-                        .WithMany("EquipmentAssignments")
+                        .WithMany()
                         .HasForeignKey("ConstructionSiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -4676,7 +6653,7 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
-                        .WithMany("EquipmentAssignments")
+                        .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -4774,6 +6751,11 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CSM.Domain.Entities.Procurement.MaterialRequest", b =>
                 {
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "ConstructionSite")
                         .WithMany("MaterialRequests")
                         .HasForeignKey("ConstructionSiteId")
@@ -4785,9 +6767,19 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("CSM.Domain.Entities.Identity.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByUser");
+
                     b.Navigation("ConstructionSite");
 
                     b.Navigation("Project");
+
+                    b.Navigation("RequestedByUser");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Procurement.MaterialRequestLine", b =>
@@ -4909,6 +6901,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("StockItem");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressEquipmentEntry", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Projects.DailyProgressTaskEntry", "DailyProgressTaskEntry")
+                        .WithMany("EquipmentEntries")
+                        .HasForeignKey("DailyProgressTaskEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DailyProgressTaskEntry");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressLog", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
@@ -4920,13 +6923,92 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("CSM.Domain.Entities.Projects.Milestone", b =>
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressPhoto", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Projects.DailySiteDiary", "DailySiteDiary")
+                        .WithMany("ProgressPhotos")
+                        .HasForeignKey("DailySiteDiaryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DailySiteDiary");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressTaskEntry", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Projects.DailyProgressLog", "DailyProgressLog")
+                        .WithMany("DailyProgressTaskEntries")
+                        .HasForeignKey("DailyProgressLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.WorkTask", "WorkTask")
+                        .WithMany("DailyProgressEntries")
+                        .HasForeignKey("WorkTaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DailyProgressLog");
+
+                    b.Navigation("WorkTask");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailySiteDiary", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
-                        .WithMany("Milestones")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.EquipmentAssignment", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Organization.ConstructionSite", null)
+                        .WithMany("EquipmentAssignments")
+                        .HasForeignKey("ConstructionSiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Equipment", "Equipment")
+                        .WithMany("Assignments")
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", null)
+                        .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", null)
+                        .WithMany("EquipmentAssignments")
+                        .HasForeignKey("ProjectId1");
+
+                    b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.Milestone", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", null)
+                        .WithMany("Milestones")
+                        .HasForeignKey("ProjectId1");
 
                     b.HasOne("CSM.Domain.Entities.Projects.ProjectPhase", "ProjectPhase")
                         .WithMany("Milestones")
@@ -4949,6 +7031,17 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("ConstructionSite");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.ProjectDelay", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Projects.ProjectPhase", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
@@ -4956,6 +7049,50 @@ namespace CSM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.TaskResourceAssignment", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.HRM.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CSM.Domain.Entities.Projects.WbsTask", "WbsTask")
+                        .WithMany("ResourceAssignments")
+                        .HasForeignKey("WbsTaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("WbsTask");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.WbsTask", b =>
+                {
+                    b.HasOne("CSM.Domain.Entities.HRM.Employee", "AssignedEmployee")
+                        .WithMany()
+                        .HasForeignKey("AssignedEmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Milestone", "Milestone")
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedEmployee");
+
+                    b.Navigation("Milestone");
 
                     b.Navigation("Project");
                 });
@@ -5014,6 +7151,11 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("ChecklistItems");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Compliance.QualityChecklist", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Budget", b =>
                 {
                     b.Navigation("Lines");
@@ -5026,6 +7168,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Expenses");
+
+                    b.Navigation("InvoiceLines");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Invoice", b =>
@@ -5035,9 +7179,14 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Payments");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Finance.PettyCashAccount", b =>
+                {
+                    b.Navigation("Transactions");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Finance.Vendor", b =>
                 {
-                    b.Navigation("Equipment");
+                    b.Navigation("Equipments");
 
                     b.Navigation("Expenses");
 
@@ -5068,12 +7217,18 @@ namespace CSM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CSM.Domain.Entities.Identity.Role", b =>
                 {
+                    b.Navigation("GranularPermissions");
+
+                    b.Navigation("Permissions");
+
                     b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Identity.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("SiteAccesses");
 
                     b.Navigation("UserRoles");
                 });
@@ -5095,6 +7250,8 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Attendances");
 
                     b.Navigation("Budgets");
+
+                    b.Navigation("CostCodes");
 
                     b.Navigation("EquipmentAssignments");
 
@@ -5128,6 +7285,10 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Assignments");
 
                     b.Navigation("DowntimeRecords");
+
+                    b.Navigation("FuelLogs");
+
+                    b.Navigation("HourLogs");
 
                     b.Navigation("MaintenanceRecords");
                 });
@@ -5163,6 +7324,26 @@ namespace CSM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("CSM.Domain.Entities.Procurement.StockItem", b =>
                 {
                     b.Navigation("Movements");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressLog", b =>
+                {
+                    b.Navigation("DailyProgressTaskEntries");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailyProgressTaskEntry", b =>
+                {
+                    b.Navigation("EquipmentEntries");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.DailySiteDiary", b =>
+                {
+                    b.Navigation("ProgressPhotos");
+                });
+
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.Equipment", b =>
+                {
+                    b.Navigation("Assignments");
                 });
 
             modelBuilder.Entity("CSM.Domain.Entities.Projects.Project", b =>
@@ -5201,8 +7382,15 @@ namespace CSM.Infrastructure.Persistence.Migrations
                     b.Navigation("Tasks");
                 });
 
+            modelBuilder.Entity("CSM.Domain.Entities.Projects.WbsTask", b =>
+                {
+                    b.Navigation("ResourceAssignments");
+                });
+
             modelBuilder.Entity("CSM.Domain.Entities.Projects.WorkTask", b =>
                 {
+                    b.Navigation("DailyProgressEntries");
+
                     b.Navigation("Dependencies");
 
                     b.Navigation("DependentTasks");

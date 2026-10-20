@@ -28,7 +28,7 @@ public sealed class VendorService : IVendorService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanRead(actor);
 
         var query = _dbContext.Vendors
             .AsNoTracking()
@@ -252,6 +252,20 @@ public sealed class VendorService : IVendorService
 
         throw new VendorManagementException(
             "You are not authorized to manage vendors.");
+    }
+
+    private static void EnsureCanRead(User actor)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.SiteManager) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            return;
+        }
+
+        throw new VendorManagementException(
+            "You are not authorized to view vendors.");
     }
 
     private static void EnsureCompanyAccess(

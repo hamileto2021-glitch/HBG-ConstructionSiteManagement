@@ -14,4 +14,10 @@ public class Role : AuditableEntity
 
     public ICollection<UserRole> UserRoles { get; set; }
         = new List<UserRole>();
+
+    public ICollection<RolePermission> Permissions { get; set; }
+        = new List<RolePermission>();
+
+    public ICollection<RoleGranularPermission> GranularPermissions { get; set; }
+        = new List<RoleGranularPermission>();
 }

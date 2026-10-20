@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using CSM.Application.Common.Exceptions;
-using CSM.Application.Common.Security;
 using CSM.Application.HRM.Attendances;
 using CSM.Application.HRM.Attendances.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +9,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProjectManagement)]
+[Authorize] // authentication only; each action declares its own granular policy
 public sealed class AttendancesController : ControllerBase
 {
     private readonly IAttendanceService _attendanceService;
@@ -21,6 +20,7 @@ public sealed class AttendancesController : ControllerBase
         _attendanceService = attendanceService;
     }
 
+    [Authorize(Policy = "HRM.Attendance.View")]
     [HttpGet]
     public async Task<
         ActionResult<IReadOnlyCollection<AttendanceResponse>>> GetAll(
@@ -50,6 +50,7 @@ public sealed class AttendancesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Attendance.View")]
     [HttpGet("{attendanceId:guid}")]
     public async Task<ActionResult<AttendanceResponse>> GetById(
         Guid attendanceId,
@@ -72,6 +73,7 @@ public sealed class AttendancesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Attendance.Submit")]
     [HttpPost("check-in")]
     public async Task<ActionResult<AttendanceResponse>> CheckIn(
         CheckInRequest request,
@@ -100,6 +102,7 @@ public sealed class AttendancesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = "HRM.Attendance.Submit")]
     [HttpPut("{attendanceId:guid}/check-out")]
     public async Task<ActionResult<AttendanceResponse>> CheckOut(
         Guid attendanceId,
@@ -138,6 +141,7 @@ public sealed class AttendancesController : ControllerBase
         return userId;
     }
 
+    [Authorize(Policy = "HRM.Attendance.Approve")]
     [HttpPut("{attendanceId:guid}/approve")]
     public async Task<ActionResult<AttendanceResponse>> Approve(
         Guid attendanceId,
@@ -161,6 +165,7 @@ public sealed class AttendancesController : ControllerBase
                 new { message = ex.Message });
         }
     }
+    [Authorize(Policy = "HRM.Attendance.Override")]
     [HttpPut("{attendanceId:guid}/override")]
     public async Task<ActionResult<AttendanceResponse>> Override(
         Guid attendanceId,

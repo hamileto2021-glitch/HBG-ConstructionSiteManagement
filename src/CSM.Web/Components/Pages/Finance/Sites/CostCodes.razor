@@ -1,0 +1,219 @@
+@page "/finance/sites/{SiteId:guid}/cost-codes"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using System.Net
+@using CSM.Web.Models.Finance
+@using CSM.Web.Services
+
+@inject IFinanceService FinanceService
+@inject IAuthService AuthService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Cost Codes</PageTitle>
+
+<h3 class="mb-3">Cost Codes</h3>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (!_canView)
+{
+    <div class="alert alert-warning">
+        You don't have permission to view cost codes.
+    </div>
+}
+else
+{
+    @if (_canManage)
+    {
+        <div class="d-flex justify-content-between mb-3">
+            <div></div>
+
+            <button class="btn btn-primary"
+                    @onclick="Create">
+                <i class="bi bi-plus-lg"></i>
+                New Cost Code
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (!_loadFailed)
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Parent</th>
+                    <th>Status</th>
+
+                    @if (_canManage)
+                    {
+                        <th width="170"></th>
+                    }
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var item in _items)
+                {
+                    <tr>
+                        <td>@item.Code</td>
+                        <td>@item.Name</td>
+                        <td>@item.ParentCode</td>
+
+                        <td>
+                            @if (item.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactive</span>
+                            }
+                        </td>
+
+                        @if (_canManage)
+                        {
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => Edit(item.Id)">
+                                    Edit
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-warning me-1"
+                                        @onclick="() => Toggle(item)">
+                                    @(item.IsActive ? "Deactivate" : "Activate")
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => Delete(item.Id)">
+                                    Delete
+                                </button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+
+    [Parameter]
+    public Guid SiteId { get; set; }
+
+    private bool _loading = true;
+    private bool _canView;
+    private bool _canManage;
+    private bool _loadFailed;
+
+    private List<CostCodeResponse> _items = new();
+
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+
+            _canView = permissions.Contains("Finance_CostCode_View");
+            _canManage = permissions.Contains("Finance_CostCode_Manage");
+
+            if (_canView)
+            {
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadFailed = true;
+            _error = $"Failed to load cost codes: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = (await FinanceService.GetSiteCostCodesAsync(SiteId)).ToList();
+            _loadFailed = false;
+        }
+        catch (HttpRequestException ex)
+            when (ex.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _loadFailed = true;
+            _error = "You don't have permission to view cost codes.";
+        }
+        catch (Exception ex)
+        {
+            _loadFailed = true;
+            _error = $"Failed to load cost codes: {ex.Message}";
+        }
+    }
+
+    private void Create()
+        => Navigation.NavigateTo(
+            $"/finance/sites/{SiteId}/cost-codes/create");
+
+    private void Edit(Guid id)
+        => Navigation.NavigateTo(
+            $"/finance/sites/{SiteId}/cost-codes/{id}/edit");
+
+    private async Task Toggle(CostCodeResponse item)
+    {
+        _error = null;
+
+        try
+        {
+            await FinanceService.ChangeCostCodeStatusAsync(
+                item.Id,
+                !item.IsActive);
+
+            item.IsActive = !item.IsActive;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        _error = null;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Delete this cost code?");
+
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await FinanceService.DeleteCostCodeAsync(id);
+
+            // Reload this site's list. The old code reloaded the
+            // company-wide list here, so a delete on a site page
+            // suddenly showed every cost code in the company.
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

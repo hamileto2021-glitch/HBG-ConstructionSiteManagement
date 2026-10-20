@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../equipment_downtime/data/models/equipment_downtime.dart';
@@ -23,6 +24,19 @@ class _EquipmentDowntimeScreenState
   bool? _openOnly;
   String? _errorMessage;
 
+  int get _total => _records.length;
+
+  int get _open =>
+      _records.where((e) => e.isOpen).length;
+
+  int get _closed =>
+      _records.where((e) => !e.isOpen).length;
+
+  double get _downtimeHours => _records.fold(
+    0,
+        (s, e) => s + (e.durationHours ?? 0),
+  );
+
   @override
   void initState() {
     super.initState();
@@ -36,14 +50,14 @@ class _EquipmentDowntimeScreenState
     });
 
     try {
-      final records = await widget.repository.getAll(
+      final result = await widget.repository.getAll(
         openOnly: _openOnly,
       );
 
       if (!mounted) return;
 
       setState(() {
-        _records = records;
+        _records = result;
         _isLoading = false;
       });
     } catch (error) {
@@ -57,103 +71,83 @@ class _EquipmentDowntimeScreenState
   }
 
   Future<void> _showCreateDialog() async {
-    final equipmentIdController = TextEditingController();
-    final downtimeNumberController = TextEditingController();
-    final reasonController = TextEditingController();
-    final resolutionController = TextEditingController();
+    final equipmentId = TextEditingController();
+    final number = TextEditingController();
+    final reason = TextEditingController();
+    final resolution = TextEditingController();
 
     final created = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         bool saving = false;
-        DateTime startedAt = DateTime.now();
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> save() async {
-              final equipmentId =
-              equipmentIdController.text.trim();
-              final downtimeNumber =
-              downtimeNumberController.text.trim();
-              final reason =
-              reasonController.text.trim();
-
-              if (equipmentId.isEmpty ||
-                  downtimeNumber.isEmpty ||
-                  reason.isEmpty) {
-                if (!dialogContext.mounted) return;
-
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
+              if (equipmentId.text.trim().isEmpty ||
+                  number.text.trim().isEmpty ||
+                  reason.text.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext)
+                    .showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'Equipment ID, downtime number and reason are required.',
+                      'Equipment ID, Number and Reason are required.',
                     ),
                   ),
                 );
                 return;
               }
 
-              setDialogState(() {
-                saving = true;
-              });
+              setDialogState(() => saving = true);
 
               try {
                 await widget.repository.create(
-                  equipmentId: equipmentId,
-                  startedAtUtc: startedAt.toUtc(),
-                  downtimeNumber: downtimeNumber,
-                  reason: reason,
-                  resolution:
-                  resolutionController.text.trim().isEmpty
+                  equipmentId: equipmentId.text.trim(),
+                  startedAtUtc: DateTime.now().toUtc(),
+                  downtimeNumber: number.text.trim(),
+                  reason: reason.text.trim(),
+                  resolution: resolution.text.trim().isEmpty
                       ? null
-                      : resolutionController.text.trim(),
+                      : resolution.text.trim(),
                 );
 
                 if (!dialogContext.mounted) return;
-
-                Navigator.of(dialogContext).pop(true);
-              } catch (error) {
+                Navigator.pop(dialogContext, true);
+              } catch (e) {
                 if (!dialogContext.mounted) return;
 
-                setDialogState(() {
-                  saving = false;
-                });
+                setDialogState(() => saving = false);
 
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text(error.toString()),
-                  ),
+                ScaffoldMessenger.of(dialogContext)
+                    .showSnackBar(
+                  SnackBar(content: Text(e.toString())),
                 );
               }
             }
 
             return AlertDialog(
-              title: const Text('Record Equipment Downtime'),
+              title:
+              const Text('Record Equipment Downtime'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
-                      controller: equipmentIdController,
-                      enabled: !saving,
+                      controller: equipmentId,
                       decoration: const InputDecoration(
                         labelText: 'Equipment ID',
-                        hintText: 'Enter equipment ID',
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: downtimeNumberController,
-                      enabled: !saving,
+                      controller: number,
                       decoration: const InputDecoration(
                         labelText: 'Downtime Number',
-                        hintText: 'e.g. DT-002',
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: reasonController,
-                      enabled: !saving,
+                      controller: reason,
                       maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Reason',
@@ -161,12 +155,10 @@ class _EquipmentDowntimeScreenState
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: resolutionController,
-                      enabled: !saving,
+                      controller: resolution,
                       maxLines: 2,
                       decoration: const InputDecoration(
-                        labelText: 'Resolution',
-                        hintText: 'Optional',
+                        labelText: 'Resolution (Optional)',
                       ),
                     ),
                   ],
@@ -176,23 +168,17 @@ class _EquipmentDowntimeScreenState
                 TextButton(
                   onPressed: saving
                       ? null
-                      : () =>
-                      Navigator.of(dialogContext).pop(false),
+                      : () => Navigator.pop(
+                    dialogContext,
+                    false,
+                  ),
                   child: const Text('Cancel'),
                 ),
                 FilledButton.icon(
                   onPressed: saving ? null : save,
-                  icon: saving
-                      ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : const Icon(Icons.save_outlined),
+                  icon: const Icon(Icons.save),
                   label: Text(
-                    saving ? 'Saving...' : 'Record Downtime',
+                    saving ? 'Saving...' : 'Record',
                   ),
                 ),
               ],
@@ -202,126 +188,65 @@ class _EquipmentDowntimeScreenState
       },
     );
 
-    equipmentIdController.dispose();
-    downtimeNumberController.dispose();
-    reasonController.dispose();
-    resolutionController.dispose();
+    equipmentId.dispose();
+    number.dispose();
+    reason.dispose();
+    resolution.dispose();
 
     if (created == true && mounted) {
       await _load();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Equipment downtime recorded.'),
-        ),
-      );
     }
   }
 
   Future<void> _closeDowntime(
       EquipmentDowntime record,
       ) async {
-    final resolutionController = TextEditingController();
+    final resolution = TextEditingController();
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        bool saving = false;
-
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> close() async {
-              setDialogState(() {
-                saving = true;
-              });
-
-              try {
-                await widget.repository.close(
-                  id: record.id,
-                  endedAtUtc: DateTime.now().toUtc(),
-                  resolution:
-                  resolutionController.text.trim().isEmpty
-                      ? null
-                      : resolutionController.text.trim(),
-                );
-
-                if (!dialogContext.mounted) return;
-
-                Navigator.of(dialogContext).pop(true);
-              } catch (error) {
-                if (!dialogContext.mounted) return;
-
-                setDialogState(() {
-                  saving = false;
-                });
-
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text(error.toString()),
-                  ),
-                );
-              }
-            }
-
-            return AlertDialog(
-              title: Text(
-                'Close ${record.downtimeNumber}',
-              ),
-              content: TextField(
-                controller: resolutionController,
-                enabled: !saving,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Resolution',
-                  hintText: 'Describe how the issue was resolved',
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: saving
-                      ? null
-                      : () =>
-                      Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton.icon(
-                  onPressed: saving ? null : close,
-                  icon: saving
-                      ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : const Icon(
-                    Icons.check_circle_outline,
-                  ),
-                  label: Text(
-                    saving ? 'Closing...' : 'Close Downtime',
-                  ),
-                ),
-              ],
-            );
-          },
+        return AlertDialog(
+          title: Text(
+            'Close ${record.downtimeNumber}',
+          ),
+          content: TextField(
+            controller: resolution,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Resolution',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, true),
+              child: const Text('Close'),
+            ),
+          ],
         );
       },
     );
 
-    resolutionController.dispose();
+    if (confirmed != true) return;
 
-    if (confirmed == true && mounted) {
+    await widget.repository.close(
+      id: record.id,
+      endedAtUtc: DateTime.now().toUtc(),
+      resolution: resolution.text.trim().isEmpty
+          ? null
+          : resolution.text.trim(),
+    );
+
+    resolution.dispose();
+
+    if (mounted) {
       await _load();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Equipment downtime closed.'),
-        ),
-      );
     }
   }
 
@@ -332,60 +257,47 @@ class _EquipmentDowntimeScreenState
         title: const Text('Equipment Downtime'),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
             onPressed: _isLoading ? null : _load,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton:
+      FloatingActionButton.extended(
         onPressed: _showCreateDialog,
         icon: const Icon(Icons.add),
-        label: const Text('Record Downtime'),
+        label: const Text('Record'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              8,
-            ),
+            padding:
+            const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: SegmentedButton<bool?>(
               segments: const [
                 ButtonSegment<bool?>(
                   value: null,
                   label: Text('All'),
-                  icon: Icon(Icons.list_alt),
                 ),
                 ButtonSegment<bool?>(
                   value: true,
                   label: Text('Open'),
-                  icon: Icon(
-                    Icons.warning_amber_outlined,
-                  ),
                 ),
                 ButtonSegment<bool?>(
                   value: false,
                   label: Text('Closed'),
-                  icon: Icon(
-                    Icons.check_circle_outline,
-                  ),
                 ),
               ],
               selected: {_openOnly},
-              onSelectionChanged: (selection) {
+              onSelectionChanged: (value) {
                 setState(() {
-                  _openOnly = selection.first;
+                  _openOnly = value.first;
                 });
                 _load();
               },
             ),
           ),
-          Expanded(
-            child: _buildBody(),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
     );
@@ -405,20 +317,13 @@ class _EquipmentDowntimeScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 48,
-              ),
+              const Icon(Icons.error, size: 48),
               const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-              ),
+              Text(_errorMessage!),
               const SizedBox(height: 16),
-              FilledButton.icon(
+              FilledButton(
                 onPressed: _load,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -430,17 +335,13 @@ class _EquipmentDowntimeScreenState
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
           children: const [
-            SizedBox(height: 120),
-            Icon(
-              Icons.build_circle_outlined,
-              size: 64,
-            ),
+            SizedBox(height: 150),
+            Icon(Icons.build_circle_outlined, size: 64),
             SizedBox(height: 16),
             Center(
               child: Text(
-                'No equipment downtime records found.',
+                'No downtime records found.',
               ),
             ),
           ],
@@ -450,25 +351,64 @@ class _EquipmentDowntimeScreenState
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(
-          16,
-          8,
-          16,
-          100,
-        ),
-        itemCount: _records.length,
-        itemBuilder: (context, index) {
-          final record = _records[index];
-
-          return _DowntimeCard(
-            record: record,
-            onClose: record.isOpen
-                ? () => _closeDowntime(record)
-                : null,
-          );
-        },
+      child: ListView(
+        padding:
+        const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        children: [
+          _buildSummaryCards(),
+          const SizedBox(height: 16),
+          ..._records.map(
+                (record) => Padding(
+              padding:
+              const EdgeInsets.only(bottom: 12),
+              child: _DowntimeCard(
+                record: record,
+                onClose: record.isOpen
+                    ? () => _closeDowntime(record)
+                    : null,
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.55,
+      shrinkWrap: true,
+      physics:
+      const NeverScrollableScrollPhysics(),
+      children: [
+        _SummaryCard(
+          title: 'Total',
+          value: '$_total',
+          icon: Icons.assignment,
+          color: Colors.blue,
+        ),
+        _SummaryCard(
+          title: 'Open',
+          value: '$_open',
+          icon: Icons.warning_amber,
+          color: Colors.red,
+        ),
+        _SummaryCard(
+          title: 'Closed',
+          value: '$_closed',
+          icon: Icons.check_circle,
+          color: Colors.green,
+        ),
+        _SummaryCard(
+          title: 'Hours Lost',
+          value: _downtimeHours.toStringAsFixed(1),
+          icon: Icons.timer,
+          color: Colors.orange,
+        ),
+      ],
     );
   }
 }
@@ -482,13 +422,17 @@ class _DowntimeCard extends StatelessWidget {
   final EquipmentDowntime record;
   final VoidCallback? onClose;
 
+  String _date(DateTime value) {
+    final d = value.toLocal();
+
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isOpen = record.isOpen;
+    final open = record.isOpen;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -498,72 +442,82 @@ class _DowntimeCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    record.downtimeNumber,
-                    style:
-                    theme.textTheme.titleMedium?.copyWith(
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.downtimeNumber,
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        record.equipmentName,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium,
+                      ),
+                      Text(record.equipmentCode),
+                    ],
+                  ),
+                ),
+                Chip(
+                  backgroundColor: open
+                      ? Colors.red.withValues(alpha: .12)
+                      : Colors.green.withValues(alpha: .12),
+                  label: Text(
+                    open ? 'OPEN' : 'CLOSED',
+                    style: TextStyle(
+                      color: open
+                          ? Colors.red
+                          : Colors.green,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                Chip(
-                  avatar: Icon(
-                    isOpen
-                        ? Icons.warning_amber_outlined
-                        : Icons.check_circle_outline,
-                    size: 18,
-                  ),
-                  label: Text(
-                    isOpen ? 'OPEN' : 'CLOSED',
-                  ),
-                ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${record.equipmentCode} — '
-                  '${record.equipmentName}',
-              style: theme.textTheme.titleSmall,
-            ),
-            if (record.constructionSiteName != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Site: ${record.constructionSiteName}',
-              ),
-            ],
             const Divider(height: 24),
             _InfoRow(
+              label: 'Site',
+              value:
+              record.constructionSiteName ?? '—',
+            ),
+            _InfoRow(
               label: 'Started',
-              value: _formatDateTime(
-                record.startedAtUtc,
-              ),
+              value: _date(record.startedAtUtc),
             ),
             _InfoRow(
               label: 'Ended',
               value: record.endedAtUtc == null
-                  ? 'Still open'
-                  : _formatDateTime(
-                record.endedAtUtc!,
-              ),
+                  ? 'In Progress'
+                  : _date(record.endedAtUtc!),
             ),
             _InfoRow(
               label: 'Duration',
               value: record.durationHours == null
-                  ? 'In progress'
-                  : '${record.durationHours!.toStringAsFixed(2)} hours',
+                  ? 'Running'
+                  : '${record.durationHours!.toStringAsFixed(1)} hrs',
             ),
             const SizedBox(height: 10),
             Text(
               'Reason',
-              style: theme.textTheme.labelLarge,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium,
             ),
             const SizedBox(height: 4),
             Text(record.reason),
-            if (record.resolution != null) ...[
+            if (record.resolution != null &&
+                record.resolution!.isNotEmpty) ...[
               const SizedBox(height: 10),
               Text(
                 'Resolution',
-                style: theme.textTheme.labelLarge,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium,
               ),
               const SizedBox(height: 4),
               Text(record.resolution!),
@@ -574,12 +528,9 @@ class _DowntimeCard extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: onClose,
-                  icon: const Icon(
-                    Icons.check_circle_outline,
-                  ),
-                  label: const Text(
-                    'Close Downtime',
-                  ),
+                  icon: const Icon(Icons.check_circle),
+                  label:
+                  const Text('Close Downtime'),
                 ),
               ),
             ],
@@ -588,16 +539,43 @@ class _DowntimeCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  static String _formatDateTime(DateTime value) {
-    final local = value.toLocal();
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
-    String two(int value) =>
-        value.toString().padLeft(2, '0');
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
 
-    return '${local.year}-${two(local.month)}-'
-        '${two(local.day)} '
-        '${two(local.hour)}:${two(local.minute)}';
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall,
+            ),
+            Text(title),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -613,21 +591,26 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding:
+      const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment:
         CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 80,
+            width: 90,
             child: Text(
               label,
-              style:
-              Theme.of(context).textTheme.labelMedium,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium,
             ),
           ),
           Expanded(
-            child: Text(value),
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
