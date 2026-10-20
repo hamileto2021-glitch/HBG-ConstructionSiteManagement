@@ -1,0 +1,23 @@
+﻿# .NET build output
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# IDE files
+.idea/
+
+# Logs
+*.log
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+Thumbs.db
+.DS_Store
