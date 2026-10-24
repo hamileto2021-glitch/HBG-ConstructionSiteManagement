@@ -10,8 +10,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
 
+/// <summary>
+/// Payment rules
+///   - A payment is created Pending. Only Completed payments are cash and
+///     only they count toward an invoice's paid amount.
+///   - A payment linked to an invoice follows the invoice: a client invoice
+///     is money in, a vendor bill is money out.
+///   - Every status change goes through ApplyStatusAsync, which also
+///     recalculates the invoice (paid amount and status) and the payroll
+///     record in the SAME save.
+/// </summary>
 public sealed class PaymentService : IPaymentService
 {
+    private const decimal Tolerance = 0.005m;
+
     private readonly ApplicationDbContext _dbContext;
 
     public PaymentService(ApplicationDbContext dbContext)
@@ -19,25 +31,42 @@ public sealed class PaymentService : IPaymentService
         _dbContext = dbContext;
     }
 
+    // ------------------------------------------------------------------
+    // Queries
+    // ------------------------------------------------------------------
+
     public async Task<IReadOnlyCollection<PaymentResponse>> GetAllAsync(
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
         EnsureCanRead(actor);
 
-        IQueryable<Payment> query =
-            _dbContext.Payments.AsNoTracking();
+        IQueryable<Payment> query = _dbContext.Payments
+            .AsNoTracking()
+            .Include(x => x.Invoice);
 
         if (!IsSuperAdmin(actor))
         {
             var companyId = GetActorCompanyId(actor);
 
-            query = query.Where(
-                x => x.CompanyId == companyId);
+            query = query.Where(x => x.CompanyId == companyId);
+        }
+
+        // Site managers only see payments of the sites they are assigned to.
+        var visibleSites = await GetVisibleSiteIdsAsync(actor, cancellationToken);
+
+        if (visibleSites is not null)
+        {
+            query = query.Where(x =>
+                (x.Invoice != null
+                    ? x.Invoice.ConstructionSiteId
+                    : x.ConstructionSiteId) != null &&
+                visibleSites.Contains(
+                    (x.Invoice != null
+                        ? x.Invoice.ConstructionSiteId
+                        : x.ConstructionSiteId)!.Value));
         }
 
         var payments = await query
@@ -45,9 +74,7 @@ public sealed class PaymentService : IPaymentService
             .ThenBy(x => x.PaymentNumber)
             .ToListAsync(cancellationToken);
 
-        return payments
-            .Select(Map)
-            .ToArray();
+        return payments.Select(Map).ToArray();
     }
 
     public async Task<PaymentResponse> GetByIdAsync(
@@ -55,83 +82,105 @@ public sealed class PaymentService : IPaymentService
         Guid paymentId,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
         EnsureCanRead(actor);
 
-        var payment = await GetPaymentAsync(
-            paymentId,
-            cancellationToken);
+        var payment = await GetPaymentAsync(paymentId, cancellationToken);
 
-        EnsureCompanyAccess(
-            actor,
-            payment.CompanyId);
+        EnsureCompanyAccess(actor, payment.CompanyId);
 
         await EnsureSiteAccess(
             actor,
-            payment.ConstructionSiteId,
+            EffectiveSiteId(payment),
             cancellationToken);
 
         return Map(payment);
     }
+
+    // Company-level payments: not tied to a construction site. The site is
+    // taken from the invoice when there is one, otherwise from the payment.
+    public async Task<IReadOnlyCollection<PaymentResponse>> GetCompanyPaymentsAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanRead(actor);
+
+        // Same rule as EnsureSiteAccess: site managers cannot see
+        // company-level payments.
+        await EnsureSiteAccess(actor, null, cancellationToken);
+
+        var companyId = GetActorCompanyId(actor);
+
+        var payments = await _dbContext.Payments
+            .AsNoTracking()
+            .Include(p => p.Invoice)
+            .Where(p =>
+                p.CompanyId == companyId &&
+                !p.IsDeleted &&
+                (p.Invoice != null
+                    ? p.Invoice.ConstructionSiteId
+                    : p.ConstructionSiteId) == null)
+            .OrderByDescending(p => p.PaymentDate)
+            .ToListAsync(cancellationToken);
+
+        return payments.Select(Map).ToList();
+    }
+
+    // ------------------------------------------------------------------
+    // Create / update / delete
+    // ------------------------------------------------------------------
 
     public async Task<PaymentResponse> CreateAsync(
         Guid currentUserId,
         CreatePaymentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
         EnsureCanModify(actor);
 
         var companyId = GetActorCompanyId(actor);
 
-        // Read existing PAY-5-### numbers (including soft-deleted)
-        var existingNumbers = await _dbContext.Payments
-            .IgnoreQueryFilters()
-            .Where(x =>
-                x.CompanyId == companyId &&
-                x.PaymentNumber.StartsWith("PAY-5-"))
-            .Select(x => x.PaymentNumber)
-            .ToListAsync(cancellationToken);
+        var paymentNumber = CleanRequired(
+            request.PaymentNumber,
+            "Payment Number");
 
-        // Highest PAY-5 sequence
-        var sequence = existingNumbers
-            .Select(number =>
-            {
-                var suffix = number.Substring("PAY-5-".Length);
+        // Create now runs the same checks as update. Before, it ran none:
+        // wrong directions, zero amounts and other companies' invoices
+        // could be saved.
+        ValidatePayment(
+            request.PaymentDate,
+            request.Amount,
+            request.ExchangeRate,
+            request.Direction);
 
-                return int.TryParse(suffix, out var value)
-                    ? value
-                    : 0;
-            })
-            .DefaultIfEmpty(0)
-            .Max();
+        await EnsureReferencesAsync(
+            companyId,
+            request.ConstructionSiteId,
+            request.ProjectId,
+            request.InvoiceId,
+            request.VendorId,
+            request.PayrollRecordId,
+            request.Direction,
+            cancellationToken);
 
-        // Use the payment number entered by the user
-        // Use the payment number entered by the user
-        var paymentNumber = request.PaymentNumber.Trim();
-
-        if (string.IsNullOrWhiteSpace(paymentNumber))
-            throw new PaymentManagementException("Payment Number is required.");
-
-        // Check for duplicate payment numbers
+        // Soft-deleted numbers stay reserved.
         var exists = await _dbContext.Payments
             .IgnoreQueryFilters()
-            .AnyAsync(x =>
-                x.CompanyId == companyId &&
-                x.PaymentNumber == paymentNumber,
+            .AnyAsync(
+                x =>
+                    x.CompanyId == companyId &&
+                    x.PaymentNumber == paymentNumber,
                 cancellationToken);
 
         if (exists)
+        {
             throw new PaymentManagementException(
                 $"Payment Number '{paymentNumber}' already exists.");
-
-        Console.WriteLine($"Generated Payment Number = {paymentNumber}");
+        }
 
         var payment = new Payment
         {
@@ -141,10 +190,7 @@ public sealed class PaymentService : IPaymentService
             InvoiceId = request.InvoiceId,
             VendorId = request.VendorId,
             PayrollRecordId = request.PayrollRecordId,
-
-            // Manual payment number
             PaymentNumber = paymentNumber,
-
             PaymentDate = request.PaymentDate,
             Direction = request.Direction,
             Amount = request.Amount,
@@ -153,19 +199,21 @@ public sealed class PaymentService : IPaymentService
             PaymentMethod = Clean(request.PaymentMethod),
             ReferenceNumber = Clean(request.ReferenceNumber),
             Notes = Clean(request.Notes),
-
             Status = PaymentStatus.Pending
         };
 
         _dbContext.Payments.Add(payment);
 
+        // A Pending payment is not cash, so it changes nothing on the
+        // invoice. (It used to trigger a recalculation that reset Draft and
+        // Cancelled invoices to Issued.)
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         if (payment.InvoiceId.HasValue)
         {
-            await RecalculateInvoiceStatusAsync(
-                payment.InvoiceId.Value,
-                cancellationToken);
+            await _dbContext.Entry(payment)
+                .Reference(x => x.Invoice)
+                .LoadAsync(cancellationToken);
         }
 
         return Map(payment);
@@ -177,19 +225,13 @@ public sealed class PaymentService : IPaymentService
         UpdatePaymentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
 
         EnsureCanModify(actor);
 
-        var payment = await GetPaymentAsync(
-            paymentId,
-            cancellationToken);
+        var payment = await GetPaymentAsync(paymentId, cancellationToken);
 
-        EnsureCompanyAccess(
-            actor,
-            payment.CompanyId);
+        EnsureCompanyAccess(actor, payment.CompanyId);
 
         EnsureEditable(payment);
 
@@ -209,241 +251,30 @@ public sealed class PaymentService : IPaymentService
             request.Direction,
             cancellationToken);
 
-        payment.ConstructionSiteId =
-            request.ConstructionSiteId;
-
-        payment.ProjectId =
-            request.ProjectId;
+        payment.ConstructionSiteId = request.ConstructionSiteId;
+        payment.ProjectId = request.ProjectId;
         payment.InvoiceId = request.InvoiceId;
         payment.VendorId = request.VendorId;
-        payment.PayrollRecordId =
-            request.PayrollRecordId;
+        payment.PayrollRecordId = request.PayrollRecordId;
         payment.PaymentDate = request.PaymentDate;
         payment.Direction = request.Direction;
         payment.Amount = request.Amount;
-        payment.CurrencyCode =
-            CleanCurrencyCode(
-                request.CurrencyCode);
-        payment.ExchangeRate =
-            request.ExchangeRate;
-        payment.PaymentMethod =
-            Clean(request.PaymentMethod);
-        payment.ReferenceNumber =
-            Clean(request.ReferenceNumber);
-        payment.Notes =
-            Clean(request.Notes);
+        payment.CurrencyCode = CleanCurrencyCode(request.CurrencyCode);
+        payment.ExchangeRate = request.ExchangeRate;
+        payment.PaymentMethod = Clean(request.PaymentMethod);
+        payment.ReferenceNumber = Clean(request.ReferenceNumber);
+        payment.Notes = Clean(request.Notes);
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
-
-        return Map(payment);
-    }
-
-    public async Task<PaymentResponse> ChangeStatusAsync(
-        Guid currentUserId,
-        Guid paymentId,
-        ChangePaymentStatusRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
-
-        EnsureCanModify(actor);
-
-        var payment = await GetPaymentAsync(
-            paymentId,
-            cancellationToken);
-
-        EnsureCompanyAccess(
-            actor,
-            payment.CompanyId);
-
-        EnsureValidTransition(
-            payment.Status,
-            request.Status);
-
-        payment.Status = request.Status;
-
-        if (request.Status == PaymentStatus.Completed &&
-            payment.PayrollRecordId.HasValue)
-        {
-            await SynchronizePayrollStatusAsync(
-                payment.PayrollRecordId.Value,
-                payment.CompanyId,
-                payment.PaymentNumber,
-                cancellationToken);
-        }
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         if (payment.InvoiceId.HasValue)
         {
-            await SynchronizeInvoiceStatusAsync(
-                payment.InvoiceId.Value,
-                cancellationToken);
+            await _dbContext.Entry(payment)
+                .Reference(x => x.Invoice)
+                .LoadAsync(cancellationToken);
         }
 
         return Map(payment);
-    }
-
-    private async Task SynchronizePayrollStatusAsync(
-        Guid payrollRecordId,
-        Guid companyId,
-        string paymentReference,
-        CancellationToken cancellationToken)
-    {
-        var payroll = await _dbContext.PayrollRecords
-            .SingleOrDefaultAsync(
-                x =>
-                    x.Id == payrollRecordId &&
-                    x.CompanyId == companyId &&
-                    !x.IsDeleted,
-                cancellationToken);
-
-        if (payroll is null)
-        {
-            throw new PaymentManagementException(
-                "Linked payroll record was not found or does not belong to the current company.");
-        }
-
-        if (payroll.Status != PayrollStatus.Approved)
-        {
-            throw new PaymentManagementException(
-                "Linked payroll must be approved before the payment can be completed.");
-        }
-
-        payroll.Status = PayrollStatus.Paid;
-        payroll.PaidAtUtc = DateTime.UtcNow;
-        payroll.PaymentReference = paymentReference;
-    }
-
-    private async Task RecalculateInvoiceStatusAsync(
-        Guid invoiceId,
-        CancellationToken cancellationToken = default)
-    {
-        var invoice = await _dbContext.Invoices
-            .FirstAsync(
-                x => x.Id == invoiceId,
-                cancellationToken);
-
-        var paid = await _dbContext.Payments
-            .Where(x =>
-                x.InvoiceId == invoiceId &&
-                x.Status == PaymentStatus.Completed &&
-                !x.IsDeleted)
-            .SumAsync(
-                x => (decimal?)x.Amount,
-                cancellationToken) ?? 0m;
-
-        // Update the financial values
-        invoice.PaidAmount = paid;
-
-        // Recalculate the status
-        invoice.Status =
-            paid <= 0m
-                ? InvoiceStatus.Issued
-                : paid < invoice.TotalAmount
-                    ? InvoiceStatus.PartiallyPaid
-                    : InvoiceStatus.Paid;
-
-        invoice.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task<User> GetActorAsync(
-        Guid currentUserId,
-        CancellationToken cancellationToken)
-    {
-        return await _dbContext.Users
-            .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .SingleOrDefaultAsync(
-                x => x.Id == currentUserId,
-                cancellationToken)
-            ?? throw new PaymentManagementException(
-                "Authenticated user was not found.");
-    }
-
-    public async Task CompletePaymentAsync(
-        Guid currentUserId,
-        Guid paymentId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
-
-        EnsureCanModify(actor);
-
-        var payment = await GetPaymentAsync(
-            paymentId,
-            cancellationToken);
-
-        EnsureCompanyAccess(
-            actor,
-            payment.CompanyId);
-
-        EnsureValidTransition(
-            payment.Status,
-            PaymentStatus.Completed);
-
-        payment.Status = PaymentStatus.Completed;
-        payment.UpdatedAtUtc = DateTime.UtcNow;
-
-        if (payment.PayrollRecordId.HasValue)
-        {
-            await SynchronizePayrollStatusAsync(
-                payment.PayrollRecordId.Value,
-                payment.CompanyId,
-                PaymentStatus.Completed.ToString(),
-                cancellationToken);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        if (payment.InvoiceId.HasValue)
-        {
-            await RecalculateInvoiceStatusAsync(
-                payment.InvoiceId.Value);
-        }
-    }
-
-    public async Task ReversePaymentAsync(
-        Guid currentUserId,
-        Guid paymentId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(
-            currentUserId,
-            cancellationToken);
-
-        EnsureCanModify(actor);
-
-        var payment = await GetPaymentAsync(
-            paymentId,
-            cancellationToken);
-
-        EnsureCompanyAccess(
-            actor,
-            payment.CompanyId);
-
-        EnsureValidTransition(
-            payment.Status,
-            PaymentStatus.Reversed);
-
-        payment.Status = PaymentStatus.Reversed;
-        payment.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        if (payment.InvoiceId.HasValue)
-        {
-            await RecalculateInvoiceStatusAsync(
-                payment.InvoiceId.Value);
-        }
     }
 
     public async Task DeleteAsync(
@@ -465,40 +296,307 @@ public sealed class PaymentService : IPaymentService
                 "Only recorded payments can be deleted.");
         }
 
+        // Only Pending payments can be deleted and they are not cash, so
+        // no invoice recalculation is needed.
         payment.IsDeleted = true;
         payment.DeletedAtUtc = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 
+    // ------------------------------------------------------------------
+    // Status changes: ONE path for all three entry points
+    // ------------------------------------------------------------------
+
+    public async Task<PaymentResponse> ChangeStatusAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        ChangePaymentStatusRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await LoadForStatusChangeAsync(
+            currentUserId,
+            paymentId,
+            cancellationToken);
+
+        await ApplyStatusAsync(payment, request.Status, cancellationToken);
+
+        return Map(payment);
+    }
+
+    public async Task CompletePaymentAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await LoadForStatusChangeAsync(
+            currentUserId,
+            paymentId,
+            cancellationToken);
+
+        await ApplyStatusAsync(
+            payment,
+            PaymentStatus.Completed,
+            cancellationToken);
+    }
+
+    public async Task ReversePaymentAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await LoadForStatusChangeAsync(
+            currentUserId,
+            paymentId,
+            cancellationToken);
+
+        await ApplyStatusAsync(
+            payment,
+            PaymentStatus.Reversed,
+            cancellationToken);
+    }
+
+    private async Task<Payment> LoadForStatusChangeAsync(
+        Guid currentUserId,
+        Guid paymentId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureCanModify(actor);
+
+        var payment = await GetPaymentAsync(paymentId, cancellationToken);
+
+        EnsureCompanyAccess(actor, payment.CompanyId);
+
+        return payment;
+    }
+
+    private async Task ApplyStatusAsync(
+        Payment payment,
+        PaymentStatus newStatus,
+        CancellationToken cancellationToken)
+    {
+        EnsureValidTransition(payment.Status, newStatus);
+
+        if (newStatus == PaymentStatus.Completed)
+        {
+            await EnsureCanCompleteAsync(payment, cancellationToken);
+        }
+
+        payment.Status = newStatus;
+        payment.UpdatedAtUtc = DateTime.UtcNow;
+
+        // Payroll follows the payment: paid when completed, back to
+        // Approved when the payment that paid it is reversed.
+        if (payment.PayrollRecordId.HasValue)
+        {
+            if (newStatus == PaymentStatus.Completed)
+            {
+                await MarkPayrollPaidAsync(payment, cancellationToken);
+            }
+            else if (newStatus == PaymentStatus.Reversed)
+            {
+                await RevertPayrollAsync(payment, cancellationToken);
+            }
+        }
+
+        // The invoice is recalculated from its completed payments, counting
+        // this payment at its NEW status, so one save keeps everything
+        // consistent.
         if (payment.InvoiceId.HasValue)
         {
-            await SynchronizeInvoiceStatusAsync(
+            await RecalculateInvoiceAsync(
                 payment.InvoiceId.Value,
+                payment,
                 cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    // The single recalculation. Stages changes only; the caller saves.
+    private async Task RecalculateInvoiceAsync(
+        Guid invoiceId,
+        Payment changing,
+        CancellationToken cancellationToken)
+    {
+        var invoice = await _dbContext.Invoices
+            .SingleOrDefaultAsync(
+                x => x.Id == invoiceId && !x.IsDeleted,
+                cancellationToken);
+
+        if (invoice is null)
+        {
+            return;
+        }
+
+        // Completed payments already saved, except the one being changed...
+        var paid = await _dbContext.Payments
+            .Where(x =>
+                x.InvoiceId == invoiceId &&
+                x.Id != changing.Id &&
+                x.Status == PaymentStatus.Completed &&
+                !x.IsDeleted)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+
+        // ...plus that one, at its new status.
+        if (changing.Status == PaymentStatus.Completed && !changing.IsDeleted)
+        {
+            paid += changing.Amount;
+        }
+
+        invoice.PaidAmount = paid;
+
+        // Only invoices that are open for payment are re-statused. A
+        // cancelled or not-yet-issued invoice keeps its status.
+        if (invoice.Status is
+            InvoiceStatus.Issued or
+            InvoiceStatus.PartiallyPaid or
+            InvoiceStatus.Paid)
+        {
+            invoice.Status =
+                paid <= 0m
+                    ? InvoiceStatus.Issued
+                    : paid + Tolerance < invoice.TotalAmount
+                        ? InvoiceStatus.PartiallyPaid
+                        : InvoiceStatus.Paid;
+        }
+
+        invoice.UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    // A payment cannot be completed against a cancelled invoice, or in a
+    // way that pays more than the invoice total.
+    private async Task EnsureCanCompleteAsync(
+        Payment payment,
+        CancellationToken cancellationToken)
+    {
+        if (!payment.InvoiceId.HasValue)
+        {
+            return;
+        }
+
+        var invoice = await _dbContext.Invoices
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.Id == payment.InvoiceId.Value && !x.IsDeleted,
+                cancellationToken)
+            ?? throw new PaymentManagementException(
+                "The invoice for this payment was not found.");
+
+        if (invoice.Status == InvoiceStatus.Cancelled)
+        {
+            throw new PaymentManagementException(
+                "A payment cannot be completed against a cancelled invoice.");
+        }
+
+        var paidByOthers = await _dbContext.Payments
+            .Where(x =>
+                x.InvoiceId == invoice.Id &&
+                x.Id != payment.Id &&
+                x.Status == PaymentStatus.Completed &&
+                !x.IsDeleted)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+
+        var remaining = invoice.TotalAmount - paidByOthers;
+
+        if (payment.Amount > remaining + Tolerance)
+        {
+            throw new PaymentManagementException(
+                $"This payment exceeds the invoice balance. Remaining balance: {Math.Max(0m, remaining):N2}.");
         }
     }
 
-    public async Task<IReadOnlyCollection<PaymentResponse>> GetCompanyPaymentsAsync(
-        Guid currentUserId,
-        CancellationToken cancellationToken = default)
+    // ------------------------------------------------------------------
+    // Payroll
+    // ------------------------------------------------------------------
+
+    private async Task MarkPayrollPaidAsync(
+        Payment payment,
+        CancellationToken cancellationToken)
     {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        var companyId = GetActorCompanyId(actor);
+        var payroll = await _dbContext.PayrollRecords
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == payment.PayrollRecordId!.Value &&
+                    x.CompanyId == payment.CompanyId &&
+                    !x.IsDeleted,
+                cancellationToken);
 
-        var payments = await _dbContext.Payments
-            .AsNoTracking()
-            .Include(p => p.Invoice)
-            .Where(p =>
-                p.CompanyId == companyId &&
-                p.Invoice!.ConstructionSiteId == null &&
-                !p.IsDeleted)
-            .OrderByDescending(p => p.PaymentDate)
-            .ToListAsync(cancellationToken);
+        if (payroll is null)
+        {
+            throw new PaymentManagementException(
+                "Linked payroll record was not found or does not belong to the current company.");
+        }
 
-        return payments.Select(Map).ToList();
+        if (payroll.Status != PayrollStatus.Approved)
+        {
+            throw new PaymentManagementException(
+                "Linked payroll must be approved before the payment can be completed.");
+        }
+
+        payroll.Status = PayrollStatus.Paid;
+        payroll.PaidAtUtc = DateTime.UtcNow;
+
+        // The payment number, on every path. One path used to store the
+        // word "Completed" here.
+        payroll.PaymentReference = payment.PaymentNumber;
     }
 
+    private async Task RevertPayrollAsync(
+        Payment payment,
+        CancellationToken cancellationToken)
+    {
+        var payroll = await _dbContext.PayrollRecords
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == payment.PayrollRecordId!.Value &&
+                    x.CompanyId == payment.CompanyId &&
+                    !x.IsDeleted,
+                cancellationToken);
 
+        if (payroll is null || payroll.Status != PayrollStatus.Paid)
+        {
+            return;
+        }
+
+        var paidByAnother = await _dbContext.Payments
+            .AnyAsync(
+                x =>
+                    x.PayrollRecordId == payroll.Id &&
+                    x.Id != payment.Id &&
+                    x.Status == PaymentStatus.Completed &&
+                    !x.IsDeleted,
+                cancellationToken);
+
+        if (paidByAnother)
+        {
+            return;
+        }
+
+        payroll.Status = PayrollStatus.Approved;
+        payroll.PaidAtUtc = null;
+        payroll.PaymentReference = null;
+    }
+
+    // ------------------------------------------------------------------
+    // Access
+    // ------------------------------------------------------------------
+
+    private async Task<User> GetActorAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Users
+            .Include(x => x.UserRoles)
+            .ThenInclude(x => x.Role)
+            .SingleOrDefaultAsync(
+                x => x.Id == currentUserId,
+                cancellationToken)
+            ?? throw new PaymentManagementException(
+                "Authenticated user was not found.");
+    }
 
     private static void EnsureCanRead(User actor)
     {
@@ -514,8 +612,7 @@ public sealed class PaymentService : IPaymentService
             "You are not authorized to view payments.");
     }
 
-    private static void EnsureCanModify(
-        User actor)
+    private static void EnsureCanModify(User actor)
     {
         if (IsSuperAdmin(actor) ||
             HasRole(actor, AppRoles.CompanyAdmin) ||
@@ -545,16 +642,42 @@ public sealed class PaymentService : IPaymentService
         }
     }
 
+    // null = sees every site; otherwise only these sites.
+    private async Task<List<Guid>?> GetVisibleSiteIdsAsync(
+        User actor,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant))
+        {
+            return null;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+
+        return await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive)
+            .Select(x => x.SiteId)
+            .ToListAsync(cancellationToken);
+    }
+
     private async Task EnsureSiteAccess(
         User actor,
         Guid? siteId,
         CancellationToken cancellationToken)
     {
-        // Company-level payment
-        // SiteManager cannot access company-level payments.
+        // Company-level payment: site managers cannot access these.
         if (!siteId.HasValue)
         {
-            if (HasRole(actor, AppRoles.SiteManager))
+            if (HasRole(actor, AppRoles.SiteManager) &&
+                !HasRole(actor, AppRoles.CompanyAdmin) &&
+                !HasRole(actor, AppRoles.Accountant) &&
+                !IsSuperAdmin(actor))
             {
                 throw new PaymentManagementException(
                     "You are not authorized to access this payment.");
@@ -563,36 +686,28 @@ public sealed class PaymentService : IPaymentService
             return;
         }
 
-        // SuperAdmin has unrestricted access.
-        if (IsSuperAdmin(actor))
-            return;
+        var visibleSites = await GetVisibleSiteIdsAsync(
+            actor,
+            cancellationToken);
 
-        // CompanyAdmin and Accountant have company-wide finance access.
-        if (HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
-        {
-            return;
-        }
-
-        var companyId = GetActorCompanyId(actor);
-
-        var hasSiteAccess = await _dbContext.UserSiteAccesses
-            .AnyAsync(
-                x => x.UserId == actor.Id &&
-                     x.SiteId == siteId.Value &&
-                     x.CompanyId == companyId &&
-                     x.IsActive,
-                cancellationToken);
-
-        if (!hasSiteAccess)
+        if (visibleSites is not null &&
+            !visibleSites.Contains(siteId.Value))
         {
             throw new PaymentManagementException(
                 "You are not assigned to this site's payment scope.");
         }
     }
 
-    private static Guid GetActorCompanyId(
-        User actor)
+    // A payment on an invoice belongs to the invoice's site. Otherwise it
+    // belongs to its own site. Reports use the same rule.
+    private static Guid? EffectiveSiteId(Payment payment)
+    {
+        return payment.InvoiceId.HasValue && payment.Invoice is not null
+            ? payment.Invoice.ConstructionSiteId
+            : payment.ConstructionSiteId;
+    }
+
+    private static Guid GetActorCompanyId(User actor)
     {
         if (!actor.CompanyId.HasValue)
         {
@@ -608,6 +723,7 @@ public sealed class PaymentService : IPaymentService
         CancellationToken cancellationToken)
     {
         return await _dbContext.Payments
+            .Include(x => x.Invoice)
             .SingleOrDefaultAsync(
                 x =>
                     x.Id == paymentId &&
@@ -616,6 +732,10 @@ public sealed class PaymentService : IPaymentService
             ?? throw new PaymentManagementException(
                 "Payment was not found.");
     }
+
+    // ------------------------------------------------------------------
+    // Validation
+    // ------------------------------------------------------------------
 
     private async Task EnsureReferencesAsync(
         Guid companyId,
@@ -643,6 +763,7 @@ public sealed class PaymentService : IPaymentService
                     "Construction site was not found or does not belong to the current company.");
             }
         }
+
         if (projectId.HasValue)
         {
             var projectExists = await _dbContext.Projects
@@ -660,11 +781,10 @@ public sealed class PaymentService : IPaymentService
             }
         }
 
-        Invoice? invoice = null;
-
         if (invoiceId.HasValue)
         {
-            invoice = await _dbContext.Invoices
+            var invoice = await _dbContext.Invoices
+                .AsNoTracking()
                 .SingleOrDefaultAsync(
                     x =>
                         x.Id == invoiceId.Value &&
@@ -685,8 +805,6 @@ public sealed class PaymentService : IPaymentService
                 throw new PaymentManagementException(
                     $"Payments cannot be added to an invoice with status {invoice.Status}.");
             }
-
-            var paymentDirection = (PaymentDirection)direction;
 
             if (invoice.Type == InvoiceType.ClientInvoice &&
                 direction != PaymentDirection.Incoming)
@@ -765,6 +883,12 @@ public sealed class PaymentService : IPaymentService
                     "Payroll payments cannot specify an invoice or vendor.");
             }
 
+            if (direction != PaymentDirection.Outgoing)
+            {
+                throw new PaymentManagementException(
+                    "Payroll payments must use Outgoing direction.");
+            }
+
             var payroll = await _dbContext.PayrollRecords
                 .SingleOrDefaultAsync(
                     x =>
@@ -819,16 +943,14 @@ public sealed class PaymentService : IPaymentService
                 "Exchange rate must be greater than zero.");
         }
 
-        if (paymentDate > DateOnly.FromDateTime(
-                DateTime.UtcNow.Date))
+        if (paymentDate > DateOnly.FromDateTime(DateTime.UtcNow.Date))
         {
             throw new PaymentManagementException(
                 "Payment date cannot be in the future.");
         }
     }
 
-    private static void EnsureEditable(
-        Payment payment)
+    private static void EnsureEditable(Payment payment)
     {
         if (payment.Status != PaymentStatus.Pending)
         {
@@ -850,13 +972,10 @@ public sealed class PaymentService : IPaymentService
                     PaymentStatus.Cancelled,
 
             PaymentStatus.Completed =>
-                requestedStatus is
-                    PaymentStatus.Reversed,
+                requestedStatus is PaymentStatus.Reversed,
 
             PaymentStatus.Failed => false,
-
             PaymentStatus.Cancelled => false,
-
             PaymentStatus.Reversed => false,
 
             _ => false
@@ -869,55 +988,9 @@ public sealed class PaymentService : IPaymentService
         }
     }
 
-    private async Task SynchronizeInvoiceStatusAsync(
-        Guid invoiceId,
-        CancellationToken cancellationToken)
-    {
-        var invoice = await _dbContext.Invoices
-            .SingleOrDefaultAsync(
-                x =>
-                    x.Id == invoiceId &&
-                    !x.IsDeleted,
-                cancellationToken);
-
-        if (invoice is null)
-        {
-            return;
-        }
-
-        var completedPayments = await _dbContext.Payments
-            .Where(
-                x =>
-                    x.InvoiceId == invoiceId &&
-                    x.Status == PaymentStatus.Completed &&
-                    !x.IsDeleted)
-            .SumAsync(
-                x => (decimal?)x.Amount,
-                cancellationToken)
-            ?? 0m;
-
-        if (completedPayments <= 0)
-        {
-            if (invoice.Status != InvoiceStatus.Cancelled)
-            {
-                invoice.Status =
-                    InvoiceStatus.Issued;
-            }
-        }
-        else if (completedPayments < invoice.TotalAmount)
-        {
-            invoice.Status =
-                InvoiceStatus.PartiallyPaid;
-        }
-        else
-        {
-            invoice.Status =
-                InvoiceStatus.Paid;
-        }
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
-    }
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
 
     private static string CleanRequired(
         string? value,
@@ -932,20 +1005,16 @@ public sealed class PaymentService : IPaymentService
         return value.Trim();
     }
 
-    private static string? Clean(
-        string? value)
+    private static string? Clean(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim();
     }
 
-    private static string CleanCurrencyCode(
-        string? value)
+    private static string CleanCurrencyCode(string? value)
     {
-        var currency = CleanRequired(
-            value,
-            "Currency code")
+        var currency = CleanRequired(value, "Currency code")
             .ToUpperInvariant();
 
         if (currency.Length != 3)
@@ -957,12 +1026,9 @@ public sealed class PaymentService : IPaymentService
         return currency;
     }
 
-    private static bool IsSuperAdmin(
-        User actor)
+    private static bool IsSuperAdmin(User actor)
     {
-        return HasRole(
-            actor,
-            AppRoles.SuperAdmin);
+        return HasRole(actor, AppRoles.SuperAdmin);
     }
 
     private static bool HasRole(
@@ -979,8 +1045,7 @@ public sealed class PaymentService : IPaymentService
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static PaymentResponse Map(
-        Payment payment)
+    private static PaymentResponse Map(Payment payment)
     {
         return new PaymentResponse(
             payment.Id,

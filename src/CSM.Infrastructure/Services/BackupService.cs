@@ -2,6 +2,7 @@ using CSM.Application.Common.Backup;
 using CSM.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using System.Data;
 
 namespace CSM.Infrastructure.Services;
 
@@ -51,13 +52,21 @@ public sealed class BackupService : IBackupService
 
         var path = Path.Combine(BackupFolder, fileName);
 
+        var databaseIdentifier =
+            new SqlCommandBuilder().QuoteIdentifier(database);
         var sql = $"""
-BACKUP DATABASE [{database}]
-TO DISK = N'{path}'
+BACKUP DATABASE {databaseIdentifier}
+TO DISK = @backupPath
 WITH INIT, COMPRESSION;
 """;
 
-        await ExecuteSqlAsync(sql, cancellationToken);
+        await ExecuteSqlAsync(
+            sql,
+            new SqlParameter("@backupPath", SqlDbType.NVarChar, 4000)
+            {
+                Value = path
+            },
+            cancellationToken);
 
         return fileName;
     }
@@ -70,19 +79,48 @@ WITH INIT, COMPRESSION;
             _configuration.GetConnectionString("DefaultConnection"));
 
         var database = builder.InitialCatalog;
+        var databaseIdentifier =
+            new SqlCommandBuilder().QuoteIdentifier(database);
+
+        var backupFolder = Path.GetFullPath(BackupFolder);
+        var fullBackupPath = Path.GetFullPath(backupFilePath);
+        var backupFolderPrefix = backupFolder.EndsWith(
+            Path.DirectorySeparatorChar)
+            ? backupFolder
+            : backupFolder + Path.DirectorySeparatorChar;
+
+        if (!fullBackupPath.StartsWith(
+                backupFolderPrefix,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                Path.GetExtension(fullBackupPath),
+                ".bak",
+                StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(fullBackupPath))
+        {
+            throw new InvalidOperationException(
+                "The backup file path is invalid.");
+        }
 
         builder.InitialCatalog = "master";
 
         var sql = $"""
-ALTER DATABASE [{database}]
+ALTER DATABASE {databaseIdentifier}
 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 
-RESTORE DATABASE [{database}]
-FROM DISK = N'{backupFilePath}'
+BEGIN TRY
+RESTORE DATABASE {databaseIdentifier}
+FROM DISK = @backupPath
 WITH REPLACE;
 
-ALTER DATABASE [{database}]
+ALTER DATABASE {databaseIdentifier}
 SET MULTI_USER;
+END TRY
+BEGIN CATCH
+    ALTER DATABASE {databaseIdentifier}
+    SET MULTI_USER;
+    THROW;
+END CATCH;
 """;
 
         await using var connection =
@@ -93,6 +131,12 @@ SET MULTI_USER;
         await using var command =
             new SqlCommand(sql, connection);
 
+        command.Parameters.Add(
+            new SqlParameter("@backupPath", SqlDbType.NVarChar, 4000)
+            {
+                Value = fullBackupPath
+            });
+
         command.CommandTimeout = 0;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -100,6 +144,7 @@ SET MULTI_USER;
 
     private async Task ExecuteSqlAsync(
         string sql,
+        SqlParameter parameter,
         CancellationToken cancellationToken)
     {
         await using var connection =
@@ -111,6 +156,7 @@ SET MULTI_USER;
         await using var command =
             new SqlCommand(sql, connection);
 
+        command.Parameters.Add(parameter);
         command.CommandTimeout = 0;
 
         await command.ExecuteNonQueryAsync(cancellationToken);

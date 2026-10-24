@@ -46,7 +46,11 @@ public sealed class TokenService : ITokenService
 
             new(
                 ClaimTypes.Name,
-                $"{user.FirstName} {user.LastName}")
+                $"{user.FirstName} {user.LastName}"),
+
+            new(
+                "must_change_password",
+                user.MustChangePassword ? "true" : "false")
         };
 
         if (user.CompanyId.HasValue)

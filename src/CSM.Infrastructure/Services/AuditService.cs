@@ -15,6 +15,7 @@ public sealed class AuditService : IAuditService
 
     public async Task LogAsync(
         Guid userId,
+        Guid companyId,
         string userName,
         string module,
         string action,
@@ -27,6 +28,7 @@ public sealed class AuditService : IAuditService
         var log = new AuditLog
         {
             UserId = userId,
+            CompanyId = companyId,
             UserName = userName,
             Module = module,
             Action = action,

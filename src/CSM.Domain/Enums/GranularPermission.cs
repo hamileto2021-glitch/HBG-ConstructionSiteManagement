@@ -81,6 +81,8 @@ public enum GranularPermission
     Reports_FinancialSummary_View,
     Reports_Export,
 
+    Audit_View,
+
     // Appended at the end so existing stored enum values keep their numbering.
     HRM_Attendance_Approve,
     Finance_Invoice_Manage,
@@ -89,6 +91,7 @@ public enum GranularPermission
     Equipment_View,
     Equipment_Manage,
 
-    HRM_Attendance_Override
+    HRM_Attendance_Override,
+    Data_Export
 
 }

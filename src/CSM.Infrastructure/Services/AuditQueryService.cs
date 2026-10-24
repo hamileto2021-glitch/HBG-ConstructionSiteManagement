@@ -14,12 +14,15 @@ public sealed class AuditQueryService : IAuditQueryService
     }
 
     public async Task<IReadOnlyCollection<AuditLogDto>> GetLogsAsync(
+        Guid companyId,
         string? module,
         DateTime? fromUtc,
         DateTime? toUtc,
         CancellationToken cancellationToken)
     {
-        var query = _context.AuditLogs.AsNoTracking();
+        var query = _context.AuditLogs
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId);
 
         if (!string.IsNullOrWhiteSpace(module))
         {

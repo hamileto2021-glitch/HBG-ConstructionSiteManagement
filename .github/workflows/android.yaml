@@ -19,7 +19,23 @@ jobs:
       - run: flutter pub get
         working-directory: mobile/csm_app
 
-      - run: flutter build apk --release
+      - name: Build release APK
+        env:
+          CSM_API_BASE_URL: ${{ vars.CSM_API_BASE_URL }}
+        run: |
+          if [ -z "$CSM_API_BASE_URL" ]; then
+            echo "Configure the CSM_API_BASE_URL repository variable."
+            exit 1
+          fi
+          case "${CSM_API_BASE_URL%/}" in
+            https://*/api) ;;
+            *)
+              echo "CSM_API_BASE_URL must be an HTTPS URL ending in /api."
+              exit 1
+              ;;
+          esac
+          flutter build apk --release \
+            --dart-define=CSM_API_BASE_URL="$CSM_API_BASE_URL"
         working-directory: mobile/csm_app
 
       - uses: actions/upload-artifact@v4

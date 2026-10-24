@@ -39,6 +39,31 @@
         <script src="js/pdf.js"></script>
         <script src="js/offlineSync.js"></script>
         <script src="js/connectionState.js"></script>
+        <script src="js/culture.js"></script>
+        <script>
+            (() => {
+                const applyTheme = (theme) => {
+                    const root = document.documentElement;
+                    const resolved = theme === "system"
+                        ? (window.matchMedia("(prefers-color-scheme: dark)").matches
+                            ? "dark" : "light")
+                        : theme;
+
+                    root.setAttribute("data-theme", resolved);
+                    root.setAttribute("data-bs-theme", resolved);
+                };
+
+                window.csmTheme = {
+                    apply: applyTheme,
+                    setCompact: (enabled) => {
+                        document.documentElement.classList.toggle(
+                            "csm-compact",
+                            Boolean(enabled)
+                        );
+                    }
+                };
+            })();
+        </script>
 
     </body>
 

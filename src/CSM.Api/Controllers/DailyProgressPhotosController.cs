@@ -1,13 +1,14 @@
 using CSM.Application.Projects.DailyProgressPhotos;
+using CSM.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CSM.API.Controllers;
+namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/daily-progress-photos")]
-[Authorize]
-public sealed class DailyProgressPhotosController : ControllerBase
+[Authorize(Policy = AppPolicies.ProjectManagement)]
+public sealed class DailyProgressPhotosController : CurrentUserControllerBase
 {
     private readonly IDailyProgressPhotoService _service;
 
@@ -23,11 +24,34 @@ public sealed class DailyProgressPhotosController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByDiaryAsync(
-            Guid.Empty,
+            CurrentUserId,
             diaryId,
             cancellationToken);
 
         return Ok(result);
+    }
+
+    [HttpGet("{photoId:guid}/content")]
+    public async Task<IActionResult> GetContent(
+        Guid photoId,
+        CancellationToken cancellationToken)
+    {
+        var content = await _service.GetContentAsync(
+            CurrentUserId,
+            photoId,
+            cancellationToken);
+
+        if (content is null)
+            return NotFound();
+
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+
+        return File(
+            content.Content,
+            content.ContentType,
+            content.FileName,
+            enableRangeProcessing: true);
     }
 
     [HttpPost("{diaryId:guid}")]
@@ -38,20 +62,26 @@ public sealed class DailyProgressPhotosController : ControllerBase
         [FromForm] string? caption,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-            return BadRequest("Image is required.");
+        if (file is null || file.Length == 0 || file.Length > 25_000_000)
+            return BadRequest(new { message = "Select an image smaller than 25 MB." });
 
         await using var stream = file.OpenReadStream();
 
-        var photo = await _service.UploadAsync(
-            Guid.Empty,
-            diaryId,
-            stream,
-            file.FileName,
-            caption,
-            cancellationToken);
+        try
+        {
+            var photo = await _service.UploadAsync(
+                CurrentUserId,
+                diaryId,
+                stream,
+                caption,
+                cancellationToken);
 
-        return Ok(photo);
+            return Ok(photo);
+        }
+        catch (InvalidDataException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{photoId:guid}")]
@@ -59,10 +89,8 @@ public sealed class DailyProgressPhotosController : ControllerBase
         Guid photoId,
         CancellationToken cancellationToken)
     {
-        Console.WriteLine($"DELETE PHOTO: {photoId}");
-
         await _service.DeleteAsync(
-            Guid.Empty,
+            CurrentUserId,
             photoId,
             cancellationToken);
 

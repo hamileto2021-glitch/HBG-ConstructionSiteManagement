@@ -10,10 +10,12 @@ import 'sync_status.dart';
 
 class SyncManager extends ChangeNotifier {
   SyncManager({
-    required this._queue,
-    required this._engine,
+    required SyncQueueService queue,
+    required SyncEngine engine,
     ConnectivityService? connectivity,
-  }) : _connectivity = connectivity ?? ConnectivityService();
+  }) : _queue = queue,
+       _engine = engine,
+       _connectivity = connectivity ?? ConnectivityService();
 
   final SyncQueueService _queue;
   final SyncEngine _engine;

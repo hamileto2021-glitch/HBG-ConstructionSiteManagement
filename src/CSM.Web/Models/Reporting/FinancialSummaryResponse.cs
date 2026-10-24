@@ -22,4 +22,8 @@ public sealed class FinancialSummaryResponse
 
     public decimal CompanyPettyCashBalance { get; set; }
     public int CompanyPettyCashAccounts { get; set; }
+
+    // Payments that are recorded but not yet completed. Not counted as cash.
+    public decimal PendingCashIn { get; set; }
+    public decimal PendingCashOut { get; set; }
 }

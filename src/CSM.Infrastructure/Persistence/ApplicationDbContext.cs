@@ -131,6 +131,11 @@ public DbSet<DocumentCategory> DocumentCategories => Set<DocumentCategory>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<LoginHistoryEntry> LoginHistoryEntries => Set<LoginHistoryEntry>();
+    public DbSet<UserPreferences> UserPreferences
+        => Set<UserPreferences>();
+
+    public DbSet<PrivacyDataRequest> PrivacyDataRequests => Set<PrivacyDataRequest>();
 public DbSet<Notification> Notifications => Set<Notification>();
 public DbSet<RoleGranularPermission> RoleGranularPermissions { get; set; }
     = null!;
@@ -141,6 +146,14 @@ public DbSet<RoleGranularPermission> RoleGranularPermissions { get; set; }
 
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ApplicationDbContext).Assembly);
+
+        if (Database.ProviderName ==
+            "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            modelBuilder.Entity<BudgetLine>()
+                .HasIndex(x => new { x.BudgetId, x.CostCodeId })
+                .HasFilter("\"IsDeleted\" = FALSE");
+        }
 
        modelBuilder.Entity<MaterialRequest>(entity =>
        {
@@ -274,6 +287,33 @@ public DbSet<RoleGranularPermission> RoleGranularPermissions { get; set; }
                     .HasForeignKey(x => x.EmployeeId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<LoginHistoryEntry>(entity =>
+            {
+                entity.ToTable("LoginHistoryEntries");
+
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.IpAddress)
+                    .HasMaxLength(100);
+
+                entity.Property(x => x.DeviceName)
+                    .HasMaxLength(200);
+
+                entity.Property(x => x.FailureReason)
+                    .HasMaxLength(500);
+
+                entity.HasIndex(x => new
+                {
+                    x.UserId,
+                    x.OccurredAtUtc
+                });
+
+                entity.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
     }
 
 
@@ -327,7 +367,6 @@ private void ApplyAuditInformation()
     }
 }
 }
-
 
 
 

@@ -18,6 +18,9 @@ public class AuthService : IAuthService
 
 private sealed class CurrentUserScopeResponse
 {
+    public string? UserId { get; set; }
+    public string? Email { get; set; }
+    public string? Name { get; set; }
     public string[] Roles { get; set; } = [];
     public bool HasActiveSiteAccess { get; set; }
 }
@@ -51,11 +54,22 @@ private sealed class CurrentUserScopeResponse
             !string.IsNullOrWhiteSpace(result.AccessToken))
         {
             await _sessionStorage.SetAsync("authToken", result.AccessToken);
+            await _sessionStorage.SetAsync("refreshToken", result.RefreshToken);
             _companyId = result.CompanyId;
             _permissions = null;
         }
 
         return result;
+    }
+
+    public async Task<string?> GetRefreshTokenAsync()
+    {
+        var token = await _sessionStorage.GetAsync<string>("refreshToken");
+
+        if (!token.Success || string.IsNullOrWhiteSpace(token.Value))
+            return null;
+
+        return token.Value;
     }
 
     public async Task LogoutAsync()
@@ -78,6 +92,7 @@ private sealed class CurrentUserScopeResponse
         finally
         {
             await _sessionStorage.DeleteAsync("authToken");
+            await _sessionStorage.DeleteAsync("refreshToken");
             _permissions = null;
             _companyId = null;
         }
@@ -132,6 +147,23 @@ private sealed class CurrentUserScopeResponse
             httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
         }
+    }
+
+    public async Task<string?> GetCurrentUserIdAsync()
+    {
+        var client = _factory.CreateClient("CSM.Api");
+
+        await ApplyAuthenticationAsync(client);
+
+        var response = await client.GetAsync("auth/me");
+
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var result = await response.Content
+            .ReadFromJsonAsync<CurrentUserScopeResponse>();
+
+        return result?.UserId;
     }
 
     public async Task<Guid?> GetCurrentCompanyIdAsync()

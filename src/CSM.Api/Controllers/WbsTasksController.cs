@@ -1,5 +1,6 @@
 using CSM.Application.Projects.WbsTasks;
 using CSM.Application.Projects.WbsTasks.Dtos;
+using CSM.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,8 +8,8 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/wbs-tasks")]
-[Authorize]
-public class WbsTasksController : ControllerBase
+[Authorize(Policy = AppPolicies.ProjectManagement)]
+public class WbsTasksController : CurrentUserControllerBase
 {
     private readonly IWbsTaskService _service;
 
@@ -22,7 +23,7 @@ public class WbsTasksController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetAllAsync(
-            Guid.Empty,
+            CurrentUserId,
             cancellationToken);
 
         return Ok(result);
@@ -34,7 +35,7 @@ public class WbsTasksController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByIdAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 
@@ -50,7 +51,7 @@ public class WbsTasksController : ControllerBase
         CancellationToken cancellationToken)
     {
         var created = await _service.CreateAsync(
-            Guid.Empty,
+            CurrentUserId,
             request,
             cancellationToken);
 

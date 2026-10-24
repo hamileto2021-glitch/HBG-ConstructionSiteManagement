@@ -16,6 +16,10 @@ public interface IAuthService
 
     Task<string?> GetTokenAsync();
 
+    Task<string?> GetRefreshTokenAsync();
+
+    Task<string?> GetCurrentUserIdAsync();
+
     Task<IReadOnlyCollection<string>> GetPermissionsAsync();
 
     Task<(string[] Roles, bool HasActiveSiteAccess)>

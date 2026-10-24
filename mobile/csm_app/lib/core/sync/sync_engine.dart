@@ -15,9 +15,10 @@ class SyncResult {
 
 class SyncEngine {
   SyncEngine({
-    required this._queue,
-    required this._handler,
-  });
+    required SyncQueueStore queue,
+    required SyncOperationHandler handler,
+  }) : _queue = queue,
+       _handler = handler;
 
   final SyncQueueStore _queue;
   final SyncOperationHandler _handler;

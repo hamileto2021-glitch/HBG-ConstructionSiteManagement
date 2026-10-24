@@ -4,6 +4,7 @@
     <Project Path="src/CSM.Application/CSM.Application.csproj" />
     <Project Path="src/CSM.Domain/CSM.Domain.csproj" />
     <Project Path="src/CSM.Infrastructure/CSM.Infrastructure.csproj" />
+    <Project Path="src/CSM.Infrastructure.PostgreSqlMigrations/CSM.Infrastructure.PostgreSqlMigrations.csproj" />
     <Project Path="src/CSM.Web/CSM.Web.csproj" />
   </Folder>
 </Solution>

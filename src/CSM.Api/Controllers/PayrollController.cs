@@ -140,6 +140,7 @@ public sealed class PayrollController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "Payroll",
                 "Approve",
@@ -175,6 +176,7 @@ public sealed class PayrollController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "Payroll",
                 "Paid",
@@ -209,6 +211,7 @@ public sealed class PayrollController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "Payroll",
                 "Cancel",
@@ -281,4 +284,20 @@ public sealed class PayrollController : ControllerBase
 
         return userId;
     }
+
+
+private Guid GetCurrentCompanyId()
+{
+    var value = User.FindFirst("company_id")?.Value;
+
+    if (!Guid.TryParse(value, out var companyId) ||
+        companyId == Guid.Empty)
+    {
+        throw new UnauthorizedAccessException(
+            "The authenticated user has no valid company ID.");
+    }
+
+    return companyId;
+}
+
 }

@@ -46,6 +46,7 @@ using Microsoft.IdentityModel.Tokens;
 
 using CSM.Application.Auth;
 using CSM.Application.Users;
+using CSM.Application.UserPreferences;
 using CSM.Infrastructure.Services;
 using CSM.Application.Companies;
 using CSM.Application.Compliance.DocumentCategories;
@@ -92,21 +93,92 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var databaseProvider =
+            configuration["Database:Provider"] ?? "SqlServer";
         var connectionString =
-            configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' was not found.");
+            configuration.GetConnectionString("DefaultConnection");
+
+        if (string.Equals(
+                databaseProvider,
+                "PostgreSQL",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                connectionString = configuration["DATABASE_URL"];
+            }
+
+            if (Uri.TryCreate(
+                    connectionString,
+                    UriKind.Absolute,
+                    out var databaseUri) &&
+                (databaseUri.Scheme == "postgres" ||
+                 databaseUri.Scheme == "postgresql"))
+            {
+                var credentials = databaseUri.UserInfo.Split(
+                    ':',
+                    2,
+                    StringSplitOptions.None);
+                if (credentials.Length != 2 ||
+                    string.IsNullOrWhiteSpace(credentials[0]) ||
+                    string.IsNullOrWhiteSpace(credentials[1]) ||
+                    string.IsNullOrWhiteSpace(databaseUri.AbsolutePath.Trim('/')))
+                {
+                    throw new InvalidOperationException(
+                        "DATABASE_URL must include a database name, username, and password.");
+                }
+
+                connectionString = new Npgsql.NpgsqlConnectionStringBuilder
+                {
+                    Host = databaseUri.Host,
+                    Port = databaseUri.IsDefaultPort || databaseUri.Port < 1
+                        ? 5432
+                        : databaseUri.Port,
+                    Database = Uri.UnescapeDataString(
+                        databaseUri.AbsolutePath.Trim('/')),
+                    Username = Uri.UnescapeDataString(credentials[0]),
+                    Password = Uri.UnescapeDataString(credentials[1]),
+                    SslMode = Npgsql.SslMode.Require
+                }.ConnectionString;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Configure ConnectionStrings:DefaultConnection or DATABASE_URL.");
+        }
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(
-                connectionString,
-                sqlOptions =>
-                {
-                    sqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 5,
-                        maxRetryDelay: TimeSpan.FromSeconds(10),
-                        errorNumbersToAdd: null);
-                }));
+        {
+            switch (databaseProvider.Trim().ToLowerInvariant())
+            {
+                case "sqlserver":
+                    options.UseSqlServer(
+                        connectionString,
+                        sqlOptions => sqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 5,
+                            maxRetryDelay: TimeSpan.FromSeconds(10),
+                            errorNumbersToAdd: null));
+                    break;
+                case "postgresql":
+                    options.UseNpgsql(
+                        connectionString,
+                        postgresOptions =>
+                        {
+                            postgresOptions.MigrationsAssembly(
+                                "CSM.Infrastructure.PostgreSqlMigrations");
+                            postgresOptions.EnableRetryOnFailure(
+                                maxRetryCount: 5,
+                                maxRetryDelay: TimeSpan.FromSeconds(10),
+                                errorCodesToAdd: null);
+                        });
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported Database:Provider '{databaseProvider}'. Use SqlServer or PostgreSQL.");
+            }
+        });
 
         services.Configure<JwtSettings>(
             configuration.GetSection(JwtSettings.SectionName));
@@ -119,18 +191,23 @@ public static class DependencyInjection
                 "JWT configuration was not found.");
 
         if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey) ||
-            jwtSettings.SecretKey.Length < 32)
+            jwtSettings.SecretKey.Length < 32 ||
+            string.Equals(
+                jwtSettings.SecretKey,
+                "CSM-Local-Development-JWT-Key-2026-Long",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "JWT SecretKey must contain at least 32 characters.");
+                "Configure a unique JWT SecretKey with at least 32 characters using a secret provider.");
         }
 
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IPasswordHasher, PasswordHasher>();
-        services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<
+            IUserPreferencesService,
+            UserPreferencesService>();
         services.AddScoped<ICompanyService, CompanyService>();
         services.AddScoped<ISiteService, SiteService>();
         services.AddScoped<IProjectService, ProjectService>();
@@ -216,7 +293,6 @@ services.AddScoped<QualityChecklistService>();
         services.AddScoped<IBackupService, BackupService>();
         services.AddScoped<IAuditService, AuditService>();
 services.AddScoped<IAuditQueryService, AuditQueryService>();
-services.AddScoped<IProjectDelayService, ProjectDelayService>();
 services.AddScoped<IProjectMilestoneService, ProjectMilestoneService>();
 services.AddScoped<IWbsTaskService, WbsTaskService>();
 services.AddScoped<IProjectProgressService, ProjectProgressService>();
@@ -871,12 +947,6 @@ options.AddPolicy(
         return services;
     }
 }
-
-
-
-
-
-
 
 
 

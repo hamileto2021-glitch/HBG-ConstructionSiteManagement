@@ -1,14 +1,15 @@
 using CSM.Application.Projects.ProjectDelays;
 using CSM.Application.Projects.ProjectDelays.Dtos;
+using CSM.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CSM.API.Controllers;
+namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/project-delays")]
-[Authorize]
-public sealed class ProjectDelaysController : ControllerBase
+[Authorize(Policy = AppPolicies.ProjectManagement)]
+public sealed class ProjectDelaysController : CurrentUserControllerBase
 {
     private readonly IProjectDelayService _service;
 
@@ -23,7 +24,7 @@ public sealed class ProjectDelaysController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetAllAsync(
-            Guid.Empty,
+            CurrentUserId,
             projectId,
             null,
             cancellationToken);
@@ -37,7 +38,7 @@ public sealed class ProjectDelaysController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByIdAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 
@@ -50,7 +51,7 @@ public sealed class ProjectDelaysController : ControllerBase
         CancellationToken cancellationToken)
     {
         var created = await _service.CreateAsync(
-            Guid.Empty,
+            CurrentUserId,
             request,
             cancellationToken);
 
@@ -67,7 +68,7 @@ public sealed class ProjectDelaysController : ControllerBase
         CancellationToken cancellationToken)
     {
         var updated = await _service.UpdateAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             request,
             cancellationToken);
@@ -81,7 +82,7 @@ public sealed class ProjectDelaysController : ControllerBase
         CancellationToken cancellationToken)
     {
         var deleted = await _service.DeleteAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 

@@ -20,8 +20,18 @@ public sealed class WbsTaskService : IWbsTaskService
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         return await _context.WbsTasks
             .AsNoTracking()
+            .Where(x =>
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(
+                     x.Project.ConstructionSiteId)))
             .OrderBy(x => x.TaskCode)
             .Select(MapToResponse)
             .ToListAsync(cancellationToken);
@@ -32,9 +42,19 @@ public sealed class WbsTaskService : IWbsTaskService
         Guid taskId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         return await _context.WbsTasks
             .AsNoTracking()
-            .Where(x => x.Id == taskId)
+            .Where(x =>
+                x.Id == taskId &&
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(
+                     x.Project.ConstructionSiteId)))
             .Select(MapToResponse)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -44,12 +64,47 @@ public sealed class WbsTaskService : IWbsTaskService
         CreateWbsTaskRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+        await ProjectDataAccess.EnsureProjectAccessAsync(
+            _context,
+            scope,
+            request.ProjectId,
+            cancellationToken);
+
+        if (request.MilestoneId != Guid.Empty &&
+            !await _context.Milestones.AnyAsync(
+                milestone =>
+                    milestone.Id == request.MilestoneId &&
+                    milestone.ProjectId == request.ProjectId &&
+                    milestone.CompanyId == scope.CompanyId,
+                cancellationToken))
+        {
+            throw new UnauthorizedAccessException(
+                "The milestone is not available in this project.");
+        }
+
+        if (request.AssignedEmployeeId.HasValue &&
+            !await _context.Employees.AnyAsync(
+                employee =>
+                    employee.Id == request.AssignedEmployeeId.Value &&
+                    employee.CompanyId == scope.CompanyId,
+                cancellationToken))
+        {
+            throw new UnauthorizedAccessException(
+                "The employee is not available in this company.");
+        }
+
         var task = new WbsTask
         {
-            CompanyId = Guid.Empty, // Replace with tenant later
+            CompanyId = scope.CompanyId,
 
             ProjectId = request.ProjectId,
-            MilestoneId = request.MilestoneId,
+            MilestoneId = request.MilestoneId == Guid.Empty
+                ? null
+                : request.MilestoneId,
             AssignedEmployeeId = request.AssignedEmployeeId,
 
             TaskCode = request.TaskCode,

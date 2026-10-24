@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 class ConnectivityService {
@@ -14,11 +13,6 @@ class ConnectivityService {
       return false;
     }
 
-    try {
-      final lookup = await InternetAddress.lookup('api.nuget.org');
-      return lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
-    } catch (_) {
-      return false;
-    }
+    return true;
   }
 }

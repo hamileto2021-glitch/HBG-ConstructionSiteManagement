@@ -21,9 +21,21 @@ public sealed class ProjectMilestoneService : IProjectMilestoneService
         Guid projectId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+        await ProjectDataAccess.EnsureProjectAccessAsync(
+            _context,
+            scope,
+            projectId,
+            cancellationToken);
+
         return await _context.Milestones
             .AsNoTracking()
-            .Where(x => x.ProjectId == projectId)
+            .Where(x =>
+                x.ProjectId == projectId &&
+                x.CompanyId == scope.CompanyId)
             .OrderBy(x => x.PlannedDate)
             .Select(MapToResponse)
             .ToListAsync(cancellationToken);
@@ -34,9 +46,19 @@ public sealed class ProjectMilestoneService : IProjectMilestoneService
         Guid milestoneId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         return await _context.Milestones
             .AsNoTracking()
-            .Where(x => x.Id == milestoneId)
+            .Where(x =>
+                x.Id == milestoneId &&
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(
+                     x.Project.ConstructionSiteId)))
             .Select(MapToResponse)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -46,8 +68,21 @@ public sealed class ProjectMilestoneService : IProjectMilestoneService
         CreateProjectMilestoneRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+        await ProjectDataAccess.EnsureProjectAccessAsync(
+            _context,
+            scope,
+            request.ProjectId,
+            cancellationToken);
+
         var project = await _context.Projects
-            .FirstOrDefaultAsync(x => x.Id == request.ProjectId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == request.ProjectId &&
+                     x.CompanyId == scope.CompanyId,
+                cancellationToken);
 
         if (project is null)
             throw new Exception("Project not found.");

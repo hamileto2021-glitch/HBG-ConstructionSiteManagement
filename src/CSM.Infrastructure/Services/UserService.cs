@@ -26,20 +26,33 @@ public sealed class UserService : IUserService
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
 
-        var users = await _dbContext.Users
+        IQueryable<User> query = _dbContext.Users
             .AsNoTracking()
-            .Where(x => x.CompanyId == actor.CompanyId && !x.IsDeleted)
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
             .Include(x => x.SiteAccesses)
-                .ThenInclude(x => x.Site)
+                .ThenInclude(x => x.Site);
+
+        if (!IsSuperAdmin(actor))
+        {
+            EnsureCompanyAdmin(actor);
+
+            query = query.Where(
+                x => x.CompanyId == actor.CompanyId);
+        }
+
+        var users = await query
             .OrderBy(x => x.FirstName)
             .ThenBy(x => x.LastName)
             .ToListAsync(cancellationToken);
 
-        return users.Select(Map).ToList();
+        return users
+            .Select(Map)
+            .ToArray();
     }
 
     public async Task<UserResponse> GetByIdAsync(
@@ -187,13 +200,6 @@ public sealed class UserService : IUserService
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
-        await WriteAuditAsync(
-            currentUserId,
-            user.Id,
-            "Create User",
-            $"Created {user.Email}",
-            cancellationToken);
-
         return Map(user);
     }
 
@@ -203,9 +209,13 @@ public sealed class UserService : IUserService
         UpdateUserRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
 
-        var target = await GetUserAsync(userId, cancellationToken);
+        var target = await GetUserAsync(
+            userId,
+            cancellationToken);
 
         EnsureCanManage(actor, target);
 
@@ -218,9 +228,10 @@ public sealed class UserService : IUserService
 
         if (request.EmployeeId.HasValue)
         {
-            var employeeExists = await _dbContext.Employees.AnyAsync(
-                x => x.Id == request.EmployeeId.Value,
-                cancellationToken);
+            var employeeExists =
+                await _dbContext.Employees.AnyAsync(
+                    x => x.Id == request.EmployeeId.Value,
+                    cancellationToken);
 
             if (!employeeExists)
             {
@@ -229,81 +240,53 @@ public sealed class UserService : IUserService
             }
         }
 
-
-        // Basic information only
         target.FirstName = request.FirstName.Trim();
         target.LastName = request.LastName.Trim();
         target.EmployeeId = request.EmployeeId;
 
-        target.PhoneNumber =
-            string.IsNullOrWhiteSpace(request.PhoneNumber)
-                ? string.Empty
-                : request.PhoneNumber.Trim();
-
-        target.JobTitle =
-            string.IsNullOrWhiteSpace(request.JobTitle)
-                ? string.Empty
-                : request.JobTitle.Trim();
-
-        target.DefaultSiteId = request.DefaultSiteId;
-        target.IsActive = request.IsActive;
-
-
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await WriteAuditAsync(
-            currentUserId,
-            target.Id,
-            "Update User",
-            "Updated profile information",
+        await _dbContext.SaveChangesAsync(
             cancellationToken);
 
-        return await GetByIdAsync(
-            currentUserId,
-            userId,
-            cancellationToken);
+        return Map(target);
     }
 
-   public async Task SetRolesAsync(
-       Guid currentUserId,
-       Guid userId,
-       SetUserRolesRequest request,
-       CancellationToken cancellationToken)
-   {
-       var currentUser = await _dbContext.Users
-           .AsNoTracking()
-           .SingleOrDefaultAsync(x => x.Id == currentUserId, cancellationToken)
-           ?? throw new UserManagementException("Current user not found.");
+    public async Task SetRolesAsync(
+        Guid currentUserId,
+        Guid userId,
+        SetUserRolesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+        var target = await GetUserAsync(
+            userId,
+            cancellationToken);
+        EnsureCanManage(actor, target);
 
-       var user = await _dbContext.Users
-           .AsNoTracking()
-           .SingleOrDefaultAsync(x => x.Id == userId, cancellationToken)
-           ?? throw new UserManagementException("User not found.");
-
-       if (currentUser.CompanyId != null &&
-           user.CompanyId != currentUser.CompanyId)
-       {
-           throw new UserManagementException(
-               "You can only manage users in your own company.");
-       }
-
-       var requestedNames = request.Roles
-           .Distinct(StringComparer.OrdinalIgnoreCase)
-           .ToList();
-
-        var requestedRoleIds = await _dbContext.Roles
-            .Where(r => requestedNames.Contains(r.Name))
-            .Select(r => r.Id)
-            .ToListAsync(cancellationToken);
-
-        if (requestedRoleIds.Count != requestedNames.Count)
+        var requestedNames = NormalizeRoles(request.Roles);
+        if (requestedNames.Count == 0)
         {
             throw new UserManagementException(
-                "One or more selected roles are invalid.");
+                "At least one role is required.");
         }
 
-        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        if (!IsSuperAdmin(actor) &&
+            requestedNames.Contains(
+                AppRoles.SuperAdmin,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            throw new UserManagementException(
+                "Company administrators cannot assign the SuperAdmin role.");
+        }
+
+        var roles = await ResolveRolesAsync(
+            requestedNames,
+            cancellationToken);
+        var requestedRoleIds = roles.Select(x => x.Id).ToHashSet();
+
+        var executionStrategy =
+            _dbContext.Database.CreateExecutionStrategy();
 
         await executionStrategy.ExecuteAsync(
             async () =>
@@ -324,13 +307,12 @@ public sealed class UserService : IUserService
                     .ToHashSet();
 
                 var linksToRemove = existingLinks
-                    .Where(x => !x.IsDeleted && !requestedRoleIds.Contains(x.RoleId))
+                    .Where(x =>
+                        !x.IsDeleted &&
+                        !requestedRoleIds.Contains(x.RoleId))
                     .ToList();
 
-                if (linksToRemove.Count > 0)
-                {
-                    _dbContext.UserRoles.RemoveRange(linksToRemove);
-                }
+                _dbContext.UserRoles.RemoveRange(linksToRemove);
 
                 foreach (var roleId in requestedRoleIds)
                 {
@@ -355,45 +337,281 @@ public sealed class UserService : IUserService
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
-
-                await WriteAuditAsync(
-                    currentUserId,
-                    userId,
-                    "Update Roles",
-                    string.Join(", ", request.Roles),
-                    cancellationToken);
-
                 await transaction.CommitAsync(cancellationToken);
             });
-   }
+
+        await WriteAuditAsync(
+            currentUserId,
+            userId,
+            "Update Roles",
+            $"{requestedNames.Count} assigned role(s)",
+            cancellationToken);
+    }
     public async Task SetActiveStatusAsync(
         Guid currentUserId,
         Guid userId,
         bool isActive,
         CancellationToken cancellationToken)
     {
-        var currentUser = await _dbContext.Users
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                x => x.Id == currentUserId,
-                cancellationToken)
-            ?? throw new UserManagementException("Current user not found.");
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+        var target = await GetUserAsync(
+            userId,
+            cancellationToken);
+        EnsureCanManage(actor, target);
 
+        if (!isActive && actor.Id == target.Id)
+        {
+            throw new UserManagementException(
+                "You cannot deactivate your own account.");
+        }
+
+        target.IsActive = isActive;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            currentUserId,
+            target.Id,
+            isActive ? "Activate User" : "Deactivate User",
+            string.Empty,
+            cancellationToken);
+    }
+
+    public async Task SetSitesAsync(
+        Guid currentUserId,
+        Guid userId,
+        SetUserSitesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+        var target = await GetUserAsync(
+            userId,
+            cancellationToken);
+        EnsureCanManage(actor, target);
+
+        if (!target.CompanyId.HasValue || request.SiteIds is null)
+        {
+            throw new UserManagementException(
+                "Site access can only be assigned to company users.");
+        }
+
+        var siteIds = request.SiteIds.Distinct().ToArray();
+        if (siteIds.Contains(Guid.Empty) ||
+            (request.DefaultSiteId.HasValue &&
+             !siteIds.Contains(request.DefaultSiteId.Value)))
+        {
+            throw new UserManagementException(
+                "The default site must be included in the assigned sites.");
+        }
+
+        var validSiteIds = await _dbContext.ConstructionSites
+            .Where(site =>
+                site.CompanyId == target.CompanyId.Value &&
+                site.IsActive &&
+                siteIds.Contains(site.Id))
+            .Select(site => site.Id)
+            .ToListAsync(cancellationToken);
+
+        if (validSiteIds.Count != siteIds.Length)
+        {
+            throw new UserManagementException(
+                "One or more selected sites are invalid or belong to another company.");
+        }
+
+        target.DefaultSiteId = request.DefaultSiteId;
+        await _dbContext.UserSiteAccesses
+            .Where(access => access.UserId == target.Id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        foreach (var siteId in siteIds)
+        {
+            _dbContext.UserSiteAccesses.Add(new UserSiteAccess
+            {
+                CompanyId = target.CompanyId.Value,
+                UserId = target.Id,
+                SiteId = siteId,
+                IsDefault = siteId == request.DefaultSiteId,
+                IsActive = true
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            currentUserId,
+            userId,
+            "Update Sites",
+            $"{siteIds.Length} assigned site(s)",
+            cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        Guid currentUserId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+        var target = await GetUserAsync(
+            userId,
+            cancellationToken);
+        EnsureCanManage(actor, target);
+
+        if (actor.Id == target.Id)
+        {
+            throw new UserManagementException(
+                "You cannot delete your own account.");
+        }
+
+        target.IsDeleted = true;
+        target.IsActive = false;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            currentUserId,
+            target.Id,
+            "Delete User",
+            "Soft deleted",
+            cancellationToken);
+    }
+
+    public async Task<UserProfileResponse> GetProfileAsync(
+        Guid currentUserId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
         var user = await _dbContext.Users
+            .AsNoTracking()
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.SiteAccesses)
+                .ThenInclude(x => x.Site)
+            .Include(x => x.Employee)
             .SingleOrDefaultAsync(
                 x => x.Id == userId,
                 cancellationToken)
-            ?? throw new UserManagementException("User not found.");
+            ?? throw new UserManagementException(
+                "User was not found.");
 
-        if (currentUser.CompanyId != null &&
-            user.CompanyId != currentUser.CompanyId)
+        EnsureCanManage(actor, user);
+
+        var sites = user.SiteAccesses
+            .Where(x => x.IsActive && !x.IsDeleted && x.Site.IsActive)
+            .Select(x => new SiteSummaryDto(
+                x.SiteId,
+                x.Site.Name,
+                x.SiteId == user.DefaultSiteId))
+            .ToArray();
+        var defaultSiteName = sites
+            .FirstOrDefault(x => x.Id == user.DefaultSiteId)?.Name;
+
+        return new UserProfileResponse(
+            user.Id,
+            user.Employee?.EmployeeNumber ?? string.Empty,
+            user.FirstName,
+            user.LastName,
+            user.Email,
+            user.PhoneNumber,
+            user.JobTitle,
+            user.IsActive,
+            user.DefaultSiteId,
+            defaultSiteName,
+            user.CreatedAtUtc,
+            user.LastLoginAtUtc,
+            user.UserRoles
+                .Where(x => !x.IsDeleted && !x.Role.IsDeleted)
+                .Select(x => x.Role.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToArray(),
+            sites);
+    }
+
+    public async Task ActivateAsync(
+        Guid currentUserId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await SetActiveStatusAsync(
+            currentUserId,
+            userId,
+            true,
+            cancellationToken);
+    }
+
+    public async Task DeactivateAsync(
+        Guid currentUserId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await SetActiveStatusAsync(
+            currentUserId,
+            userId,
+            false,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<UserAuditResponse>> GetAuditAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        IQueryable<UserAudit> query = _dbContext.UserAudits
+            .AsNoTracking()
+            .Include(x => x.ActorUser)
+            .Include(x => x.TargetUser);
+
+        if (!IsSuperAdmin(actor))
         {
-            throw new UserManagementException(
-                "You can only manage users in your own company.");
+            EnsureCompanyAdmin(actor);
+            if (!actor.CompanyId.HasValue)
+            {
+                throw new UserManagementException(
+                    "Company administrator is not assigned to a company.");
+            }
+
+            query = query.Where(
+                audit => audit.TargetUser.CompanyId == actor.CompanyId);
         }
 
-        user.IsActive = isActive;
-        user.UpdatedAtUtc = DateTime.UtcNow;
+        return await query
+            .OrderByDescending(x => x.PerformedAtUtc)
+            .Take(500)
+            .Select(x => new UserAuditResponse(
+                x.Id,
+                x.PerformedAtUtc,
+                x.ActorUser.FirstName + " " + x.ActorUser.LastName,
+                x.Action,
+                x.TargetUser.FirstName + " " + x.TargetUser.LastName,
+                x.Details))
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task WriteAuditAsync(
+        Guid actorUserId,
+        Guid targetUserId,
+        string action,
+        string details,
+        CancellationToken cancellationToken)
+    {
+        _dbContext.UserAudits.Add(new UserAudit
+        {
+            ActorUserId = actorUserId,
+            TargetUserId = targetUserId,
+            Action = action,
+            Details = details
+        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -416,20 +634,20 @@ public sealed class UserService : IUserService
     }
 
     private async Task<User> GetUserAsync(
-    Guid userId,
-    CancellationToken cancellationToken)
-{
-    return await _dbContext.Users
-        .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-        .Include(x => x.SiteAccesses)
-            .ThenInclude(x => x.Site)
-        .SingleOrDefaultAsync(
-            x => x.Id == userId,
-            cancellationToken)
-        ?? throw new UserManagementException(
-            "User was not found.");
-}
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.SiteAccesses)
+                .ThenInclude(x => x.Site)
+            .SingleOrDefaultAsync(
+                x => x.Id == userId,
+                cancellationToken)
+            ?? throw new UserManagementException(
+                "User was not found.");
+    }
 
     private void EnsureCanManage(
         User actor,
@@ -505,206 +723,6 @@ public sealed class UserService : IUserService
         return roles;
     }
 
-    public async Task SetSitesAsync(
-        Guid currentUserId,
-        Guid userId,
-        SetUserSitesRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        var target = await GetUserAsync(userId, cancellationToken);
-
-        EnsureCanManage(actor, target);
-
-        target.DefaultSiteId = request.DefaultSiteId;
-
-        // Delete directly in SQL (avoids EF tracking duplicates)
-        await _dbContext.UserSiteAccesses
-            .Where(x => x.UserId == target.Id)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        // Insert unique site assignments
-        var uniqueSiteIds = request.SiteIds
-            .Where(x => x != Guid.Empty)
-            .Distinct()
-            .ToList();
-
-        foreach (var siteId in uniqueSiteIds)
-        {
-            _dbContext.UserSiteAccesses.Add(new UserSiteAccess
-            {
-                CompanyId = target.CompanyId!.Value,
-                UserId = target.Id,
-                SiteId = siteId,
-                IsActive = true
-            });
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await WriteAuditAsync(
-            currentUserId,
-            userId,
-            "Update Sites",
-            $"{request.SiteIds.Count} assigned site(s)",
-            cancellationToken);
-    }
-
-    public async Task ActivateAsync(
-        Guid currentUserId,
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        var target = await GetUserAsync(userId, cancellationToken);
-
-        EnsureCanManage(actor, target);
-
-        target.IsActive = true;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await WriteAuditAsync(
-            currentUserId,
-            target.Id,
-            "Activate User",
-            "",
-            cancellationToken);
-    }
-
-    public async Task DeactivateAsync(
-        Guid currentUserId,
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        var target = await GetUserAsync(userId, cancellationToken);
-
-        EnsureCanManage(actor, target);
-
-        target.IsActive = false;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await WriteAuditAsync(
-            currentUserId,
-            target.Id,
-            "Deactivate User",
-            "",
-            cancellationToken);
-    }
-
-    public async Task DeleteAsync(
-        Guid currentUserId,
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        var target = await GetUserAsync(userId, cancellationToken);
-
-        EnsureCanManage(actor, target);
-
-        // Prevent deleting yourself
-        if (actor.Id == target.Id)
-            throw new UserManagementException(
-                "You cannot delete your own account.");
-
-        target.IsDeleted = true;
-        target.IsActive = false;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await WriteAuditAsync(
-            currentUserId,
-            target.Id,
-            "Delete User",
-            "Soft deleted",
-            cancellationToken);
-    }
-
-    public async Task<UserProfileResponse> GetProfileAsync(
-        Guid currentUserId,
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-
-        var user = await _dbContext.Users
-            .AsNoTracking()
-            .Include(x => x.UserRoles)
-                .ThenInclude(x => x.Role)
-            .Include(x => x.SiteAccesses)
-                .ThenInclude(x => x.Site)
-            .SingleAsync(x => x.Id == userId, cancellationToken);
-
-        return new UserProfileResponse(
-            user.Id,
-            user.EmployeeId?.ToString() ?? "",
-            user.FirstName,
-            user.LastName,
-            user.Email,
-            user.PhoneNumber,
-            user.JobTitle,
-            user.IsActive,
-            user.DefaultSiteId,
-            user.SiteAccesses
-                .FirstOrDefault(x => x.SiteId == user.DefaultSiteId)?
-                .Site.Name,
-            user.CreatedAtUtc,
-            user.LastLoginAtUtc,
-            user.UserRoles
-                .Select(x => x.Role.Name)
-                .ToArray(),
-            user.SiteAccesses
-                .Where(x => x.IsActive)
-                .Select(x => new SiteSummaryDto(
-                    x.SiteId,
-                    x.Site.Name,
-                    x.SiteId == user.DefaultSiteId))
-                .ToArray()
-        );
-    }
-
-    private async Task WriteAuditAsync(
-        Guid actorUserId,
-        Guid targetUserId,
-        string action,
-        string details,
-        CancellationToken cancellationToken)
-    {
-        _dbContext.UserAudits.Add(new UserAudit
-        {
-            ActorUserId = actorUserId,
-            TargetUserId = targetUserId,
-            Action = action,
-            Details = details,
-            PerformedAtUtc = DateTime.UtcNow
-        });
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyCollection<UserAuditResponse>> GetAuditAsync(
-        Guid currentUserId,
-        CancellationToken cancellationToken = default)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-
-        return await _dbContext.UserAudits
-            .AsNoTracking()
-            .Include(x => x.ActorUser)
-            .Include(x => x.TargetUser)
-            .OrderByDescending(x => x.PerformedAtUtc)
-            .Select(x => new UserAuditResponse(
-                x.Id,
-                x.PerformedAtUtc,
-                x.ActorUser.FirstName + " " + x.ActorUser.LastName,
-                x.Action,
-                x.TargetUser.FirstName + " " + x.TargetUser.LastName,
-                x.Details))
-            .ToListAsync(cancellationToken);
-    }
-
     private static List<string> NormalizeRoles(
         IReadOnlyCollection<string>? roles)
     {
@@ -765,26 +783,13 @@ public sealed class UserService : IUserService
     private static UserResponse Map(User user)
     {
         var roles = user.UserRoles
-            .Where(x => !x.IsDeleted && !x.Role.IsDeleted)
+            .Where(x =>
+                !x.IsDeleted &&
+                !x.Role.IsDeleted)
             .Select(x => x.Role.Name)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(x => x)
             .ToArray();
-
-        var siteIds = user.SiteAccesses?
-            .Where(x => x.IsActive && !x.IsDeleted)
-            .Select(x => x.SiteId)
-            .Distinct()
-            .ToArray()
-            ?? Array.Empty<Guid>();
-
-        var siteNames = user.SiteAccesses?
-            .Where(x => x.IsActive && !x.IsDeleted)
-            .Select(x => x.Site.Name)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToArray()
-            ?? Array.Empty<string>();
 
         return new UserResponse(
             user.Id,
@@ -793,7 +798,7 @@ public sealed class UserService : IUserService
             user.Email,
             user.FirstName,
             user.LastName,
-            $"{user.FirstName} {user.LastName}",
+            $"{user.FirstName} {user.LastName}".Trim(),
             user.PhoneNumber,
             user.JobTitle,
             user.IsActive,
@@ -801,9 +806,17 @@ public sealed class UserService : IUserService
             user.DefaultSiteId,
             user.LastLoginAtUtc,
             roles,
-            siteIds,
-            siteNames,
-            user.CreatedAtUtc
-        );
+            user.SiteAccesses
+                .Where(x => x.IsActive && !x.IsDeleted)
+                .Select(x => x.SiteId)
+                .Distinct()
+                .ToArray(),
+            user.SiteAccesses
+                .Where(x => x.IsActive && !x.IsDeleted)
+                .Select(x => x.Site.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToArray(),
+            user.CreatedAtUtc);
     }
 }

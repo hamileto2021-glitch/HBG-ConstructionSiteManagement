@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using CSM.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using CSM.Infrastructure.Persistence;
+using CSM.Application.Users.Dtos;
 
 namespace CSM.Api.Controllers;
 
@@ -81,6 +82,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [Authorize]
+    [MustChangePasswordAllowed]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(
         LogoutRequest request,
@@ -93,6 +95,157 @@ public sealed class AuthController : ControllerBase
 
         return NoContent();
     }
+
+
+[Authorize]
+[HttpGet("sessions")]
+public async Task<IActionResult> GetSessions(
+    [FromHeader(Name = "X-Current-Refresh-Token")]
+    string? currentRefreshToken,
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var sessions = await _authService.GetSessionsAsync(
+        userId,
+        currentRefreshToken,
+        cancellationToken);
+
+    return Ok(sessions);
+}
+
+[Authorize]
+[HttpGet("login-history")]
+public async Task<IActionResult> GetLoginHistory(
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var history = await _dbContext.LoginHistoryEntries
+        .AsNoTracking()
+        .Where(x => x.UserId == userId)
+        .OrderByDescending(x => x.OccurredAtUtc)
+        .Select(x => new
+        {
+            x.Id,
+            x.OccurredAtUtc,
+            x.Succeeded,
+            x.IpAddress,
+            x.DeviceName,
+            x.FailureReason
+        })
+        .Take(100)
+        .ToListAsync(cancellationToken);
+
+    return Ok(history);
+}
+
+[Authorize]
+[HttpDelete("sessions/{sessionId:guid}")]
+public async Task<IActionResult> RevokeSession(
+    Guid sessionId,
+    [FromHeader(Name = "X-Current-Refresh-Token")]
+    string? currentRefreshToken,
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var revoked = await _authService.RevokeSessionAsync(
+        userId,
+        sessionId,
+        GetIpAddress(),
+        currentRefreshToken,
+        cancellationToken);
+
+    if (!revoked)
+    {
+        return NotFound(new
+        {
+            message = "Session not found, already revoked, or current session."
+        });
+    }
+
+    return NoContent();
+}
+
+
+[Authorize]
+[HttpPost("sessions/revoke-others")]
+public async Task<IActionResult> RevokeOtherSessions(
+    [FromHeader(Name = "X-Current-Refresh-Token")]
+    string? currentRefreshToken,
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    if (string.IsNullOrWhiteSpace(currentRefreshToken))
+    {
+        return BadRequest(new
+        {
+            message = "Current refresh token is required."
+        });
+    }
+
+    var revokedCount = await _authService.RevokeOtherSessionsAsync(
+        userId,
+        currentRefreshToken,
+        GetIpAddress(),
+        cancellationToken);
+
+    if (revokedCount == 0)
+    {
+        return Conflict(new
+        {
+            message = "Current session could not be verified, or no other active sessions exist."
+        });
+    }
+
+    return Ok(new
+    {
+        revokedCount,
+        message = $"Revoked {revokedCount} other session(s)."
+    });
+}
+
+
+
+
 
 
 [Authorize]
@@ -130,6 +283,160 @@ public async Task<IActionResult> Me(
     });
 }
 
+[Authorize]
+[HttpPut("me/profile")]
+public async Task<IActionResult> UpdateMyProfile(
+    UpdateMyProfileRequest request,
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var firstName = request.FirstName?.Trim();
+    var lastName = request.LastName?.Trim();
+    var phoneNumber = request.PhoneNumber?.Trim() ?? string.Empty;
+    var jobTitle = request.JobTitle?.Trim() ?? string.Empty;
+
+    if (string.IsNullOrWhiteSpace(firstName) ||
+        string.IsNullOrWhiteSpace(lastName))
+    {
+        return BadRequest(new
+        {
+            message = "First name and last name are required."
+        });
+    }
+
+    if (firstName.Length > 100 ||
+        lastName.Length > 100 ||
+        phoneNumber.Length > 30 ||
+        jobTitle.Length > 100)
+    {
+        return BadRequest(new
+        {
+            message = "One or more profile fields exceed the permitted length."
+        });
+    }
+
+    var user = await _dbContext.Users
+        .SingleOrDefaultAsync(
+            x => x.Id == userId && !x.IsDeleted,
+            cancellationToken);
+
+    if (user is null)
+    {
+        return NotFound(new
+        {
+            message = "User account not found."
+        });
+    }
+
+    user.FirstName = firstName;
+    user.LastName = lastName;
+    user.PhoneNumber = phoneNumber;
+    user.JobTitle = jobTitle;
+
+    await _dbContext.SaveChangesAsync(cancellationToken);
+
+    return Ok(new
+    {
+        firstName = user.FirstName,
+        lastName = user.LastName,
+        phoneNumber = user.PhoneNumber,
+        jobTitle = user.JobTitle
+    });
+}
+
+[Authorize]
+[HttpGet("me/profile")]
+public async Task<IActionResult> GetMyProfileForEdit(
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var profile = await _dbContext.Users
+        .AsNoTracking()
+        .Where(x => x.Id == userId && !x.IsDeleted)
+        .Select(x => new
+        {
+            x.FirstName,
+            x.LastName,
+            x.PhoneNumber,
+            x.JobTitle
+        })
+        .SingleOrDefaultAsync(cancellationToken);
+
+    if (profile is null)
+    {
+        return NotFound(new
+        {
+            message = "User account not found."
+        });
+    }
+
+    return Ok(profile);
+}
+
+[Authorize]
+[HttpGet("organization-membership")]
+public async Task<IActionResult> GetOrganizationMembership(
+    CancellationToken cancellationToken)
+{
+    var userIdValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Unauthorized(new
+        {
+            message = "Invalid authenticated user."
+        });
+    }
+
+    var memberships = await _dbContext.UserSiteAccesses
+        .AsNoTracking()
+        .Where(x =>
+            x.UserId == userId &&
+            x.IsActive &&
+            !x.IsDeleted &&
+            x.Site.IsActive &&
+            !x.Site.IsDeleted)
+        .OrderByDescending(x => x.IsDefault)
+        .ThenBy(x => x.Site.Name)
+        .Select(x => new
+        {
+            x.CompanyId,
+            x.SiteId,
+            SiteCode = x.Site.SiteCode,
+            SiteName = x.Site.Name,
+            x.Site.Address,
+            x.Site.City,
+            x.Site.Region,
+            x.Site.Country,
+            SiteStatus = x.Site.Status.ToString(),
+            x.IsDefault
+        })
+        .ToListAsync(cancellationToken);
+
+    return Ok(memberships);
+}
+
 
     [Authorize]
     [HttpGet("permissions")]
@@ -157,6 +464,7 @@ public async Task<IActionResult> Me(
     }
 
     [Authorize]
+    [MustChangePasswordAllowed]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(
         ChangePasswordRequest request,
@@ -203,4 +511,9 @@ public async Task<IActionResult> Me(
             .RemoteIpAddress?
             .ToString();
     }
+}
+
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class MustChangePasswordAllowedAttribute : Attribute
+{
 }

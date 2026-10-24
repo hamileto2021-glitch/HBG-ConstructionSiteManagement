@@ -82,6 +82,17 @@ public sealed class AuthService : IAuthService
                 user.FailedLoginAttempts = 0;
             }
 
+            _dbContext.LoginHistoryEntries.Add(
+                new LoginHistoryEntry
+                {
+                    UserId = user.Id,
+                    OccurredAtUtc = utcNow,
+                    Succeeded = false,
+                    IpAddress = ipAddress,
+                    DeviceName = request.DeviceName,
+                    FailureReason = "Invalid email or password."
+                });
+
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             throw new AuthenticationException(
@@ -244,6 +255,151 @@ public sealed class AuthService : IAuthService
             cancellationToken);
     }
 
+
+public async Task<IReadOnlyList<UserSessionResponse>> GetSessionsAsync(
+    Guid userId,
+    string? currentRefreshToken,
+    CancellationToken cancellationToken = default)
+{
+    var utcNow = DateTime.UtcNow;
+
+    string? currentTokenHash = null;
+
+    if (!string.IsNullOrWhiteSpace(currentRefreshToken))
+    {
+        currentTokenHash =
+            _tokenService.HashRefreshToken(currentRefreshToken);
+    }
+
+    var sessions = await _dbContext.RefreshTokens
+        .AsNoTracking()
+        .Where(x =>
+            x.UserId == userId &&
+            !x.IsDeleted &&
+            !x.RevokedAtUtc.HasValue &&
+            x.ExpiresAtUtc > utcNow)
+        .OrderByDescending(x => x.CreatedAtUtc)
+        .Select(x => new UserSessionResponse(
+            x.Id,
+            x.DeviceName,
+            x.CreatedByIp,
+            x.CreatedAtUtc,
+            x.ExpiresAtUtc,
+            currentTokenHash != null &&
+                x.TokenHash == currentTokenHash))
+        .ToListAsync(cancellationToken);
+
+    return sessions;
+}
+
+
+
+public async Task<bool> RevokeSessionAsync(
+    Guid userId,
+    Guid sessionId,
+    string? ipAddress,
+    string? currentRefreshToken,
+    CancellationToken cancellationToken = default)
+{
+    var session = await _dbContext.RefreshTokens
+        .SingleOrDefaultAsync(
+            x => x.Id == sessionId &&
+                 x.UserId == userId &&
+                 !x.IsDeleted,
+            cancellationToken);
+
+    if (session is null || session.RevokedAtUtc.HasValue)
+    {
+        return false;
+    }
+
+    // Never revoke the refresh-token session used by this request.
+    if (!string.IsNullOrWhiteSpace(currentRefreshToken))
+    {
+        var currentTokenHash =
+            _tokenService.HashRefreshToken(currentRefreshToken);
+
+        if (string.Equals(
+                session.TokenHash,
+                currentTokenHash,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+    }
+
+    session.RevokedAtUtc = DateTime.UtcNow;
+    session.RevokedByIp = ipAddress;
+    session.RevocationReason = "Session revoked by user.";
+
+    await _dbContext.SaveChangesAsync(cancellationToken);
+
+    return true;
+}
+
+
+public async Task<int> RevokeOtherSessionsAsync(
+    Guid userId,
+    string? currentRefreshToken,
+    string? ipAddress,
+    CancellationToken cancellationToken = default)
+{
+    // Fail safely if the current refresh token is unavailable.
+    if (string.IsNullOrWhiteSpace(currentRefreshToken))
+    {
+        return 0;
+    }
+
+    var currentTokenHash =
+        _tokenService.HashRefreshToken(currentRefreshToken);
+
+    var utcNow = DateTime.UtcNow;
+
+    var activeSessions = await _dbContext.RefreshTokens
+        .Where(x =>
+            x.UserId == userId &&
+            !x.IsDeleted &&
+            !x.RevokedAtUtc.HasValue &&
+            x.ExpiresAtUtc > utcNow)
+        .ToListAsync(cancellationToken);
+
+    // Do not revoke anything unless the current session is verified.
+    var currentSessionExists = activeSessions.Any(x =>
+        string.Equals(
+            x.TokenHash,
+            currentTokenHash,
+            StringComparison.Ordinal));
+
+    if (!currentSessionExists)
+    {
+        return 0;
+    }
+
+    var otherSessions = activeSessions
+        .Where(x => !string.Equals(
+            x.TokenHash,
+            currentTokenHash,
+            StringComparison.Ordinal))
+        .ToList();
+
+    foreach (var session in otherSessions)
+    {
+        session.RevokedAtUtc = utcNow;
+        session.RevokedByIp = ipAddress;
+        session.RevocationReason =
+            "All other sessions revoked by user.";
+    }
+
+    if (otherSessions.Count > 0)
+    {
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return otherSessions.Count;
+}
+
+
+
     private AuthResponse CreateTokenPair(
         User user,
         IReadOnlyCollection<string> roles,
@@ -275,6 +431,15 @@ public sealed class AuthService : IAuthService
         };
 
         _dbContext.RefreshTokens.Add(refreshToken);
+        _dbContext.LoginHistoryEntries.Add(
+            new LoginHistoryEntry
+            {
+                UserId = user.Id,
+                OccurredAtUtc = utcNow,
+                Succeeded = true,
+                IpAddress = ipAddress,
+                DeviceName = deviceName
+            });
 
         return BuildResponse(
             user,
@@ -436,34 +601,11 @@ public sealed class AuthService : IAuthService
 
                     private static void ValidatePassword(string password)
                     {
-                        if (password.Length < 12)
+                        if (password.Length != 6 ||
+                            password.Any(ch => ch < '0' || ch > '9'))
                         {
                             throw new AuthenticationException(
-                                "Password must contain at least 12 characters.");
-                        }
-
-                        if (!password.Any(char.IsUpper))
-                        {
-                            throw new AuthenticationException(
-                                "Password must contain at least one uppercase letter.");
-                        }
-
-                        if (!password.Any(char.IsLower))
-                        {
-                            throw new AuthenticationException(
-                                "Password must contain at least one lowercase letter.");
-                        }
-
-                        if (!password.Any(char.IsDigit))
-                        {
-                            throw new AuthenticationException(
-                                "Password must contain at least one number.");
-                        }
-
-                        if (!password.Any(ch => !char.IsLetterOrDigit(ch)))
-                        {
-                            throw new AuthenticationException(
-                                "Password must contain at least one special character.");
+                                "Password must be exactly 6 digits.");
                         }
                     }
                 }

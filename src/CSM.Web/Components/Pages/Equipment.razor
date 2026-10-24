@@ -1,157 +1,148 @@
-
 @page "/equipment"
 
+@using CSM.Web.Components.Shared
 @using CSM.Web.Services
 
 @inject NavigationManager Navigation
 @inject AuthService AuthService
+@inject ILogger<Equipment> Logger
 
 <PageTitle>Equipment</PageTitle>
 
-<div class="container py-4">
+<div class="equipment-page container-fluid">
+    <header class="equipment-header">
+        <div>
+            <div class="equipment-eyebrow">OPERATIONS</div>
+            <h1>Equipment Management</h1>
+            <p>Manage equipment, site assignments, and operational records.</p>
+        </div>
 
-    <div class="d-flex align-items-center mb-4">
-        <button class="btn btn-outline-secondary me-3"
-                @onclick="GoBack">
-            ← Back
+        <button type="button" class="btn equipment-back-button" @onclick="GoBack">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            <span>Back</span>
         </button>
+    </header>
 
-        <h2 class="mb-0">Equipment Management</h2>
-    </div>
-
-    <div class="row g-4">
-
-        @* Visible to all roles *@
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100"
-                 style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/equipment/list")'>
-                <div class="card-body">
-                    <h4>Equipment</h4>
-                    <p class="text-muted mb-0">
-                        Register and manage equipment assets.
-                    </p>
+    @if (_isLoading)
+    {
+        <section class="equipment-grid" aria-label="Loading equipment options" role="status" aria-live="polite">
+            @for (var index = 0; index < 6; index++)
+            {
+                <div class="equipment-card-skeleton" aria-hidden="true">
+                    <span class="skeleton-icon"></span>
+                    <span class="skeleton-copy">
+                        <span></span>
+                        <span></span>
+                    </span>
                 </div>
+            }
+            <span class="visually-hidden">Loading equipment options...</span>
+        </section>
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <section class="equipment-state equipment-error" role="alert">
+            <span class="equipment-state-icon" aria-hidden="true">
+                <i class="bi bi-exclamation-triangle"></i>
+            </span>
+            <div>
+                <h2>Equipment options unavailable</h2>
+                <p>@_loadError</p>
+                <button type="button" class="btn equipment-retry-button" @onclick="LoadUserScopeAsync">
+                    <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>
+                    Try again
+                </button>
             </div>
-        </div>
+        </section>
+    }
+    else
+    {
+        <section class="equipment-grid" aria-label="Equipment management options">
+            <NavigationCard Href="/equipment/list"
+                            Title="Equipment"
+                            Description="Register and manage equipment assets."
+                            IconClass="bi bi-truck-front"
+                            Tone="NavigationCardTone.Blue" />
 
-        @* Hidden from Accountants *@
-        @if (!_isAccountant)
-        {
-            <div class="col-md-6">
-                <div class="card shadow-sm h-100"
-                     style="cursor:pointer"
-                     @onclick='() => Navigation.NavigateTo("/equipment/sites")'>
-                    <div class="card-body">
-                        <h4>Assignments</h4>
-                        <p class="text-muted mb-0">
-                            Assign equipment to construction sites.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            @if (!_isAccountant)
+            {
+                <NavigationCard Href="/equipment/sites"
+                                Title="Assignments"
+                                Description="Assign equipment to construction sites."
+                                IconClass="bi bi-pin-map-fill"
+                                Tone="NavigationCardTone.Indigo" />
 
-            <div class="col-md-6">
-                <div class="card shadow-sm h-100"
-                     style="cursor:pointer"
-                     @onclick='() => Navigation.NavigateTo("/equipment/downtime-sites")'>
-                    <div class="card-body">
-                        <h4>Downtime</h4>
-                        <p class="text-muted mb-0">
-                            Track equipment downtime and resolutions.
-                        </p>
-                    </div>
-                </div>
-            </div>
+                <NavigationCard Href="/equipment/downtime-sites"
+                                Title="Downtime"
+                                Description="Track equipment downtime and resolutions."
+                                IconClass="bi bi-exclamation-octagon"
+                                Tone="NavigationCardTone.Red" />
 
-            <div class="col-md-6">
-                <div class="card shadow-sm h-100"
-                     style="cursor:pointer"
-                     @onclick='() => Navigation.NavigateTo("/equipment/maintenance-sites")'>
-                    <div class="card-body">
-                        <h4>Maintenance</h4>
-                        <p class="text-muted mb-0">
-                            Manage preventive and corrective maintenance.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        }
+                <NavigationCard Href="/equipment/maintenance-sites"
+                                Title="Maintenance"
+                                Description="Manage preventive and corrective maintenance."
+                                IconClass="bi bi-tools"
+                                Tone="NavigationCardTone.Teal" />
+            }
 
-        @* Visible to all roles *@
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100"
-                 style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/equipment/fuel-sites")'>
-                <div class="card-body">
-                    <h4>Fuel Consumption</h4>
-                    <p class="text-muted mb-0">
-                        Record fuel usage by construction site.
-                    </p>
-                </div>
-            </div>
-        </div>
+            <NavigationCard Href="/equipment/fuel-sites"
+                            Title="Fuel Consumption"
+                            Description="Record fuel usage by construction site."
+                            IconClass="bi bi-fuel-pump"
+                            Tone="NavigationCardTone.Orange" />
 
-        @* Hidden from Accountants *@
-        @if (!_isAccountant)
-        {
-            <div class="col-md-6">
-                <div class="card shadow-sm h-100"
-                     style="cursor:pointer"
-                     @onclick='() => Navigation.NavigateTo("/equipment/hourmeter-sites")'>
-                    <div class="card-body">
-                        <h4>Hour Meter</h4>
-                        <p class="text-muted mb-0">
-                            Record equipment operating hours by construction site.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        }
+            @if (!_isAccountant)
+            {
+                <NavigationCard Href="/equipment/hourmeter-sites"
+                                Title="Hour Meter"
+                                Description="Record equipment operating hours by construction site."
+                                IconClass="bi bi-stopwatch"
+                                Tone="NavigationCardTone.Violet" />
+            }
 
-        @* Visible to all roles *@
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100"
-                 style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/equipment/utilization-sites")'>
-                <div class="card-body">
-                    <h4>Utilization</h4>
-                    <p class="text-muted mb-0">
-                        View equipment hours, fuel usage, downtime, and maintenance cost.
-                    </p>
-                </div>
-            </div>
-        </div>
+            <NavigationCard Href="/equipment/utilization-sites"
+                            Title="Utilization"
+                            Description="View equipment hours, fuel usage, downtime, and maintenance cost."
+                            IconClass="bi bi-graph-up-arrow"
+                            Tone="NavigationCardTone.Green" />
 
-        @* Visible to all roles *@
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100"
-                 style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/equipment/timesheet-sites")'>
-                <div class="card-body">
-                    <h4>Daily Timesheets</h4>
-                    <p class="text-muted mb-0">
-                        Record daily equipment shifts by construction site.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-    </div>
+            <NavigationCard Href="/equipment/timesheet-sites"
+                            Title="Daily Timesheets"
+                            Description="Record daily equipment shifts by construction site."
+                            IconClass="bi bi-calendar-check"
+                            Tone="NavigationCardTone.Cyan" />
+        </section>
+    }
 </div>
 
 @code {
     private bool _isAccountant;
+    private bool _isLoading = true;
+    private string? _loadError;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadUserScopeAsync();
+
+    private async Task LoadUserScopeAsync()
     {
-        var userScope = await AuthService.GetCurrentUserScopeAsync();
+        _isLoading = true;
+        _loadError = null;
 
-        _isAccountant = userScope.Roles.Any(role =>
-            string.Equals(
-                role,
-                "Accountant",
-                StringComparison.OrdinalIgnoreCase));
+        try
+        {
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+
+            _isAccountant = userScope.Roles.Any(role =>
+                string.Equals(role, "Accountant", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load the current user's equipment access scope.");
+            _loadError = "We couldn't check your access permissions. Please try again.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private void GoBack()

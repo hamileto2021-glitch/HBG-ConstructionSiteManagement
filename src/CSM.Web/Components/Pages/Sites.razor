@@ -17,188 +17,140 @@
 }
 else
 {
-    <div class="container-fluid py-4">
-
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-0">Construction Sites</h2>
-                <small class="text-muted">
-                    Manage all company construction sites
-                </small>
+    <main class="sites-page container-fluid">
+        <header class="sites-header">
+            <div class="sites-heading">
+                <span class="sites-eyebrow">PROJECT DIRECTORY</span>
+                <h1>Construction Sites</h1>
+                <p>Manage and monitor your company construction sites.</p>
             </div>
 
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary"
-                        @onclick="Back">
-                    <span class="bi bi-arrow-left me-1"></span>
-                    Back
+            <div class="sites-header-actions">
+                <button type="button" class="btn sites-back-button" @onclick="Back">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    <span>Back</span>
                 </button>
-
-                <button class="btn btn-primary"
-                        @onclick="NewSite">
-                    <span class="bi bi-plus-lg me-1"></span>
-                    New Site
+                <button type="button" class="btn sites-create-button" @onclick="NewSite">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                    <span>New site</span>
                 </button>
             </div>
-        </div>
+        </header>
 
-        <!-- Statistics -->
-        <div class="row g-3 mb-4">
+        <section class="sites-statistics" aria-label="Site status summary">
+            <article class="site-stat-card">
+                <span class="site-stat-icon stat-total"><i class="bi bi-buildings" aria-hidden="true"></i></span>
+                <div><span class="site-stat-label">Total sites</span><strong>@_sites.Count</strong></div>
+            </article>
+            <article class="site-stat-card">
+                <span class="site-stat-icon stat-active"><i class="bi bi-activity" aria-hidden="true"></i></span>
+                <div><span class="site-stat-label">Active</span><strong>@_sites.Count(x => x.Status == "Active")</strong></div>
+            </article>
+            <article class="site-stat-card">
+                <span class="site-stat-icon stat-planning"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
+                <div><span class="site-stat-label">Planning</span><strong>@_sites.Count(x => x.Status == "Planning")</strong></div>
+            </article>
+            <article class="site-stat-card">
+                <span class="site-stat-icon stat-completed"><i class="bi bi-check2-circle" aria-hidden="true"></i></span>
+                <div><span class="site-stat-label">Completed</span><strong>@_sites.Count(x => x.Status == "Completed")</strong></div>
+            </article>
+        </section>
 
-            <div class="col-md-3">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body">
-                        <div class="text-muted">Total Sites</div>
-                        <h2>@_sites.Count</h2>
-                    </div>
-                </div>
-            </div>
+        <section class="sites-filter-panel" aria-label="Search and filter sites">
+            <label class="site-search">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input class="form-control"
+                       aria-label="Search sites"
+                       placeholder="Search by site name or code..."
+                       @bind="_search" />
+            </label>
+            <label class="site-status-filter">
+                <span class="filter-label">Status</span>
+                <select class="form-select" aria-label="Filter sites by status" @bind="_statusFilter">
+                    <option value="">All statuses</option>
+                    <option>Planning</option>
+                    <option>Active</option>
+                    <option>OnHold</option>
+                    <option>Completed</option>
+                    <option>Closed</option>
+                </select>
+            </label>
+            <span class="sites-result-count">@FilteredSites.Count() @(FilteredSites.Count() == 1 ? "site" : "sites")</span>
+        </section>
 
-            <div class="col-md-3">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body">
-                        <div class="text-muted">Active</div>
-                        <h2>@_sites.Count(x => x.Status == "Active")</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body">
-                        <div class="text-muted">Planning</div>
-                        <h2>@_sites.Count(x => x.Status == "Planning")</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body">
-                        <div class="text-muted">Completed</div>
-                        <h2>@_sites.Count(x => x.Status == "Completed")</h2>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Search + Filter -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-body">
-                <div class="row g-3">
-
-                    <div class="col-md-5">
-                        <input class="form-control"
-                               placeholder="Search by site name or code..."
-                               @bind="_search"/>
-                    </div>
-
-                    <div class="col-md-3">
-                        <select class="form-select"
-                                @bind="_statusFilter">
-                            <option value="">All Status</option>
-                            <option>Planning</option>
-                            <option>Active</option>
-                            <option>Completed</option>
-                        </select>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-
-
-        <!-- Site Cards -->
-        <div class="row g-4">
-
-            @foreach (var site in FilteredSites)
-            {
-                <div class="col-lg-4 col-md-6">
-
-                    <div class="card shadow-sm h-100 border-0">
-
-                        <div class="card-body">
-
-                            <div class="d-flex justify-content-between">
-
-                                <div>
-                                    <h4 class="mb-1">@site.Name</h4>
-                                    <div class="text-muted">@site.SiteCode</div>
+        @if (!FilteredSites.Any())
+        {
+            <section class="sites-empty-state">
+                <span class="sites-empty-icon"><i class="bi bi-search" aria-hidden="true"></i></span>
+                <h2>@(_sites.Count == 0 ? "No sites yet" : "No matching sites")</h2>
+                <p>@(_sites.Count == 0
+                    ? "Create your first construction site to get started."
+                    : "Try changing your search or selecting a different status.")</p>
+                @if (_sites.Count == 0)
+                {
+                    <button type="button" class="btn sites-create-button" @onclick="NewSite">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        <span>Create a site</span>
+                    </button>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="sites-grid" aria-label="Construction sites">
+                @foreach (var site in FilteredSites)
+                {
+                    <article class="site-card">
+                        <div class="site-card-body">
+                            <div class="site-card-heading">
+                                <div class="site-title-group">
+                                    <h2>@site.Name</h2>
+                                    <span class="site-code"><i class="bi bi-hash" aria-hidden="true"></i>@site.SiteCode</span>
                                 </div>
-
-                                <div class="site-status">
-
-                                    @if (site.Status == "Active")
-                                    {
-                                        <span class="badge bg-success">Active</span>
-                                    }
-                                    else if (site.Status == "Planning")
-                                    {
-                                        <span class="badge bg-dark">Planning</span>
-                                    }
-                                    else if (site.Status == "OnHold")
-                                    {
-                                        <span class="badge bg-warning text-dark">On Hold</span>
-                                    }
-                                    else if (site.Status == "Completed")
-                                    {
-                                        <span class="badge bg-primary">Completed</span>
-                                    }
-                                    else if (site.Status == "Closed")
-                                    {
-                                        <span class="badge bg-secondary">Closed</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-light text-dark">@site.Status</span>
-                                    }
-
-                                </div>
-
+                                <span class="@StatusBadge(site.Status) site-status-badge">@StatusLabel(site.Status)</span>
                             </div>
 
-                            <hr/>
-
-                            <div><strong>City:</strong> @site.City</div>
-                            <div><strong>Region:</strong> @site.Region</div>
-                            <div><strong>Country:</strong> @site.Country</div>
-
-                            <div class="mt-3">
-                                <strong>Start:</strong>
-                                @(site.PlannedStartDate?.ToString("dd MMM yyyy") ?? "-")
+                            <div class="site-details">
+                                <div class="site-detail">
+                                    <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                                    <span><strong>City</strong>@(string.IsNullOrWhiteSpace(site.City) ? "—" : site.City)</span>
+                                </div>
+                                <div class="site-detail">
+                                    <i class="bi bi-map" aria-hidden="true"></i>
+                                    <span><strong>Region</strong>@(string.IsNullOrWhiteSpace(site.Region) ? "—" : site.Region)</span>
+                                </div>
+                                <div class="site-detail">
+                                    <i class="bi bi-globe2" aria-hidden="true"></i>
+                                    <span><strong>Country</strong>@(string.IsNullOrWhiteSpace(site.Country) ? "—" : site.Country)</span>
+                                </div>
+                                <div class="site-detail">
+                                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                                    <span><strong>Planned start</strong>@(site.PlannedStartDate?.ToString("dd MMM yyyy") ?? "Not scheduled")</span>
+                                </div>
                             </div>
-
                         </div>
 
-                        <div class="card-footer bg-white border-0">
-
-                            <div class="d-flex gap-2">
-
-                                <button class="btn btn-sm btn-primary flex-fill"
-                                        @onclick="() => ViewSite(site.Id)">
-                                    View
-                                </button>
-
-                                <button class="btn btn-outline-secondary w-100"
-                                        @onclick='() => Navigation.NavigateTo($"/sites/edit/{site.Id}")'>
-                                    Edit
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-            }
-
-        </div>
-
-    </div>
+                        <footer class="site-card-actions">
+                            <button type="button"
+                                    class="btn site-view-button"
+                                    aria-label="@($"View {site.Name}")"
+                                    @onclick="() => ViewSite(site.Id)">
+                                <i class="bi bi-arrow-up-right-square" aria-hidden="true"></i>
+                                <span>View site</span>
+                            </button>
+                            <button type="button"
+                                    class="btn site-edit-button"
+                                    aria-label="@($"Edit {site.Name}")"
+                                    @onclick="() => EditSite(site.Id)">
+                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                                <span>Edit</span>
+                            </button>
+                        </footer>
+                    </article>
+                }
+            </section>
+        }
+    </main>
 }
 
 @code {
@@ -213,10 +165,10 @@ else
         _sites.Where(site =>
             (string.IsNullOrWhiteSpace(_search) ||
              site.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-             site.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+             site.SiteCode.Contains(_search, StringComparison.OrdinalIgnoreCase))
             &&
             (string.IsNullOrWhiteSpace(_statusFilter) ||
-             site.Status == _statusFilter));
+             string.Equals(site.Status, _statusFilter, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -237,13 +189,20 @@ else
         Navigation.NavigateTo($"/sites/{siteId}");
     }
 
-    static string Badge(string status) => status switch
+    private static string StatusBadge(string status) => status switch
     {
         "Active" => "badge bg-success",
         "Completed" => "badge bg-primary",
-        "Planned" => "badge bg-secondary",
+        "Planning" => "badge bg-info text-dark",
         "OnHold" => "badge bg-warning text-dark",
-        _ => "badge bg-dark"
+        "Closed" => "badge bg-secondary",
+        _ => "badge bg-light text-dark"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "OnHold" => "On hold",
+        _ => status
     };
 
     private void Back()
@@ -264,19 +223,6 @@ else
     private void EditSite(Guid id)
     {
         Navigation.NavigateTo($"/sites/edit/{id}");
-    }
-
-    private string StatusBadge(string status)
-    {
-        return status switch
-        {
-            "Planning" => "badge bg-dark",
-            "Active" => "badge bg-success",
-            "OnHold" => "badge bg-warning text-dark",
-            "Completed" => "badge bg-primary",
-            "Closed" => "badge bg-secondary",
-            _ => "badge bg-light text-dark"
-        };
     }
 
     private void OpenCompanyCostCodes()

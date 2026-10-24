@@ -32,13 +32,13 @@ public sealed class EmployeeService : IEmployeeService
 
         EnsureCanRead(actor);
 
+        var employeeId = actor.EmployeeId;
+
         if (HasRole(actor, AppRoles.Employee))
         {
-            if (!actor.EmployeeId.HasValue)
-            {
+            if (employeeId is null)
                 throw new EmployeeManagementException(
                     "No employee record is linked to this user.");
-            }
         }
 
 
@@ -48,7 +48,7 @@ IQueryable<Employee> query =
   if (HasRole(actor, AppRoles.Employee))
   {
       query = query.Where(
-          x => x.Id == actor.EmployeeId.Value);
+          x => x.Id == employeeId.GetValueOrDefault());
   }
 
 if (!IsSuperAdmin(actor))

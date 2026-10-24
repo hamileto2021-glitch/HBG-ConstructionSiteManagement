@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CSM.Infrastructure\CSM.Infrastructure.csproj" />
+    <ProjectReference Include="..\CSM.Infrastructure.PostgreSqlMigrations\CSM.Infrastructure.PostgreSqlMigrations.csproj" />
     <ProjectReference Include="..\CSM.Application\CSM.Application.csproj" />
   </ItemGroup>
 

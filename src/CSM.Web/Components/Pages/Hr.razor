@@ -6,186 +6,253 @@
 @inject NavigationManager Navigation
 @inject IAuthService AuthService
 @inject IContractorService ContractorService
+@inject ILogger<Hr> Logger
 
-<PageTitle>HR Management</PageTitle>
+<PageTitle>HR Management | CSM</PageTitle>
 
-@if (_ready)
-{
-    <div class="container-fluid py-3">
+<main class="hr-page">
+    @if (!_ready)
+    {
+        <section class="hr-loading" role="status" aria-live="polite">
+            <span class="hr-loading-icon" aria-hidden="true">
+                <i class="bi bi-people"></i>
+            </span>
+            <span>Loading your HR workspace…</span>
+        </section>
+    }
+    else
+    {
+        <header class="hr-header">
+            <div>
+                <div class="hr-eyebrow">
+                    <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+                    People &amp; workforce
+                </div>
+                <h1>Human Resources</h1>
+                <p>Manage your workforce, site staffing, attendance, and payroll.</p>
+            </div>
+            <div class="hr-header-badge">
+                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                <span>Access-controlled workspace</span>
+            </div>
+        </header>
 
-        <h2>Human Resource Management</h2>
+        @if (_contractorLoadFailed)
+        {
+            <div class="hr-inline-error" role="alert">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <span>Contractor information is unavailable right now.</span>
+                <button type="button" @onclick="LoadContractorCountAsync" disabled="@_contractorLoading">
+                    @if (_contractorLoading)
+                    {
+                        <span>Retrying…</span>
+                    }
+                    else
+                    {
+                        <span>Try again</span>
+                    }
+                </button>
+            </div>
+        }
 
-        <div class="row g-3 mt-3">
+        @if (_canViewEmployees || _canViewContractors || _canViewAttendance ||
+             _canViewShifts || _canViewLeave || _canViewPayroll)
+        {
+            <section class="hr-section" aria-labelledby="hr-sections-title">
+                <div class="hr-section-heading">
+                    <div>
+                        <h2 id="hr-sections-title">Your HR sections</h2>
+                        <p>Choose an area to view and manage its records.</p>
+                    </div>
+                </div>
 
-            @if (_canViewEmployees)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm">
-                        <div class="card-body">
-                            <h6>Employees</h6>
-                            <h2>@_employeeCount</h2>
-
-                            <div class="d-grid gap-2 mt-2">
+                <div class="hr-card-grid">
+                    @if (_canViewEmployees)
+                    {
+                        <article class="hr-card hr-card-blue">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-person-vcard"></i>
+                                </span>
+                                <span class="hr-card-category">Workforce</span>
+                            </div>
+                            <h3>Employees</h3>
+                            <p>Browse employee records and manage workforce details.</p>
+                            <div class="hr-card-actions">
                                 @if (_showCompanyEmployeesButton)
                                 {
-                                    <button class="btn btn-primary"
-                                            @onclick="OpenCompanyEmployees">
+                                    <button class="hr-primary-button" type="button" @onclick="OpenCompanyEmployees">
+                                        <i class="bi bi-building" aria-hidden="true"></i>
                                         Company
                                     </button>
                                 }
-
-                                <button class="btn btn-outline-primary"
-                                        @onclick="OpenSiteEmployees">
+                                <button class="hr-secondary-button" type="button" @onclick="OpenSiteEmployees">
+                                    <i class="bi bi-geo-alt" aria-hidden="true"></i>
                                     Site
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </article>
 
-                @if (_canViewSiteAssignments)
-                {
-                    <div class="col-lg-3">
-                        <div class="card text-center shadow-sm">
-                            <div class="card-body">
-                                <h6>Site Assignments</h6>
-                                <h2>0</h2>
-
-                                <button class="btn btn-primary mt-2"
-                                        @onclick="OpenSiteAssignments">
-                                    Manage Site Assignments
+                        @if (_canViewSiteAssignments)
+                        {
+                            <article class="hr-card hr-card-indigo">
+                                <div class="hr-card-topline">
+                                    <span class="hr-card-icon" aria-hidden="true">
+                                        <i class="bi bi-person-lines-fill"></i>
+                                    </span>
+                                    <span class="hr-card-category">Deployment</span>
+                                </div>
+                                <h3>Site assignments</h3>
+                                <p>Assign employees to sites and review current placements.</p>
+                                <button class="hr-card-link" type="button" @onclick="OpenSiteAssignments">
+                                    Manage assignments
+                                    <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </button>
+                            </article>
+                        }
+                    }
+
+                    @if (_canViewContractors)
+                    {
+                        <article class="hr-card hr-card-orange">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-hard-hat"></i>
+                                </span>
+                                <span class="hr-card-category">Partners</span>
                             </div>
-                        </div>
-                    </div>
-                }
-            }
-
-            @if (_canViewContractors)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm">
-                        <div class="card-body">
-                            <h6>Contractors</h6>
-                            <h2>@_contractorCount</h2>
-
-                            <button class="btn btn-primary mt-2"
-                                    @onclick="OpenContractors">
-                                Manage Contractors
+                            <div class="hr-card-metric" aria-live="polite">
+                                @if (_contractorLoading)
+                                {
+                                    <span class="hr-metric-loading" aria-label="Loading contractor count"></span>
+                                }
+                                else
+                                {
+                                    <span>@_contractorCount</span>
+                                }
+                                <span>contractors</span>
+                            </div>
+                            <h3>Contractors</h3>
+                            <p>View and maintain contractor information.</p>
+                            <button class="hr-card-link" type="button" @onclick="OpenContractors">
+                                Manage contractors
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </button>
-                        </div>
-                    </div>
-                </div>
-            }
+                        </article>
+                    }
 
-            @if (_canViewAttendance)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm"
-                         role="button"
-                         @onclick='() => Navigation.NavigateTo("/hr/attendance")'>
-
-                        <div class="card-body">
-                            <h6>Attendance</h6>
-                            <h2>0%</h2>
-                            <button class="btn btn-primary mt-2"
-                                    @onclick="OpenAttendance">
-                                Manage Attendances
+                    @if (_canViewAttendance)
+                    {
+                        <article class="hr-card hr-card-green">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-calendar2-check"></i>
+                                </span>
+                                <span class="hr-card-category">Time &amp; attendance</span>
+                            </div>
+                            <h3>Attendance</h3>
+                            <p>Review attendance and manage employee check-ins.</p>
+                            <button class="hr-card-link" type="button" @onclick="OpenAttendance">
+                                Manage attendance
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </button>
-                        </div>
+                        </article>
 
-                    </div>
-                </div>
-
-                @if (_canViewTimesheets)
-                {
-                    <div class="col-lg-3">
-                        <div class="card text-center shadow-sm">
-                            <div class="card-body">
-                                <h6>Timesheets</h6>
-                                <h2>0</h2>
-
-                                <button class="btn btn-primary mt-2"
-                                        @onclick="OpenTimesheets">
-                                    Manage Timesheets
+                        @if (_canViewTimesheets)
+                        {
+                            <article class="hr-card hr-card-cyan">
+                                <div class="hr-card-topline">
+                                    <span class="hr-card-icon" aria-hidden="true">
+                                        <i class="bi bi-calendar-week"></i>
+                                    </span>
+                                    <span class="hr-card-category">Time &amp; attendance</span>
+                                </div>
+                                <h3>Timesheets</h3>
+                                <p>Review and manage employee timesheet records.</p>
+                                <button class="hr-card-link" type="button" @onclick="OpenTimesheets">
+                                    Manage timesheets
+                                    <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                 </button>
+                            </article>
+                        }
+                    }
+
+                    @if (_canViewShifts)
+                    {
+                        <article class="hr-card hr-card-violet">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-calendar2-range"></i>
+                                </span>
+                                <span class="hr-card-category">Scheduling</span>
                             </div>
-                        </div>
-                    </div>
-                }
-            }
-
-            @if (_canViewShifts)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm">
-                        <div class="card-body">
-                            <h6>Shifts</h6>
-                            <h2>0</h2>
-
-                            <button class="btn btn-primary mt-2"
-                                    @onclick="OpenShifts">
-                                Manage Shifts
+                            <h3>Shifts</h3>
+                            <p>Plan and manage workforce shift schedules.</p>
+                            <button class="hr-card-link" type="button" @onclick="OpenShifts">
+                                Manage shifts
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </button>
-                        </div>
-                    </div>
-                </div>
-            }
+                        </article>
+                    }
 
-            @if (_canViewLeave)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm">
-                        <div class="card-body">
-                            <h6>Leave</h6>
-                            <h2>0</h2>
-
-                            <button class="btn btn-primary mt-2"
-                                    @onclick="OpenLeave">
-                                Manage Leave
+                    @if (_canViewLeave)
+                    {
+                        <article class="hr-card hr-card-teal">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-calendar2-minus"></i>
+                                </span>
+                                <span class="hr-card-category">Time away</span>
+                            </div>
+                            <h3>Leave management</h3>
+                            <p>Review leave requests and manage time-off records.</p>
+                            <button class="hr-card-link" type="button" @onclick="OpenLeave">
+                                Manage leave
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </button>
-                        </div>
-                    </div>
-                </div>
-            }
+                        </article>
+                    }
 
-            @if (_canViewPayroll)
-            {
-                <div class="col-lg-3">
-                    <div class="card text-center shadow-sm">
-                        <div class="card-body">
-                            <h6>Payroll</h6>
-                            <h2>ETB 0</h2>
-
-                            <button class="btn btn-primary mt-2"
-                                    @onclick="OpenPayroll">
-                                Manage Payroll
+                    @if (_canViewPayroll)
+                    {
+                        <article class="hr-card hr-card-slate">
+                            <div class="hr-card-topline">
+                                <span class="hr-card-icon" aria-hidden="true">
+                                    <i class="bi bi-wallet2"></i>
+                                </span>
+                                <span class="hr-card-category">Compensation</span>
+                            </div>
+                            <h3>Payroll</h3>
+                            <p>Access payroll records and manage compensation workflows.</p>
+                            <button class="hr-card-link" type="button" @onclick="OpenPayroll">
+                                Manage payroll
+                                <i class="bi bi-arrow-right" aria-hidden="true"></i>
                             </button>
-                        </div>
-                    </div>
+                        </article>
+                    }
                 </div>
-            }
-
-            @if (!_canViewEmployees && !_canViewContractors && !_canViewAttendance && !_canViewShifts && !_canViewLeave && !_canViewPayroll)
-            {
-                <div class="col-12">
-                    <p class="text-muted">You don't have access to any HR sections.</p>
-                </div>
-            }
-
-        </div>
-
-    </div>
-}
+            </section>
+        }
+        else
+        {
+            <section class="hr-empty-state" role="status">
+                <span class="hr-empty-icon" aria-hidden="true">
+                    <i class="bi bi-shield-lock"></i>
+                </span>
+                <h2>No HR sections available</h2>
+                <p>You don’t currently have permission to access any HR sections. Contact your administrator if you need access.</p>
+            </section>
+        }
+    }
+</main>
 
 @code {
-    private int _employeeCount = 0;
     private int _contractorCount;
-
     private bool _ready;
+    private bool _contractorLoading;
+    private bool _contractorLoadFailed;
     private bool _canViewEmployees;
     private bool _showCompanyEmployeesButton = true;
-    private bool _canViewCompanyEmployees;
     private bool _canViewSiteAssignments;
     private bool _canViewTimesheets;
     private bool _canViewContractors;
@@ -197,49 +264,36 @@
     protected override async Task OnInitializedAsync()
     {
         var permissions = await AuthService.GetPermissionsAsync();
-
         _canViewEmployees = permissions.Contains("HRM_Employee_View");
 
         var userScope = await AuthService.GetCurrentUserScopeAsync();
 
-        var isSupervisor =
-            userScope.Roles.Any(
-                role => string.Equals(
-                    role,
-                    "Supervisor",
-                    StringComparison.OrdinalIgnoreCase));
+        var isSupervisor = userScope.Roles.Any(role =>
+            string.Equals(role, "Supervisor", StringComparison.OrdinalIgnoreCase));
 
         _canViewSiteAssignments =
             permissions.Contains("HRM_SiteAssignment_View") &&
             !isSupervisor;
 
-        _canViewTimesheets =
-            permissions.Contains("HRM_Timesheet_View");
+        _canViewTimesheets = permissions.Contains("HRM_Timesheet_View");
 
-        var isHrOfficer =
-            userScope.Roles.Contains(
-                "HROfficer",
-                StringComparer.OrdinalIgnoreCase) ||
-            userScope.Roles.Contains(
-                "HrOfficer",
-                StringComparer.OrdinalIgnoreCase);
+        var isHrOfficer = userScope.Roles.Contains(
+                              "HROfficer",
+                              StringComparer.OrdinalIgnoreCase) ||
+                          userScope.Roles.Contains(
+                              "HrOfficer",
+                              StringComparer.OrdinalIgnoreCase);
 
         _showCompanyEmployeesButton =
             !(isSupervisor && userScope.HasActiveSiteAccess) &&
             !(isHrOfficer && userScope.HasActiveSiteAccess);
 
-        var isCompanyAdmin = permissions.Contains("Sites_Manage");
-        var isSuperAdmin = permissions.Contains("SuperAdmin");
-
-        _canViewCompanyEmployees = isCompanyAdmin || isSuperAdmin;
         _canViewContractors = permissions.Contains("HRM_Contractor_View");
         _canViewAttendance = permissions.Contains("HRM_Attendance_View");
         _canViewShifts = permissions.Contains("HRM_Shift_View");
         _canViewLeave = permissions.Contains("HRM_Leave_View");
         _canViewPayroll = permissions.Contains("HRM_Payroll_View");
 
-        // If the user only has access to a single HR section, skip the hub
-        // and take them straight there instead of showing a near-empty grid.
         var accessibleRoutes = new List<string>();
         if (_canViewEmployees) accessibleRoutes.Add("/hr/employees/company");
         if (_canViewContractors) accessibleRoutes.Add("/hr/contractors");
@@ -258,54 +312,38 @@
 
         if (_canViewContractors)
         {
-            var contractors = await ContractorService.GetContractorsAsync();
-            _contractorCount = contractors.Count;
-            StateHasChanged();
+            await LoadContractorCountAsync();
         }
     }
 
-    private void OpenCompanyEmployees()
+    private async Task LoadContractorCountAsync()
     {
-        Navigation.NavigateTo("/hr/employees/company");
+        _contractorLoading = true;
+        _contractorLoadFailed = false;
+
+        try
+        {
+            var contractors = await ContractorService.GetContractorsAsync();
+            _contractorCount = contractors.Count;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load the contractor count for the HR dashboard.");
+            _contractorLoadFailed = true;
+        }
+        finally
+        {
+            _contractorLoading = false;
+        }
     }
 
-    private void OpenSiteEmployees()
-    {
-        Navigation.NavigateTo("/hr/employees/site");
-    }
-
-    private void OpenContractors()
-    {
-        Navigation.NavigateTo("/hr/contractors");
-    }
-
-    private void OpenAttendance()
-    {
-        Navigation.NavigateTo("/hr/attendance");
-    }
-
-    private void OpenSiteAssignments()
-    {
-        Navigation.NavigateTo("/hr/site-assignments");
-    }
-
-    private void OpenLeave()
-    {
-        Navigation.NavigateTo("/hr/leave");
-    }
-
-    private void OpenShifts()
-    {
-        Navigation.NavigateTo("/hr/shifts");
-    }
-
-    private void OpenTimesheets()
-    {
-        Navigation.NavigateTo("/hr/timesheets");
-    }
-
-    private void OpenPayroll()
-    {
-        Navigation.NavigateTo("/hr/payroll");
-    }
+    private void OpenCompanyEmployees() => Navigation.NavigateTo("/hr/employees/company");
+    private void OpenSiteEmployees() => Navigation.NavigateTo("/hr/employees/site");
+    private void OpenContractors() => Navigation.NavigateTo("/hr/contractors");
+    private void OpenAttendance() => Navigation.NavigateTo("/hr/attendance");
+    private void OpenSiteAssignments() => Navigation.NavigateTo("/hr/site-assignments");
+    private void OpenLeave() => Navigation.NavigateTo("/hr/leave");
+    private void OpenShifts() => Navigation.NavigateTo("/hr/shifts");
+    private void OpenTimesheets() => Navigation.NavigateTo("/hr/timesheets");
+    private void OpenPayroll() => Navigation.NavigateTo("/hr/payroll");
 }

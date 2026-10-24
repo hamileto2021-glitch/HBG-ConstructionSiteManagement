@@ -1,33 +1,37 @@
-﻿@inject CSM.Web.Services.INotificationApiService NotificationService
+﻿@using Microsoft.AspNetCore.Components.Routing
+@using System.Linq
+@using Microsoft.JSInterop
+@using CSM.Web.Services
+
+@inject IJSRuntime JS
+@inject UserPreferencesService PreferencesService
+@inject CSM.Web.Services.INotificationApiService NotificationService
 @inject CSM.Web.Services.IAuthService AuthService
 @inject NavigationManager NavigationManager
-@using Microsoft.AspNetCore.Components.Routing
-@using System.Linq
 @implements IDisposable
 
-<div class="nav-backdrop @(_navOpen ? "show" : "")" @onclick="CloseNav"></div>
+<button type="button"
+        class="nav-backdrop @(IsNavOpen ? "show" : "")"
+        @onclick="CloseNavAsync"
+        aria-label="Close navigation menu"
+        tabindex="@(IsNavOpen ? "0" : "-1")"></button>
 
-<div class="sidebar @(_navOpen ? "nav-open" : "")">
+<aside id="app-navigation"
+       class="sidebar @(IsNavOpen ? "nav-open" : "")"
+       aria-label="Application navigation">
 
-    <!-- Header -->
-    <div class="top-row ps-3 navbar navbar-dark">
-        <div class="container-fluid d-flex align-items-center justify-content-between">
-            <span class="navbar-brand fw-bold">HBG CSM</span>
-
-            <button class="navbar-toggler"
-                    type="button"
-                    @onclick="ToggleNav"
-                    aria-label="Toggle navigation"
-                    aria-expanded="@_navOpen">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-        </div>
+    <div class="sidebar-header">
+        <a class="navbar-brand" href="/dashboard" aria-label="HBG CSM home">
+            <span class="brand-mark" aria-hidden="true">H</span>
+            <span>HBG <strong>CSM</strong></span>
+        </a>
+        <span class="sidebar-tagline">CONSTRUCTION MANAGEMENT</span>
     </div>
 
     <!-- Scrollable Menu -->
-    <div class="nav-scrollable" @onclick="CloseNav">
+    <div class="nav-scrollable" @onclick="CloseNavAsync">
 
-        <nav class="@(_permissionsLoaded ? "" : "nav-loading")">
+        <nav class="@(_permissionsLoaded ? "" : "nav-loading")" aria-label="Main navigation">
 
             <div class="section-title">
                 Construction Management
@@ -38,8 +42,8 @@
                 <NavLink class="nav-link"
                          href="/dashboard"
                          Match="NavLinkMatch.All">
-                    <span class="bi bi-speedometer2-nav-menu"></span>
-                    <span>Dashboard</span>
+                    <span class="bi bi-speedometer2-nav-menu nav-icon" aria-hidden="true"></span>
+                    <span class="nav-label">Dashboard</span>
                 </NavLink>
             </div>
 
@@ -50,8 +54,8 @@
                     <NavLink class="nav-link"
                              href="/project-tracking"
                              Match="NavLinkMatch.All">
-                        <span class="bi bi-kanban-nav-menu"></span>
-                        <span>Project Tracking</span>
+                        <span class="bi bi-kanban-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Project Tracking</span>
                     </NavLink>
                 </div>
             }
@@ -63,8 +67,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/procurement">
-                        <span class="bi bi-box-seam-nav-menu"></span>
-                        <span>Procurement</span>
+                        <span class="bi bi-box-seam-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Procurement</span>
                     </NavLink>
                 </div>
             }
@@ -74,8 +78,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/inventory">
-                        <span class="bi bi-box-seam-nav-menu"></span>
-                        <span>Inventory</span>
+                        <span class="bi bi-box-seam-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Inventory</span>
                     </NavLink>
                 </div>
             }
@@ -86,8 +90,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/equipment">
-                        <span class="bi bi-truck-nav-menu"></span>
-                        <span>Equipment</span>
+                        <span class="bi bi-truck-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Equipment</span>
                     </NavLink>
                 </div>
             }
@@ -103,8 +107,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/users">
-                        <span class="bi bi-people-nav-menu"></span>
-                        <span>Users</span>
+                        <span class="bi bi-people-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Users</span>
                     </NavLink>
                 </div>
             }
@@ -113,8 +117,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/roles">
-                        <span class="bi bi-shield-lock-nav-menu"></span>
-                        <span>Role Permissions</span>
+                        <span class="bi bi-shield-lock-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Role Permissions</span>
                     </NavLink>
                 </div>
             }
@@ -123,8 +127,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/users/audit">
-                        <span class="bi bi-clock-history-nav-menu"></span>
-                        <span>User Audit</span>
+                        <span class="bi bi-clock-history-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">User Audit</span>
                     </NavLink>
                 </div>
             }
@@ -137,8 +141,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/hr">
-                        <span class="bi bi-person-badge-nav-menu"></span>
-                        <span>HR Management</span>
+                        <span class="bi bi-person-badge-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">HR Management</span>
                     </NavLink>
                 </div>
             }
@@ -153,8 +157,8 @@
                     <NavLink class="nav-link"
                              href="/finance/sites"
                              Match="NavLinkMatch.Prefix">
-                        <span class="bi bi-wallet2-nav-menu"></span>
-                        <span>Finance</span>
+                        <span class="bi bi-wallet2-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Finance</span>
                     </NavLink>
                 </div>
             }
@@ -163,8 +167,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/compliance">
-                        <span class="bi bi-shield-check-nav-menu"></span>
-                        <span>Compliance</span>
+                        <span class="bi bi-shield-check-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Compliance</span>
                     </NavLink>
                 </div>
             }
@@ -174,8 +178,8 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/reports">
-                        <span class="bi bi-bar-chart-nav-menu"></span>
-                        <span>Reports</span>
+                        <span class="bi bi-bar-chart-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Reports</span>
                     </NavLink>
                 </div>
             }
@@ -184,12 +188,12 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/notifications">
-                        <span class="bi bi-bell-nav-menu"></span>
-                        <span>Notifications</span>
+                        <span class="bi bi-bell-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Notifications</span>
 
                         @if (_unreadNotificationCount > 0)
                         {
-                            <span class="badge bg-danger ms-2">
+                            <span class="badge bg-danger notification-badge">
                                 @_unreadNotificationCount
                             </span>
                         }
@@ -199,8 +203,8 @@
 
             <div class="nav-item">
                 <NavLink class="nav-link" href="/settings">
-                    <span class="bi bi-gear-nav-menu"></span>
-                    <span>Settings & Privacy</span>
+                    <span class="bi bi-gear-nav-menu nav-icon" aria-hidden="true"></span>
+                    <span class="nav-label">Settings & Privacy</span>
                 </NavLink>
             </div>
 
@@ -211,22 +215,28 @@
     <!-- Sign Out -->
     <div class="signout">
         <button type="button" class="nav-link signout-btn" @onclick="SignOutAsync" disabled="@_signingOut">
-            <span class="bi bi-box-arrow-right-nav-menu"></span>
+            <span class="bi bi-box-arrow-right-nav-menu nav-icon" aria-hidden="true"></span>
             <span>@(_signingOut ? "Signing out..." : "Sign Out")</span>
         </button>
     </div>
-
-</div>
+</aside>
 
 @code
 {
     private int _unreadNotificationCount;
-    private bool _navOpen;
     private bool _permissionsLoaded;
+    private bool _rememberNavigation;
+    private bool _navigationPreferenceLoaded;
+    private string? _navigationStorageKey;
     private bool _roleCheckCompleted;
     private bool _isSupervisor;
     private bool _signingOut;
 
+    [Parameter]
+    public bool IsNavOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsNavOpenChanged { get; set; }
 
     private IReadOnlyCollection<string> _permissions = [];
 
@@ -278,16 +288,129 @@
             _isSupervisor = false;
         }
 
+        await InitializeRememberNavigationAsync();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task InitializeRememberNavigationAsync()
+    {
+        var userId = await AuthService.GetCurrentUserIdAsync();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            _navigationPreferenceLoaded = true;
+            return;
+        }
+
+        _navigationStorageKey = $"csm:last-route:{userId}";
+
+        var preferences = await PreferencesService.GetAsync();
+        _rememberNavigation = preferences?.RememberNavigation ?? false;
+
+        _navigationPreferenceLoaded = true;
+
+        if (!_rememberNavigation)
+        {
+            await JS.InvokeVoidAsync(
+                "localStorage.removeItem",
+                _navigationStorageKey);
+
+            return;
+        }
+
+        var currentRoute =
+            NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+
+        // Restore only when entering the application root.
+        if (!string.IsNullOrWhiteSpace(currentRoute))
+            return;
+
+        var savedRoute = await JS.InvokeAsync<string?>(
+            "localStorage.getItem",
+            _navigationStorageKey);
+
+        if (string.IsNullOrWhiteSpace(savedRoute))
+            return;
+
+        // Only restore an internal application route.
+        if (savedRoute.StartsWith('/') ||
+            savedRoute.StartsWith('\\') ||
+            Uri.TryCreate(savedRoute, UriKind.Absolute, out _))
+        {
+            return;
+        }
+
+        var savedPath = savedRoute.Split('?', '#')[0];
+
+        if (string.IsNullOrWhiteSpace(savedPath) ||
+            savedPath.Equals("login", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(savedRoute);
     }
 
     // Re-check the unread count after every page change, and every 30 seconds
     // in between, so the bell shows new notifications without a reload.
     private readonly CancellationTokenSource _cts = new();
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private void OnLocationChanged(
+        object? sender,
+        LocationChangedEventArgs e)
     {
         _ = RefreshUnreadCountAsync();
+        _ = SaveLastVisitedPageAsync(e.Location);
+    }
+
+    private async Task SaveLastVisitedPageAsync(string location)
+    {
+        if (!_navigationPreferenceLoaded ||
+            string.IsNullOrWhiteSpace(_navigationStorageKey))
+        {
+            return;
+        }
+
+        try
+        {
+            // Re-read the preference so changes made in Settings
+            // take effect without requiring a new sign-in.
+            var preferences = await PreferencesService.GetAsync();
+
+            _rememberNavigation =
+                preferences?.RememberNavigation ?? false;
+
+            if (!_rememberNavigation)
+            {
+                await JS.InvokeVoidAsync(
+                    "localStorage.removeItem",
+                    _navigationStorageKey);
+
+                return;
+            }
+
+            var route = NavigationManager.ToBaseRelativePath(location);
+
+            if (string.IsNullOrWhiteSpace(route))
+                return;
+
+            var path = route.Split('?', '#')[0];
+
+            if (path.Equals("login", StringComparison.OrdinalIgnoreCase) ||
+                path.Equals("logout", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            await JS.InvokeVoidAsync(
+                "localStorage.setItem",
+                _navigationStorageKey,
+                route);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser circuit disconnected during navigation.
+        }
     }
 
     private async Task RefreshLoopAsync()
@@ -337,14 +460,9 @@
         return _permissions.Contains(permission);
     }
 
-    private void ToggleNav()
+    private Task CloseNavAsync()
     {
-        _navOpen = !_navOpen;
-    }
-
-    private void CloseNav()
-    {
-        _navOpen = false;
+        return IsNavOpen ? IsNavOpenChanged.InvokeAsync(false) : Task.CompletedTask;
     }
 
     private async Task SignOutAsync()

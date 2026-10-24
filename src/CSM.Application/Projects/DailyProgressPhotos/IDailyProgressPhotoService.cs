@@ -10,15 +10,19 @@ public interface IDailyProgressPhotoService
         CancellationToken cancellationToken = default);
 
     Task<DailyProgressPhotoResponse> UploadAsync(
-        Guid companyId,
+        Guid currentUserId,
         Guid diaryId,
         Stream fileStream,
-        string fileName,
         string? caption,
         CancellationToken cancellationToken = default);
 
     Task DeleteAsync(
-        Guid companyId,
+        Guid currentUserId,
+        Guid photoId,
+        CancellationToken cancellationToken = default);
+
+    Task<DailyProgressPhotoContent?> GetContentAsync(
+        Guid currentUserId,
         Guid photoId,
         CancellationToken cancellationToken = default);
 }

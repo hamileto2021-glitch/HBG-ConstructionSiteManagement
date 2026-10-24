@@ -91,6 +91,7 @@ public sealed class EmployeesController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "HRM",
                 "Create",
@@ -130,6 +131,7 @@ public sealed class EmployeesController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "HRM",
                 "Update",
@@ -166,6 +168,7 @@ public sealed class EmployeesController : ControllerBase
 
             await _auditService.LogAsync(
                 GetCurrentUserId(),
+                GetCurrentCompanyId(),
                 User.Identity?.Name ?? "System",
                 "HRM",
                 "Status Change",
@@ -197,4 +200,20 @@ public sealed class EmployeesController : ControllerBase
 
         return userId;
     }
+
+
+private Guid GetCurrentCompanyId()
+{
+    var value = User.FindFirst("company_id")?.Value;
+
+    if (!Guid.TryParse(value, out var companyId) ||
+        companyId == Guid.Empty)
+    {
+        throw new UnauthorizedAccessException(
+            "The authenticated user has no valid company ID.");
+    }
+
+    return companyId;
+}
+
 }

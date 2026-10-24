@@ -27,16 +27,20 @@ class _NotificationCenterScreenState
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
 
     try {
       final result = await _repository.getAll();
 
+      if (!mounted) return;
       setState(() {
         _notifications = result;
       });
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -44,6 +48,7 @@ class _NotificationCenterScreenState
     if (notification.isRead) return;
 
     await _repository.markRead(notification.id, true);
+    if (!mounted) return;
     await _load();
   }
 
@@ -95,6 +100,8 @@ class _NotificationCenterScreenState
 
   @override
   Widget build(BuildContext context) {
+    final filteredNotifications = _filtered;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
@@ -137,11 +144,11 @@ class _NotificationCenterScreenState
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _filtered.length,
+                itemCount: filteredNotifications.length,
                 separatorBuilder: (context, index) =>
                 const Divider(height: 1),
                 itemBuilder: (context, index) {
-                  final n = _filtered[index];
+                  final n = filteredNotifications[index];
 
                   return ListTile(
                     leading: CircleAvatar(

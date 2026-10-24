@@ -18,17 +18,45 @@ public sealed class ProjectDelayService : IProjectDelayService
     }
 
     public async Task<IReadOnlyCollection<ProjectDelayResponse>> GetAllAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid? projectId,
         Guid? siteId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         var query = _context.ProjectDelays
             .AsNoTracking()
-            .Where(x => !x.IsDeleted);
+            .Where(x =>
+                !x.IsDeleted &&
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(
+                     x.Project.ConstructionSiteId)));
 
         if (projectId.HasValue)
+        {
+            await ProjectDataAccess.EnsureProjectAccessAsync(
+                _context,
+                scope,
+                projectId.Value,
+                cancellationToken);
             query = query.Where(x => x.ProjectId == projectId.Value);
+        }
+
+        if (siteId.HasValue)
+        {
+            await ProjectDataAccess.EnsureSiteAccessAsync(
+                _context,
+                scope,
+                siteId.Value,
+                cancellationToken);
+            query = query.Where(
+                x => x.Project.ConstructionSiteId == siteId.Value);
+        }
 
         return await query
             .OrderByDescending(x => x.DelayDate)
@@ -37,25 +65,46 @@ public sealed class ProjectDelayService : IProjectDelayService
     }
 
     public async Task<ProjectDelayResponse?> GetByIdAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid delayId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         return await _context.ProjectDelays
             .AsNoTracking()
-            .Where(x => x.Id == delayId && !x.IsDeleted)
+            .Where(x =>
+                x.Id == delayId &&
+                !x.IsDeleted &&
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(
+                     x.Project.ConstructionSiteId)))
             .Select(MapToResponse)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<ProjectDelayResponse> CreateAsync(
-        Guid tenantId,
+        Guid currentUserId,
         CreateProjectDelayRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+        var siteId = await ProjectDataAccess.EnsureProjectAccessAsync(
+            _context,
+            scope,
+            request.ProjectId,
+            cancellationToken);
+
         var delay = new ProjectDelay
         {
-            CompanyId = tenantId,
+            CompanyId = scope.CompanyId,
             ProjectId = request.ProjectId,
             DelayDate = request.DelayDate.ToDateTime(TimeOnly.MinValue),
             Category = request.Category.ToString(),
@@ -69,18 +118,29 @@ public sealed class ProjectDelayService : IProjectDelayService
         _context.ProjectDelays.Add(delay);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Map(delay);
+        return Map(delay, siteId);
     }
 
     public async Task<ProjectDelayResponse?> UpdateAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid delayId,
         UpdateProjectDelayRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         var delay = await _context.ProjectDelays
+            .Include(x => x.Project)
             .FirstOrDefaultAsync(
-                x => x.Id == delayId && !x.IsDeleted,
+                x => x.Id == delayId &&
+                     !x.IsDeleted &&
+                     x.CompanyId == scope.CompanyId &&
+                     (scope.CanAccessAllSites ||
+                      scope.AccessibleSiteIds.Contains(
+                          x.Project.ConstructionSiteId)),
                 cancellationToken);
 
         if (delay is null)
@@ -99,17 +159,27 @@ public sealed class ProjectDelayService : IProjectDelayService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Map(delay);
+        return Map(delay, delay.Project.ConstructionSiteId);
     }
 
     public async Task<bool> DeleteAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid delayId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         var delay = await _context.ProjectDelays
             .FirstOrDefaultAsync(
-                x => x.Id == delayId && !x.IsDeleted,
+                x => x.Id == delayId &&
+                     !x.IsDeleted &&
+                     x.CompanyId == scope.CompanyId &&
+                     (scope.CanAccessAllSites ||
+                      scope.AccessibleSiteIds.Contains(
+                          x.Project.ConstructionSiteId)),
                 cancellationToken);
 
         if (delay is null)
@@ -121,11 +191,13 @@ public sealed class ProjectDelayService : IProjectDelayService
         return true;
     }
 
-    private static ProjectDelayResponse Map(ProjectDelay delay) =>
+    private static ProjectDelayResponse Map(
+        ProjectDelay delay,
+        Guid siteId) =>
         new(
             delay.Id,
             delay.ProjectId,
-            Guid.Empty,
+            siteId,
             DateOnly.FromDateTime(delay.DelayDate),
             Enum.TryParse<CSM.Domain.Enums.DelayCategory>(
                 delay.Category,
@@ -144,7 +216,7 @@ public sealed class ProjectDelayService : IProjectDelayService
             delay => new ProjectDelayResponse(
                 delay.Id,
                 delay.ProjectId,
-                Guid.Empty,
+                delay.Project.ConstructionSiteId,
                 DateOnly.FromDateTime(delay.DelayDate),
                 delay.Category == "Weather" ? DelayCategory.Weather :
                 delay.Category == "Material" ? DelayCategory.Material :

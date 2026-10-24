@@ -41,7 +41,7 @@
                     <select class="form-select"
                             @bind="_scope"
                             @bind:after="ScopeChangedAsync">
-                        <option value="All">Company + all sites</option>
+                        <option value="All">All records in my reporting scope</option>
                         <option value="Company">Company level (not tied to a site)</option>
                         <option value="Site">Site</option>
                     </select>
@@ -140,7 +140,7 @@
 
                         @Tile("Contract Value",
                             Money(Executive.TotalContractValue),
-                            hint: "All projects",
+                            hint: "Projects in your reporting scope",
                             col: "col-md-6 col-xl-3")
 
                         @Tile("Budget",
@@ -287,11 +287,14 @@
                             css: "text-danger",
                             hint: Split(f => f.TotalExpenses, "Approved and paid, including tax"))
 
-                        @UsedTile(Summary.TotalBudget, Summary.TotalExpenses, "col-md-6 col-xl-4")
+                        @UsedTile(Summary.TotalBudget,
+                            Summary.TotalExpenses,
+                            "col-md-6 col-xl-4",
+                            reportedPercent: Summary.BudgetUtilizationPercent)
 
                         @Tile("Invoiced to Clients",
                             Money(Summary.TotalInvoices),
-                            hint: "Client invoices, cancelled excluded")
+                            hint: "Issued client invoices; drafts and cancelled excluded")
 
                         @Tile("Outstanding Receivables",
                             Money(Summary.OutstandingReceivables),
@@ -308,10 +311,20 @@
                             css: "text-success",
                             hint: "Completed incoming payments")
 
+                        @Tile("Pending Cash In",
+                            Money(Summary.PendingCashIn),
+                            css: Summary.PendingCashIn > 0m ? "text-warning" : "",
+                            hint: "Recorded but not completed, so not counted as cash in")
+
                         @Tile("Total Expenditure",
                             Money(Summary.TotalExpenditure),
                             css: "text-danger",
                             hint: "Outgoing payments plus petty cash spent")
+
+                        @Tile("Pending Cash Out",
+                            Money(Summary.PendingCashOut),
+                            css: Summary.PendingCashOut > 0m ? "text-warning" : "",
+                            hint: "Recorded but not completed, so not counted as expenditure")
 
                         @Tile("Cash Balance",
                             Money(Summary.Balance),
@@ -327,6 +340,11 @@
                             Money(Summary.PettyCashBalance),
                             hint: "All petty cash accounts")
 
+                        @Tile("Petty Cash In",
+                            Money(PettyCashIn(Summary)),
+                            css: "text-success",
+                            hint: "Top-ups plus the money accounts were opened with")
+
                         @Tile("Petty Cash Spent",
                             Money(Summary.TotalPettyCashOut),
                             css: "text-danger")
@@ -335,12 +353,26 @@
                             Summary.ActivePettyCashAccounts.ToString("N0"))
 
                     </div>
+
+                    @if (HasPettyCashGap(Summary))
+                    {
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <strong>Petty cash does not reconcile.</strong>
+                            The accounts hold @Money(Summary.PettyCashBalance), but cash in
+                            (@Money(PettyCashIn(Summary))) minus cash out
+                            (@Money(Summary.TotalPettyCashOut)) is
+                            @Money(PettyCashIn(Summary) - Summary.TotalPettyCashOut).
+                            @Money(-PettyCashGap(Summary)) of money left an account without
+                            a CashOut transaction, for example a balance changed directly.
+                            Net Cash Flow is overstated until that is corrected.
+                        </div>
+                    }
                 }
 
             </div>
         </div>
 
-        <!-- Company breakdown: head office + every site, with a total that adds up -->
+        <!-- Breakdown includes the site/company records returned for this user's reporting scope. -->
         @if (_scope == "All" && _all is not null)
         {
             <div class="card shadow-sm mb-4">
@@ -352,8 +384,10 @@
                                 Breakdown by Site
                             </h5>
                             <small>
-                                Head office and each construction site. The
-                                total row is the company-wide figure above.
+                                Company-level figures where available, accessible
+                                construction sites, and historical activity included
+                                by your reporting scope. The total matches the
+                                financial report above.
                             </small>
                         </div>
                     </div>
@@ -397,8 +431,9 @@
                     @if (HasOtherRow)
                     {
                         <div class="text-muted small">
-                            "Other" is activity recorded against sites that no
-                            longer exist. It is included in the total.
+                            "Other" is activity included in your reporting scope
+                            that is not associated with a currently listed site.
+                            It is included in the total.
                         </div>
                     }
                 </div>
@@ -438,7 +473,7 @@
 
 @code {
 
-    // Company scope data (kept while the user looks at a site).
+    // All-scope data (kept while the user looks at a site).
     private ExecutiveDashboardResponse? _allExecutive;
     private AllFinancialSummaryResponse? _all;
     private FinancialSummaryResponse? _companyLevelSummary;
@@ -460,10 +495,8 @@
     private string? _executiveError;
     private string? _financialError;
 
-    // What the two main sections show, for the current scope. For the company
-    // scope this is the company-wide total (head office + all sites), not the
-    // head-office-only record set.
-    // "All"     company + every site (the combined total)
+    // What the two main sections show for the current scope.
+    // "All"     records included by the reporting service's access scope
     // "Company" company-level records only, not tied to any site
     // "Site"    one construction site
     private ExecutiveDashboardResponse? Executive
@@ -500,24 +533,24 @@
     }
 
     private string CurrentScopeLabel
-        => _scope == "All" ? "Company + all sites"
+        => _scope == "All" ? "All accessible records"
          : _scope == "Company" ? "Company level"
          : _sites.FirstOrDefault(x => x.Id.ToString() == _selectedSiteId)?.Name
            ?? "Select a construction site";
 
     private string ScopeIntro
-        => _scope == "All" ? "Company-wide management reports and financial analytics."
+        => _scope == "All" ? "Management and financial reports for records included in your reporting access."
          : _scope == "Company" ? "Company-level financial records that are not tied to a construction site."
          : $"{CurrentScopeLabel} management reports and financial analytics.";
 
     private string ExecutiveSubtitle
         => _scope == "All"
-            ? "Company-wide management overview"
+            ? "Management overview for sites and projects in your reporting scope"
             : $"{CurrentScopeLabel} management overview";
 
     private string FinancialSubtitle
-        => _scope == "All" ? "Company-wide financial position (company level and all sites)"
-         : _scope == "Company" ? "Budgets, expenses and payments not tied to a construction site"
+        => _scope == "All" ? "Financial position for company and site records included in your reporting access"
+         : _scope == "Company" ? "Company-level financial records not tied to a construction site"
          : $"{CurrentScopeLabel} financial position";
 
     protected override async Task OnInitializedAsync()
@@ -632,7 +665,7 @@
             _executiveError = FriendlyError(ex);
         }
 
-        // One call gives head office, every site and the company total.
+        // One call returns company, accessible-site, and in-scope total figures.
         try
         {
             _all = await ReportingService.GetAllFinancialSummariesAsync();
@@ -702,6 +735,7 @@
         string Code,
         decimal Budget,
         decimal Expenses,
+        decimal BudgetUtilizationPercent,
         decimal Invoiced,
         decimal Receivables,
         decimal Payables,
@@ -718,6 +752,7 @@
             code,
             f.TotalBudget,
             f.TotalExpenses,
+            f.BudgetUtilizationPercent,
             f.TotalInvoices,
             f.OutstandingReceivables,
             f.OutstandingPayables,
@@ -731,15 +766,15 @@
     private Row TotalRow
         => ToRow("Total", string.Empty, _all!.Total);
 
-    // Head office first, then each site, then "Other" when the total holds
-    // activity that belongs to no listed site (sites that were deleted).
+    // Company-level records first, then each visible site, then residual
+    // activity included by the service but not represented by a visible site.
     private List<Row> BreakdownRows
     {
         get
         {
             var rows = new List<Row>
             {
-                ToRow("Head office (company level)", string.Empty, _all!.Company)
+                ToRow("Company level (not tied to a site)", string.Empty, _all!.Company)
             };
 
             rows.AddRange(_all.Sites.Select(
@@ -770,11 +805,15 @@
 
             var total = TotalRow;
 
+            var otherBudget = total.Budget - listed.Sum(r => r.Budget);
+            var otherExpenses = total.Expenses - listed.Sum(r => r.Expenses);
+
             var other = new Row(
-                "Other (deleted sites)",
+                "Other (unlisted sites)",
                 string.Empty,
-                total.Budget - listed.Sum(r => r.Budget),
-                total.Expenses - listed.Sum(r => r.Expenses),
+                otherBudget,
+                otherExpenses,
+                UsedPercent(otherBudget, otherExpenses),
                 total.Invoiced - listed.Sum(r => r.Invoiced),
                 total.Receivables - listed.Sum(r => r.Receivables),
                 total.Payables - listed.Sum(r => r.Payables),
@@ -807,11 +846,23 @@
 
     private static string Money(decimal value) => value.ToString("N2");
 
-    // Under the combined view, show how a figure splits between the
-    // company-level (non-site) records and the sites.
+    // Net cash flow and balance differ only by the petty cash money in, so
+    // the response already carries it: NetCashFlow - Balance.
+    private static decimal PettyCashIn(FinancialSummaryResponse f)
+        => f.NetCashFlow - f.Balance;
+
+    // What the petty cash accounts hold, minus what their transactions explain.
+    private static decimal PettyCashGap(FinancialSummaryResponse f)
+        => f.PettyCashBalance - (PettyCashIn(f) - f.TotalPettyCashOut);
+
+    private static bool HasPettyCashGap(FinancialSummaryResponse f)
+        => Math.Abs(PettyCashGap(f)) >= 0.005m;
+
+    // Under the combined view, show the split between company-level and
+    // other in-scope records. This may include historical activity.
     private string Split(Func<FinancialSummaryResponse, decimal> pick, string fallback)
         => _scope == "All" && _all is not null
-            ? $"Company level {Money(pick(_all.Company))} + sites {Money(pick(_all.Total) - pick(_all.Company))}"
+            ? $"Company level {Money(pick(_all.Company))} + other in-scope records {Money(pick(_all.Total) - pick(_all.Company))}"
             : fallback;
 
     private static string SitesText(ExecutiveDashboardResponse e)
@@ -821,7 +872,7 @@
         => value < 0 ? "text-danger" : "text-success";
 
     private static decimal UsedPercent(decimal budget, decimal expenses)
-        => budget <= 0m ? 0m : Math.Round(expenses / budget * 100m, 1);
+        => budget == 0m ? 0m : Math.Round(expenses / budget * 100m, 2);
 
     // Same thresholds as the budget alerts: 80% warning, 100% limit reached.
     private static string UsedClass(decimal percent)
@@ -848,19 +899,26 @@
             </div>
         </div>;
 
-    private RenderFragment UsedTile(decimal budget, decimal expenses, string col)
+    private RenderFragment UsedTile(
+        decimal budget,
+        decimal expenses,
+        string col,
+        decimal? reportedPercent = null)
     {
-        var percent = UsedPercent(budget, expenses);
+        var percent = reportedPercent ?? UsedPercent(budget, expenses);
 
         return @<div class="@col">
             <div class="card h-100 border">
                 <div class="card-body">
                     <div class="text-muted small">Budget Used</div>
-                    <div class="fs-5 fw-bold">@percent.ToString("0.#")%</div>
+                    <div class="fs-5 fw-bold">@percent.ToString("0.00")%</div>
                     <div class="progress mt-2" style="height: 8px;">
                         <div class="progress-bar @UsedClass(percent)"
                              role="progressbar"
-                             style="width: @(Math.Min(percent, 100m).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%">
+                             aria-valuenow="@percent.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             style="width: @(Math.Clamp(percent, 0m, 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))%">
                         </div>
                     </div>
                     <div class="text-muted small mt-1">
@@ -873,17 +931,17 @@
 
     private RenderFragment DataRow(Row r, bool bold = false)
     {
-        var used = UsedPercent(r.Budget, r.Expenses);
-
         return @<tr class="@(bold ? "table-light fw-bold" : "")">
             <td class="@(bold ? "" : "fw-semibold")">@r.Name</td>
             <td>@r.Code</td>
             <td class="text-end">@Money(r.Budget)</td>
             <td class="text-end">@Money(r.Expenses)</td>
             <td class="text-end">
-                @if (r.Budget > 0m)
+                @if (r.Budget != 0m)
                 {
-                    <span class="badge @UsedClass(used)">@used.ToString("0.#")%</span>
+                    <span class="badge @UsedClass(r.BudgetUtilizationPercent)">
+                        @r.BudgetUtilizationPercent.ToString("0.00")%
+                    </span>
                 }
                 else
                 {

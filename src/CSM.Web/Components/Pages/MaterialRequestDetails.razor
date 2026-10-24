@@ -387,6 +387,12 @@ else
 
     private void Back()
     {
+        if (request is null)
+        {
+            Navigation.NavigateTo("/material-requests");
+            return;
+        }
+
         Navigation.NavigateTo(
             $"/material-requests/site/{request.ConstructionSiteId}");
     }

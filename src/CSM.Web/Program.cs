@@ -2,9 +2,63 @@ using CSM.Web.Components;
 using CSM.Web.Services;
 using CSM.Web.Services.HRM;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.Extensions.Localization;
+using System.Globalization;
+using Microsoft.AspNetCore.Localization;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddLocalization();
+
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"];
+var apiHost = builder.Configuration["CSM_API_HOST"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl) &&
+    !builder.Environment.IsDevelopment() &&
+    !string.IsNullOrWhiteSpace(apiHost))
+{
+    apiBaseUrl = $"https://{apiHost.TrimEnd('/')}/api/";
+}
+
+if (!Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var apiUri) ||
+    !apiUri.AbsolutePath.EndsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
+    !string.IsNullOrEmpty(apiUri.Query) ||
+    !string.IsNullOrEmpty(apiUri.Fragment) ||
+    !string.IsNullOrEmpty(apiUri.UserInfo) ||
+    (apiUri.Scheme != Uri.UriSchemeHttps &&
+     !(builder.Environment.IsDevelopment() &&
+       apiUri.Scheme == Uri.UriSchemeHttp)))
+{
+    throw new InvalidOperationException(
+        "Configure ApiSettings:BaseUrl as an absolute API URL ending in /api/; Production requires HTTPS.");
+}
+
+var allowedHosts =
+    builder.Configuration["AllowedHosts"] ??
+    builder.Configuration["RENDER_EXTERNAL_HOSTNAME"];
+if (!builder.Environment.IsDevelopment() &&
+    (string.IsNullOrWhiteSpace(allowedHosts) ||
+     allowedHosts.Split(',', StringSplitOptions.TrimEntries)
+         .Any(host => host.Length == 0 || host.Contains('*'))))
+{
+    throw new InvalidOperationException(
+        "Configure AllowedHosts with the deployed web hostname(s).");
+}
+
+var supportedCultures = new[]
+{
+    new CultureInfo("en"),
+    new CultureInfo("am"),
+    new CultureInfo("om")
+};
+
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    options.DefaultRequestCulture =
+        new RequestCulture("en");
+
+    options.SupportedCultures = supportedCultures;
+    options.SupportedUICultures = supportedCultures;
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -21,14 +75,25 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddHttpClient("CSM.Api", client =>
 {
-    client.BaseAddress = new Uri(
-        builder.Configuration["ApiSettings:BaseUrl"]!);
+    client.BaseAddress = apiUri;
 });
+
+builder.Services.AddScoped<UserPreferencesService>();
+builder.Services.AddScoped<UserSessionsService>();
+builder.Services.AddScoped<LoginHistoryService>();
+builder.Services.AddScoped<AuditHistoryService>();
+builder.Services.AddScoped<PersonalDataExportService>();
+builder.Services.AddScoped<PrivacyDataRequestService>();
+builder.Services.AddScoped<PasswordChangeService>();
+
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AuthService>(sp =>
     (AuthService)sp.GetRequiredService<IAuthService>());
 builder.Services.AddScoped<ProtectedSessionStorage>();
+builder.Services.AddScoped<CurrentUserProfileService>();
+builder.Services.AddScoped<MyProfileService>();
+builder.Services.AddScoped<OrganizationMembershipService>();
 builder.Services.AddScoped<IExecutiveDashboardService,
     ExecutiveDashboardService>();
 
@@ -83,6 +148,8 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
 app.UseHttpsRedirection();
+
+app.UseRequestLocalization();
 
 app.UseAntiforgery();
 

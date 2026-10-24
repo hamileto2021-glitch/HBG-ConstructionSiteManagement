@@ -16,22 +16,40 @@ public sealed class DailySiteDiaryService : IDailySiteDiaryService
     }
 
     public async Task<IReadOnlyCollection<DailySiteDiaryResponse>> GetAllAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid? projectId,
         Guid? siteId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         var query = _context.DailySiteDiaries
             .AsNoTracking()
-            .AsQueryable();
+            .Where(x =>
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(x.SiteId)));
 
         if (projectId.HasValue)
         {
+            await ProjectDataAccess.EnsureProjectAccessAsync(
+                _context,
+                scope,
+                projectId.Value,
+                cancellationToken);
             query = query.Where(x => x.ProjectId == projectId.Value);
         }
 
         if (siteId.HasValue)
         {
+            await ProjectDataAccess.EnsureSiteAccessAsync(
+                _context,
+                scope,
+                siteId.Value,
+                cancellationToken);
             query = query.Where(x => x.SiteId == siteId.Value);
         }
 
@@ -49,9 +67,18 @@ public sealed class DailySiteDiaryService : IDailySiteDiaryService
         Guid diaryId,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         return await _context.DailySiteDiaries
             .AsNoTracking()
-            .Where(x => x.Id == diaryId)
+            .Where(x =>
+                x.Id == diaryId &&
+                x.CompanyId == scope.CompanyId &&
+                (scope.CanAccessAllSites ||
+                 scope.AccessibleSiteIds.Contains(x.SiteId)))
             .Select(MapToResponse)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -61,9 +88,33 @@ public sealed class DailySiteDiaryService : IDailySiteDiaryService
         CreateDailySiteDiaryRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+        await ProjectDataAccess.EnsureSiteAccessAsync(
+            _context,
+            scope,
+            request.SiteId,
+            cancellationToken);
+        if (request.ProjectId.HasValue)
+        {
+            var projectSiteId =
+                await ProjectDataAccess.EnsureProjectAccessAsync(
+                    _context,
+                    scope,
+                    request.ProjectId.Value,
+                    cancellationToken);
+            if (projectSiteId != request.SiteId)
+            {
+                throw new UnauthorizedAccessException(
+                    "The project does not belong to the selected site.");
+            }
+        }
+
         var diary = new DailySiteDiary
         {
-            CompanyId = Guid.Empty,              // replace with current tenant later
+            CompanyId = scope.CompanyId,
             SiteId = request.SiteId,
             ProjectId = request.ProjectId,
             DiaryDate = request.DiaryDate,
@@ -83,16 +134,46 @@ public sealed class DailySiteDiaryService : IDailySiteDiaryService
     }
 
     public async Task<DailySiteDiaryResponse?> UpdateAsync(
-        Guid tenantId,
+        Guid currentUserId,
         Guid diaryId,
         UpdateDailySiteDiaryRequest request,
         CancellationToken cancellationToken = default)
     {
+        var scope = await ProjectDataAccess.GetScopeAsync(
+            _context,
+            currentUserId,
+            cancellationToken);
+
         var diary = await _context.DailySiteDiaries
-            .FirstOrDefaultAsync(x => x.Id == diaryId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == diaryId &&
+                     x.CompanyId == scope.CompanyId &&
+                     (scope.CanAccessAllSites ||
+                      scope.AccessibleSiteIds.Contains(x.SiteId)),
+                cancellationToken);
 
         if (diary is null)
             return null;
+
+        await ProjectDataAccess.EnsureSiteAccessAsync(
+            _context,
+            scope,
+            request.SiteId,
+            cancellationToken);
+        if (request.ProjectId.HasValue)
+        {
+            var projectSiteId =
+                await ProjectDataAccess.EnsureProjectAccessAsync(
+                    _context,
+                    scope,
+                    request.ProjectId.Value,
+                    cancellationToken);
+            if (projectSiteId != request.SiteId)
+            {
+                throw new UnauthorizedAccessException(
+                    "The project does not belong to the selected site.");
+            }
+        }
 
         diary.SiteId = request.SiteId;
         diary.ProjectId = request.ProjectId;
@@ -107,16 +188,25 @@ public sealed class DailySiteDiaryService : IDailySiteDiaryService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return await GetByIdAsync(tenantId, diaryId, cancellationToken);
+        return await GetByIdAsync(currentUserId, diaryId, cancellationToken);
     }
 
    public async Task<bool> DeleteAsync(
-       Guid tenantId,
+       Guid currentUserId,
        Guid diaryId,
        CancellationToken cancellationToken = default)
    {
+       var scope = await ProjectDataAccess.GetScopeAsync(
+           _context,
+           currentUserId,
+           cancellationToken);
+
        var rows = await _context.DailySiteDiaries
-           .Where(x => x.Id == diaryId)
+           .Where(x =>
+               x.Id == diaryId &&
+               x.CompanyId == scope.CompanyId &&
+               (scope.CanAccessAllSites ||
+                scope.AccessibleSiteIds.Contains(x.SiteId)))
            .ExecuteDeleteAsync(cancellationToken);
 
        return rows > 0;

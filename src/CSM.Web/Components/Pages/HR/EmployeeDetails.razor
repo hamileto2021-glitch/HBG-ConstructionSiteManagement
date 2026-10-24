@@ -7,295 +7,236 @@
 @inject IEmployeeService EmployeeService
 @inject NavigationManager Navigation
 
-<PageTitle>Employee Details</PageTitle>
+<PageTitle>Employee Details | CSM</PageTitle>
 
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<main class="employee-details-page">
+    <header class="employee-details-header">
         <div>
-            <h3>Employee Details</h3>
-            <p class="text-muted mb-0">
-                View employee information.
-            </p>
+            <div class="employee-details-eyebrow">
+                <i class="bi bi-people" aria-hidden="true"></i>
+                Workforce directory
+            </div>
+            <h1>Employee details</h1>
+            <p>Review employee profile, employment, and contact information.</p>
         </div>
 
-        <button class="btn btn-outline-secondary"
-                @onclick="Back">
-            <i class="bi bi-arrow-left me-1"></i>
-            Back
+        <button class="employee-back-button" type="button" @onclick="Back">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+            <span>Back to employees</span>
         </button>
-    </div>
+    </header>
 
     @if (_loading)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border"></div>
-            <div class="mt-2">Loading employee...</div>
-        </div>
+        <section class="employee-state" role="status" aria-live="polite" aria-busy="true">
+            <span class="employee-loader" aria-hidden="true"></span>
+            <h2>Loading employee profile</h2>
+            <p>Please wait while the employee information is retrieved.</p>
+        </section>
     }
     else if (!string.IsNullOrWhiteSpace(_error))
     {
-        <div class="alert alert-danger">
-            @_error
-        </div>
+        <section class="employee-state employee-state-error" role="alert">
+            <span class="employee-state-icon" aria-hidden="true">
+                <i class="bi bi-person-exclamation"></i>
+            </span>
+            <h2>Employee details unavailable</h2>
+            <p>@_error</p>
+            <button class="employee-primary-button" type="button" @onclick="LoadEmployee">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                Try again
+            </button>
+        </section>
     }
     else if (_employee is not null)
     {
-        <div class="card shadow-sm mb-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h4 class="mb-1">
-                            @_employee.FirstName
-                            @if (!string.IsNullOrWhiteSpace(_employee.MiddleName))
-                            {
-                                <span> @_employee.MiddleName</span>
-                            }
-                            @_employee.LastName
-                        </h4>
+        <section class="employee-profile-banner" aria-label="Employee profile summary">
+            <div class="employee-avatar" aria-hidden="true">@EmployeeInitials</div>
+            <div class="employee-profile-copy">
+                <div class="employee-profile-eyebrow">EMPLOYEE PROFILE</div>
+                <h2>@EmployeeFullName</h2>
+                <div class="employee-profile-meta">
+                    <span><i class="bi bi-person-badge" aria-hidden="true"></i> @_employee.EmployeeNumber</span>
+                    @if (!string.IsNullOrWhiteSpace(_employee.JobTitle))
+                    {
+                        <span><i class="bi bi-briefcase" aria-hidden="true"></i> @_employee.JobTitle</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_employee.Department))
+                    {
+                        <span><i class="bi bi-diagram-3" aria-hidden="true"></i> @_employee.Department</span>
+                    }
+                </div>
+            </div>
+            <span class="employee-status-badge @GetStatusClass(_employee.Status)">
+                <span class="employee-status-dot" aria-hidden="true"></span>
+                @GetDisplayStatus(_employee.Status)
+            </span>
+        </section>
 
-                        <div class="text-muted">
-                            @_employee.EmployeeNumber
-                        </div>
-                    </div>
-
-                    <span class="badge @GetStatusClass(_employee.Status)">
-                        @_employee.Status
+        <div class="employee-details-grid">
+            <section class="employee-info-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-blue" aria-hidden="true">
+                        <i class="bi bi-person"></i>
                     </span>
+                    <div>
+                        <h2>Personal information</h2>
+                        <p>Identity and personal details</p>
+                    </div>
+                </header>
+                <dl class="employee-detail-list">
+                    <div><dt>Employee number</dt><dd>@Display(_employee.EmployeeNumber)</dd></div>
+                    <div><dt>First name</dt><dd>@Display(_employee.FirstName)</dd></div>
+                    <div><dt>Middle name</dt><dd>@Display(_employee.MiddleName)</dd></div>
+                    <div><dt>Last name</dt><dd>@Display(_employee.LastName)</dd></div>
+                    <div><dt>Date of birth</dt><dd>@(_employee.DateOfBirth?.ToString("dd MMM yyyy") ?? "—")</dd></div>
+                    <div><dt>National ID</dt><dd>@Display(_employee.NationalIdNumber)</dd></div>
+                    <div><dt>Tax ID</dt><dd>@Display(_employee.TaxIdentificationNumber)</dd></div>
+                </dl>
+            </section>
+
+            <section class="employee-info-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-indigo" aria-hidden="true">
+                        <i class="bi bi-briefcase"></i>
+                    </span>
+                    <div>
+                        <h2>Employment</h2>
+                        <p>Role, dates, and compensation</p>
+                    </div>
+                </header>
+                <dl class="employee-detail-list">
+                    <div><dt>Job title</dt><dd>@Display(_employee.JobTitle)</dd></div>
+                    <div><dt>Department</dt><dd>@Display(_employee.Department)</dd></div>
+                    <div><dt>Employee type</dt><dd>@Display(_employee.EmployeeType)</dd></div>
+                    <div><dt>Wage type</dt><dd>@Display(_employee.WageType)</dd></div>
+                    <div><dt>Hire date</dt><dd>@_employee.HireDate.ToString("dd MMM yyyy")</dd></div>
+                    <div><dt>Termination date</dt><dd>@(_employee.TerminationDate?.ToString("dd MMM yyyy") ?? "—")</dd></div>
+                    <div><dt>Base wage</dt><dd>@($"{_employee.BaseWage:N2} {_employee.CurrencyCode}")</dd></div>
+                </dl>
+            </section>
+
+            <section class="employee-info-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-green" aria-hidden="true">
+                        <i class="bi bi-telephone"></i>
+                    </span>
+                    <div>
+                        <h2>Contact information</h2>
+                        <p>Ways to reach this employee</p>
+                    </div>
+                </header>
+                <dl class="employee-detail-list">
+                    <div><dt>Phone</dt><dd>@Display(_employee.PhoneNumber)</dd></div>
+                    <div><dt>Email</dt><dd class="employee-breakable">@Display(_employee.Email)</dd></div>
+                </dl>
+            </section>
+
+            <section class="employee-info-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-orange" aria-hidden="true">
+                        <i class="bi bi-bank"></i>
+                    </span>
+                    <div>
+                        <h2>Bank information</h2>
+                        <p>Payment account details</p>
+                    </div>
+                </header>
+                <dl class="employee-detail-list">
+                    <div><dt>Bank name</dt><dd>@Display(_employee.BankName)</dd></div>
+                    <div><dt>Account number</dt><dd class="employee-breakable">@Display(_employee.BankAccountNumber)</dd></div>
+                </dl>
+            </section>
+
+            <section class="employee-info-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-red" aria-hidden="true">
+                        <i class="bi bi-life-preserver"></i>
+                    </span>
+                    <div>
+                        <h2>Emergency contact</h2>
+                        <p>Contact to use in an emergency</p>
+                    </div>
+                </header>
+                <dl class="employee-detail-list">
+                    <div><dt>Name</dt><dd>@Display(_employee.EmergencyContactName)</dd></div>
+                    <div><dt>Phone</dt><dd>@Display(_employee.EmergencyContactPhone)</dd></div>
+                </dl>
+            </section>
+
+            <section class="employee-info-card employee-status-card">
+                <header class="employee-card-heading">
+                    <span class="employee-card-icon employee-tone-slate" aria-hidden="true">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </span>
+                    <div>
+                        <h2>Update employment status</h2>
+                        <p>Change the current status for this employee</p>
+                    </div>
+                </header>
+
+                @if (!string.IsNullOrWhiteSpace(_statusMessage))
+                {
+                    <div class="employee-feedback employee-feedback-success" role="status">
+                        <i class="bi bi-check-circle" aria-hidden="true"></i>
+                        <span>@_statusMessage</span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_statusError))
+                {
+                    <div class="employee-feedback employee-feedback-error" role="alert">
+                        <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                        <span>@_statusError</span>
+                    </div>
+                }
+
+                <div class="employee-status-form">
+                    <div class="employee-form-field">
+                        <label for="employee-status">New status</label>
+                        <select id="employee-status" class="form-select" @bind="_newStatus">
+                            <option value="">Select status</option>
+                            <option value="Active">Active</option>
+                            <option value="OnLeave">On Leave</option>
+                            <option value="Suspended">Suspended</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Terminated">Terminated</option>
+                        </select>
+                    </div>
+                    <div class="employee-form-field">
+                        <label for="employee-termination-date">Termination date</label>
+                        <InputDate id="employee-termination-date"
+                                   class="form-control"
+                                   @bind-Value="_terminationDate" />
+                        <span class="employee-form-help">Required when setting status to Terminated.</span>
+                    </div>
+                    <button class="employee-primary-button employee-update-button"
+                            type="button"
+                            @onclick="ChangeStatusAsync"
+                            disabled="@_changingStatus">
+                        @if (_changingStatus)
+                        {
+                            <span class="employee-button-spinner" aria-hidden="true"></span>
+                            <span>Updating…</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                            <span>Update status</span>
+                        }
+                    </button>
                 </div>
-            </div>
+            </section>
         </div>
 
-        <div class="row g-4">
-
-            <div class="col-lg-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <strong>Personal Information</strong>
-                    </div>
-
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Employee Number</dt>
-                            <dd class="col-sm-7">@_employee.EmployeeNumber</dd>
-
-                            <dt class="col-sm-5">First Name</dt>
-                            <dd class="col-sm-7">@_employee.FirstName</dd>
-
-                            <dt class="col-sm-5">Middle Name</dt>
-                            <dd class="col-sm-7">@Display(_employee.MiddleName)</dd>
-
-                            <dt class="col-sm-5">Last Name</dt>
-                            <dd class="col-sm-7">@_employee.LastName</dd>
-
-                            <dt class="col-sm-5">Date of Birth</dt>
-                            <dd class="col-sm-7">
-                                @_employee.DateOfBirth?.ToString("dd MMM yyyy")
-                            </dd>
-
-                            <dt class="col-sm-5">National ID</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.NationalIdNumber)
-                            </dd>
-
-                            <dt class="col-sm-5">Tax ID</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.TaxIdentificationNumber)
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <strong>Employment Information</strong>
-                    </div>
-
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Job Title</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.JobTitle)
-                            </dd>
-
-                            <dt class="col-sm-5">Department</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.Department)
-                            </dd>
-
-                            <dt class="col-sm-5">Employee Type</dt>
-                            <dd class="col-sm-7">@_employee.EmployeeType</dd>
-
-                            <dt class="col-sm-5">Wage Type</dt>
-                            <dd class="col-sm-7">@_employee.WageType</dd>
-
-                            <dt class="col-sm-5">Hire Date</dt>
-                            <dd class="col-sm-7">
-                                @_employee.HireDate.ToString("dd MMM yyyy")
-                            </dd>
-
-                            <dt class="col-sm-5">Termination Date</dt>
-                            <dd class="col-sm-7">
-                                @_employee.TerminationDate?.ToString("dd MMM yyyy")
-                            </dd>
-
-                            <dt class="col-sm-5">Base Wage</dt>
-                            <dd class="col-sm-7">
-                                @_employee.BaseWage.ToString("N2")
-                                @_employee.CurrencyCode
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <strong>Contact Information</strong>
-                    </div>
-
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Phone</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.PhoneNumber)
-                            </dd>
-
-                            <dt class="col-sm-5">Email</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.Email)
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <strong>Bank Information</strong>
-                    </div>
-
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Bank Name</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.BankName)
-                            </dd>
-
-                            <dt class="col-sm-5">Account Number</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.BankAccountNumber)
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card shadow-sm">
-                    <div class="card-header">
-                        <strong>Emergency Contact</strong>
-                    </div>
-
-                    <div class="card-body">
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Name</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.EmergencyContactName)
-                            </dd>
-
-                            <dt class="col-sm-5">Phone</dt>
-                            <dd class="col-sm-7">
-                                @Display(_employee.EmergencyContactPhone)
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <div class="card shadow-sm mt-4">
-                    <div class="card-header">
-                        <strong>Employee Status</strong>
-                    </div>
-
-                    <div class="card-body">
-
-                        @if (!string.IsNullOrWhiteSpace(_statusMessage))
-                        {
-                            <div class="alert alert-success">
-                                @_statusMessage
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(_statusError))
-                        {
-                            <div class="alert alert-danger">
-                                @_statusError
-                            </div>
-                        }
-
-                        <div class="row g-3">
-
-                            <div class="col-md-4">
-                                <label class="form-label">Status</label>
-
-                                <select class="form-select"
-                                        @bind="_newStatus">
-                                    <option value="">Select status</option>
-                                    <option value="Active">Active</option>
-                                    <option value="OnLeave">On Leave</option>
-                                    <option value="Suspended">Suspended</option>
-                                    <option value="Inactive">Inactive</option>
-                                    <option value="Terminated">Terminated</option>
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Termination Date</label>
-
-                                <InputDate class="form-control"
-                                           @bind-Value="_terminationDate" />
-
-                                <div class="form-text">
-                                    Required when terminating an employee.
-                                </div>
-                            </div>
-
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button class="btn btn-primary w-100"
-                                        @onclick="ChangeStatusAsync"
-                                        disabled="@_changingStatus">
-                                    @if (_changingStatus)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-1"></span>
-                                        <span>Updating...</span>
-                                    }
-                                    else
-                                    {
-                                        <i class="bi bi-arrow-repeat me-1"></i>
-                                        <span>Update Status</span>
-                                    }
-                                </button>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-        <div class="mt-4">
-            <button class="btn btn-primary"
-                    @onclick="Back">
-                <i class="bi bi-arrow-left me-1"></i>
-                Back to Employees
+        <footer class="employee-details-footer">
+            <button class="employee-back-button" type="button" @onclick="Back">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                <span>Back to employees</span>
             </button>
-        </div>
+        </footer>
     }
-</div>
+</main>
 
 @code {
     [Parameter]
@@ -316,6 +257,31 @@
 
     private string? _statusMessage;
     private string? _statusError;
+
+    private string EmployeeFullName =>
+        string.Join(" ", new[]
+        {
+            _employee?.FirstName,
+            _employee?.MiddleName,
+            _employee?.LastName
+        }.Where(name => !string.IsNullOrWhiteSpace(name)));
+
+    private string EmployeeInitials
+    {
+        get
+        {
+            var initials = new[]
+                {
+                    _employee?.FirstName,
+                    _employee?.LastName
+                }
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => char.ToUpperInvariant(name![0]))
+                .Take(2);
+
+            return string.Concat(initials);
+        }
+    }
 
     private async Task ChangeStatusAsync()
     {
@@ -402,12 +368,6 @@
         StateHasChanged();
     }
 
-    private void ViewSiteEmployee(Guid employeeId)
-    {
-        Navigation.NavigateTo(
-            $"/hr/employees/details/{employeeId}?siteId={SiteId}");
-    }
-
     private void Back()
     {
         if (SiteId.HasValue)
@@ -429,14 +389,19 @@
 
     private static string GetStatusClass(string status)
     {
-        return status switch
+        return status.ToLowerInvariant() switch
         {
-            "Active" => "bg-success",
-            "OnLeave" => "bg-warning text-dark",
-            "Suspended" => "bg-danger",
-            "Inactive" => "bg-secondary",
-            "Terminated" => "bg-dark",
-            _ => "bg-secondary"
+            "active" => "employee-status-active",
+            "onleave" => "employee-status-leave",
+            "suspended" => "employee-status-suspended",
+            "inactive" => "employee-status-inactive",
+            "terminated" => "employee-status-terminated",
+            _ => "employee-status-inactive"
         };
     }
+
+    private static string GetDisplayStatus(string status) =>
+        status.Equals("OnLeave", StringComparison.OrdinalIgnoreCase)
+            ? "On leave"
+            : status;
 }

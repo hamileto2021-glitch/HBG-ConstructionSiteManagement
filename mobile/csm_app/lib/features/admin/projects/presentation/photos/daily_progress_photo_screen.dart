@@ -1,11 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../data/models/daily_progress_photo.dart';
 import '../../data/repositories/daily_progress_photo_repository.dart';
-import '../../../../../core/config/api_config.dart';
 
 
 
@@ -31,6 +31,7 @@ class _DailyProgressPhotoScreenState
   bool _uploading = false;
 
   List<DailyProgressPhoto> _photos = [];
+  final Map<String, Future<Uint8List>> _photoContent = {};
 
   @override
   void initState() {
@@ -84,7 +85,21 @@ class _DailyProgressPhotoScreenState
     await _repository.delete(photo.id);
     await _loadPhotos();
   }
-  void _openPhoto(DailyProgressPhoto photo) {
+  Future<void> _openPhoto(DailyProgressPhoto photo) async {
+    late final Uint8List bytes;
+    try {
+      bytes = await _loadPhotoContent(photo);
+    } catch (_) {
+      _photoContent.remove(photo.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load this photo.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -100,8 +115,8 @@ class _DailyProgressPhotoScreenState
               child: InteractiveViewer(
                 minScale: 0.5,
                 maxScale: 4,
-                child: Image.network(
-                  _url(photo.filePath),
+                child: Image.memory(
+                  bytes,
                   fit: BoxFit.contain,
                 ),
               ),
@@ -210,8 +225,11 @@ class _DailyProgressPhotoScreenState
     );
   }
 
-  String _url(String relative) {
-    return ApiConfig.fileUrl(relative);
+  Future<Uint8List> _loadPhotoContent(DailyProgressPhoto photo) {
+    return _photoContent.putIfAbsent(
+      photo.id,
+      () => _repository.getContent(photo.id),
+    );
   }
 
   @override
@@ -261,14 +279,26 @@ class _DailyProgressPhotoScreenState
                       onTap: () => _openPhoto(photo),
                       child: Hero(
                         tag: photo.id,
-                        child: Image.network(
-                          _url(photo.filePath),
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.broken_image,
-                            size: 48,
-                          ),
+                        child: FutureBuilder<Uint8List>(
+                          future: _loadPhotoContent(photo),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) {
+                              return const Icon(
+                                Icons.broken_image,
+                                size: 48,
+                              );
+                            }
+                            if (!snapshot.hasData) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            return Image.memory(
+                              snapshot.data!,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            );
+                          },
                         ),
                       ),
                     ),

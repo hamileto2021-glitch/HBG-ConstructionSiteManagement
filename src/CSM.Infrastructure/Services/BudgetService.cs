@@ -36,13 +36,40 @@ public sealed class BudgetService : IBudgetService
             actor,
             cancellationToken);
 
-        IQueryable<Budget> query =
-            _dbContext.Budgets.AsNoTracking();
+        IQueryable<Budget> query = _dbContext.Budgets
+            .AsNoTracking()
+            .Include(x => x.ConstructionSite)
+            .Include(x => x.Project)
+            .Where(x => !x.IsDeleted);
 
         if (!IsSuperAdmin(actor))
         {
-            query = query.Where(
-                x => x.CompanyId == GetActorCompanyId(actor));
+            var companyId = GetActorCompanyId(actor);
+
+            query = query.Where(x => x.CompanyId == companyId);
+
+            if (!IsCompanyWide(actor))
+            {
+                var siteIds = await _dbContext.UserSiteAccesses
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.UserId == actor.Id &&
+                        x.CompanyId == companyId &&
+                        x.IsActive)
+                    .Select(x => x.SiteId)
+                    .ToListAsync(cancellationToken);
+
+                var seesAllSites =
+                    HasRole(actor, AppRoles.SiteManager) &&
+                    siteIds.Count == 0;
+
+                if (!seesAllSites)
+                {
+                    query = query.Where(x =>
+                        x.ConstructionSiteId != null &&
+                        siteIds.Contains(x.ConstructionSiteId.Value));
+                }
+            }
         }
 
         var budgets = await query
@@ -107,8 +134,21 @@ public sealed class BudgetService : IBudgetService
             actor,
             budget.CompanyId);
 
+        // Company-level budgets are for company-wide roles only.
+        if (!budget.ConstructionSiteId.HasValue && !IsCompanyWide(actor))
+        {
+            throw new BudgetManagementException(
+                "You are not authorized to access this budget.");
+        }
+
+        await EnsureSiteAccess(
+            actor,
+            budget.ConstructionSiteId,
+            cancellationToken);
+
         return Map(budget);
     }
+
 
     public async Task<BudgetResponse> CreateAsync(
         Guid currentUserId,
@@ -615,6 +655,14 @@ public sealed class BudgetService : IBudgetService
         return HasRole(actor, AppRoles.SuperAdmin);
     }
 
+    private static bool IsCompanyWide(User actor)
+    {
+        return IsSuperAdmin(actor) ||
+               HasRole(actor, AppRoles.CompanyAdmin) ||
+               HasRole(actor, AppRoles.Accountant);
+    }
+
+
     private static bool HasRole(
         User actor,
         string roleName)
@@ -651,7 +699,8 @@ public sealed class BudgetService : IBudgetService
             TotalAmount = budget.TotalAmount,
             CurrencyCode = budget.CurrencyCode,
 
-            EffectiveFrom = budget.EffectiveFrom!.Value,
+            EffectiveFrom = budget.EffectiveFrom
+                            ?? DateOnly.FromDateTime(budget.CreatedAtUtc),
             EffectiveTo = budget.EffectiveTo ?? budget.EffectiveFrom,
 
             Status = budget.Status,

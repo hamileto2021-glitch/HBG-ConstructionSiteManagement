@@ -1,5 +1,6 @@
 using CSM.Application.Common.Backup;
 using CSM.Application.Common.Security;
+using CSM.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.CompanyManagement)]
+[Authorize(Roles = AppRoles.SuperAdmin)]
 public sealed class BackupController : ControllerBase
 {
     private readonly IBackupService _backupService;
@@ -58,18 +59,25 @@ public sealed class BackupController : ControllerBase
 
         Directory.CreateDirectory(backupFolder);
 
-        var filePath = Path.Combine(
-            backupFolder,
-            backupFile.FileName);
+        var fileName = $"restore-{Guid.NewGuid():N}.bak";
+        var filePath = Path.Combine(backupFolder, fileName);
 
-        using (var stream = System.IO.File.Create(filePath))
+        try
         {
-            await backupFile.CopyToAsync(stream, cancellationToken);
-        }
+            await using (var stream = System.IO.File.Create(filePath))
+            {
+                await backupFile.CopyToAsync(stream, cancellationToken);
+            }
 
-        await _backupService.RestoreBackupAsync(
-            filePath,
-            cancellationToken);
+            await _backupService.RestoreBackupAsync(
+                filePath,
+                cancellationToken);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(filePath))
+                System.IO.File.Delete(filePath);
+        }
 
         return Ok(new
         {

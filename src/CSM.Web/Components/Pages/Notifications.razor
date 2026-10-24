@@ -3,94 +3,254 @@
 @inject CSM.Web.Services.INotificationApiService NotificationService
 @inject NavigationManager Navigation
 
-<PageTitle>Notifications</PageTitle>
+<PageTitle>Notifications | CSM</PageTitle>
 
-<h3>Notifications</h3>
+<main class="notifications-page">
+    <header class="notifications-header">
+        <div>
+            <div class="notifications-eyebrow">
+                <i class="bi bi-bell" aria-hidden="true"></i>
+                Updates &amp; alerts
+            </div>
+            <h1>Notifications</h1>
+            <p>Stay up to date with activity across your workspace.</p>
+        </div>
 
-@if (_loading)
-{
-    <p>Loading notifications...</p>
-}
-else if (!string.IsNullOrWhiteSpace(_error))
-{
-    <div class="alert alert-danger">@_error</div>
-}
-else if (_notifications.Count == 0)
-{
-    <div class="alert alert-info">
-        No notifications found.
-    </div>
-}
-else
-{
+        <button class="notifications-refresh"
+                type="button"
+                @onclick="LoadAsync"
+                disabled="@_loading"
+                aria-label="Refresh notifications">
+            <i class="bi bi-arrow-clockwise @(_loading ? "notifications-spin" : string.Empty)"
+               aria-hidden="true"></i>
+            <span>Refresh</span>
+        </button>
+    </header>
+
     @if (!string.IsNullOrWhiteSpace(_actionError))
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @_actionError
+        <div class="notifications-alert" role="alert">
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+            <span>@_actionError</span>
             <button type="button"
-                    class="btn-close"
-                    @onclick="() => _actionError = null"></button>
+                    class="notifications-alert-dismiss"
+                    @onclick="() => _actionError = null"
+                    aria-label="Dismiss error">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
         </div>
     }
 
-    <div class="list-group">
-        @foreach (var notification in _notifications)
-        {
-            var link = GetLink(notification);
-
-            <div class="list-group-item @GetItemClass(notification)">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="mb-1">
-                            @notification.Title
-                        </h5>
-
-                        <p class="mb-1">
-                            @notification.Message
-                        </p>
-
-                        <small class="text-muted">
-                            @notification.CreatedAtUtc.ToLocalTime()
-                        </small>
-                    </div>
-
-                    <span class="@GetSeverityClass(notification.Severity)">
-                        @notification.Severity
-                    </span>
+    @if (_loading && _notifications.Count == 0)
+    {
+        <section class="notifications-state" aria-live="polite" aria-busy="true">
+            <span class="notifications-loader" aria-hidden="true"></span>
+            <h2>Loading notifications</h2>
+            <p>Checking for your latest updates…</p>
+        </section>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <section class="notifications-state notifications-state-error" role="alert">
+            <span class="notifications-state-icon">
+                <i class="bi bi-cloud-slash" aria-hidden="true"></i>
+            </span>
+            <h2>Notifications could not be loaded</h2>
+            <p>@_error</p>
+            <button class="notifications-primary-button" type="button" @onclick="LoadAsync">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                Try again
+            </button>
+        </section>
+    }
+    else
+    {
+        <section class="notification-summary" aria-label="Notification summary">
+            <article class="summary-card">
+                <span class="summary-icon summary-icon-total">
+                    <i class="bi bi-inbox" aria-hidden="true"></i>
+                </span>
+                <div>
+                    <span class="summary-label">Total updates</span>
+                    <strong>@_notifications.Count</strong>
                 </div>
+            </article>
+            <article class="summary-card">
+                <span class="summary-icon summary-icon-unread">
+                    <i class="bi bi-envelope" aria-hidden="true"></i>
+                </span>
+                <div>
+                    <span class="summary-label">Unread</span>
+                    <strong>@UnreadCount</strong>
+                </div>
+            </article>
+            <article class="summary-card">
+                <span class="summary-icon summary-icon-priority">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                </span>
+                <div>
+                    <span class="summary-label">Needs attention</span>
+                    <strong>@PriorityCount</strong>
+                </div>
+            </article>
+        </section>
 
-                @if (link is not null || !notification.IsRead)
-                {
-                    <div class="mt-2 d-flex gap-2">
-                        @if (link is not null)
-                        {
-                            <button
-                                class="btn btn-sm btn-primary"
-                                @onclick="() => OpenAsync(notification)">
-                                Open
-                            </button>
-                        }
-
-                        @if (!notification.IsRead)
-                        {
-                            <button
-                                class="btn btn-sm btn-outline-primary"
-                                @onclick="() => MarkAsReadAsync(notification.Id)">
-                                Mark as read
-                            </button>
-                        }
-                    </div>
-                }
+        <section class="notifications-panel" aria-labelledby="notification-list-title">
+            <div class="notifications-panel-header">
+                <div>
+                    <h2 id="notification-list-title">Your activity</h2>
+                    <p>Review updates and open related records.</p>
+                </div>
+                <div class="notification-filters" role="group" aria-label="Filter notifications">
+                    <button type="button"
+                            class="@FilterClass("all")"
+                            aria-pressed="@(_activeFilter == "all")"
+                            @onclick='() => SetFilter("all")'>
+                        All <span>@_notifications.Count</span>
+                    </button>
+                    <button type="button"
+                            class="@FilterClass("unread")"
+                            aria-pressed="@(_activeFilter == "unread")"
+                            @onclick='() => SetFilter("unread")'>
+                        Unread <span>@UnreadCount</span>
+                    </button>
+                    <button type="button"
+                            class="@FilterClass("read")"
+                            aria-pressed="@(_activeFilter == "read")"
+                            @onclick='() => SetFilter("read")'>
+                        Read
+                    </button>
+                </div>
             </div>
-        }
-    </div>
-}
+
+            @if (_notifications.Count == 0)
+            {
+                <div class="notifications-state notifications-empty">
+                    <span class="notifications-state-icon">
+                        <i class="bi bi-bell-slash" aria-hidden="true"></i>
+                    </span>
+                    <h2>You’re all caught up</h2>
+                    <p>There are no notifications to show right now.</p>
+                </div>
+            }
+            else if (!FilteredNotifications.Any())
+            {
+                <div class="notifications-state notifications-empty">
+                    <span class="notifications-state-icon">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                    </span>
+                    <h2>No @(_activeFilter) notifications</h2>
+                    <p>Try another filter to see more activity.</p>
+                    <button class="notifications-text-button"
+                            type="button"
+                            @onclick='() => SetFilter("all")'>
+                        Show all notifications
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="notification-list">
+                    @foreach (var notification in FilteredNotifications)
+                    {
+                        var link = GetLink(notification);
+                        var isMarkingRead = _markingRead.Contains(notification.Id);
+
+                        <article class="notification-item @(notification.IsRead ? "is-read" : "is-unread")">
+                            <span class="notification-indicator" aria-hidden="true"></span>
+                            <span class="notification-icon @GetSeverityTone(notification.Severity)">
+                                <i class="bi @GetSeverityIcon(notification.Severity)" aria-hidden="true"></i>
+                            </span>
+
+                            <div class="notification-content">
+                                <div class="notification-topline">
+                                    <div class="notification-title-group">
+                                        <h3>@notification.Title</h3>
+                                        @if (!notification.IsRead)
+                                        {
+                                            <span class="notification-unread-label">New</span>
+                                        }
+                                    </div>
+                                    <span class="@GetSeverityClass(notification.Severity)">
+                                        @notification.Severity
+                                    </span>
+                                </div>
+
+                                <p class="notification-message">@notification.Message</p>
+
+                                <div class="notification-footer">
+                                    <time datetime="@notification.CreatedAtUtc.ToUniversalTime().ToString("O")">
+                                        <i class="bi bi-clock" aria-hidden="true"></i>
+                                        @notification.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, h:mm tt")
+                                    </time>
+
+                                    @if (link is not null || !notification.IsRead)
+                                    {
+                                        <div class="notification-actions">
+                                            @if (link is not null)
+                                            {
+                                                <button class="notification-open-button"
+                                                        type="button"
+                                                        @onclick="() => OpenAsync(notification)">
+                                                    Open
+                                                    <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+                                                </button>
+                                            }
+
+                                            @if (!notification.IsRead)
+                                            {
+                                                <button class="notification-read-button"
+                                                        type="button"
+                                                        disabled="@isMarkingRead"
+                                                        @onclick="() => MarkAsReadAsync(notification.Id)">
+                                                    @if (isMarkingRead)
+                                                    {
+                                                        <span class="notification-button-spinner" aria-hidden="true"></span>
+                                                        <span>Marking…</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-check2" aria-hidden="true"></i>
+                                                        <span>Mark as read</span>
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+</main>
 
 @code {
     private List<NotificationResponse> _notifications = [];
+    private readonly HashSet<Guid> _markingRead = [];
     private bool _loading = true;
     private string? _error;
     private string? _actionError;
+    private string _activeFilter = "all";
+
+    private int UnreadCount => _notifications.Count(notification => !notification.IsRead);
+
+    private int PriorityCount => _notifications.Count(notification =>
+        !notification.IsRead &&
+        (string.Equals(notification.Severity, "Critical", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(notification.Severity, "Warning", StringComparison.OrdinalIgnoreCase)));
+
+    private IEnumerable<NotificationResponse> FilteredNotifications =>
+        _notifications
+            .OrderByDescending(notification => notification.CreatedAtUtc)
+            .Where(notification => _activeFilter switch
+            {
+                "unread" => !notification.IsRead,
+                "read" => notification.IsRead,
+                _ => true
+            });
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,7 +265,6 @@ else
         try
         {
             var result = await NotificationService.GetAsync();
-
             _notifications = result.ToList();
         }
         catch (Exception ex)
@@ -121,21 +280,29 @@ else
     private async Task MarkAsReadAsync(Guid notificationId)
     {
         _actionError = null;
+        _markingRead.Add(notificationId);
 
         try
         {
-            await NotificationService.MarkReadAsync(notificationId);
-            await LoadAsync();
+            var updatedNotification = await NotificationService.MarkReadAsync(notificationId);
+            var notification = _notifications.FirstOrDefault(item => item.Id == notificationId);
+
+            if (notification is not null)
+            {
+                notification.IsRead = updatedNotification?.IsRead ?? true;
+                notification.ReadAtUtc = updatedNotification?.ReadAtUtc ?? DateTime.UtcNow;
+            }
         }
         catch (Exception ex)
         {
-            // Keep the list on screen; only show the problem above it.
             _actionError = ex.Message;
+        }
+        finally
+        {
+            _markingRead.Remove(notificationId);
         }
     }
 
-    // Where a notification leads. Returns null when the type has no page,
-    // so the Open button is hidden.
     private static string? GetLink(NotificationResponse notification)
     {
         if (notification.SourceEntityId is not Guid id)
@@ -169,11 +336,12 @@ else
         {
             try
             {
-                await NotificationService.MarkReadAsync(notification.Id);
+                var updatedNotification = await NotificationService.MarkReadAsync(notification.Id);
+                notification.IsRead = updatedNotification?.IsRead ?? true;
+                notification.ReadAtUtc = updatedNotification?.ReadAtUtc ?? DateTime.UtcNow;
             }
             catch (Exception ex)
             {
-                // Still open the record; the notification just stays unread.
                 _actionError = ex.Message;
             }
         }
@@ -181,21 +349,38 @@ else
         Navigation.NavigateTo(link);
     }
 
-    private static string GetItemClass(NotificationResponse notification)
+    private void SetFilter(string filter)
     {
-        return notification.IsRead
-            ? "list-group-item"
-            : "list-group-item fw-semibold";
+        _activeFilter = filter;
     }
 
-    private static string GetSeverityClass(string severity)
-    {
-        return severity switch
+    private string FilterClass(string filter) =>
+        _activeFilter == filter ? "notification-filter active" : "notification-filter";
+
+    private static string GetSeverityTone(string severity) =>
+        severity.ToLowerInvariant() switch
         {
-            "Critical" => "badge bg-danger",
-            "Warning" => "badge bg-warning text-dark",
-            "Info" => "badge bg-info text-dark",
-            _ => "badge bg-secondary"
+            "critical" => "severity-tone-critical",
+            "warning" => "severity-tone-warning",
+            "info" => "severity-tone-info",
+            _ => "severity-tone-default"
         };
-    }
+
+    private static string GetSeverityIcon(string severity) =>
+        severity.ToLowerInvariant() switch
+        {
+            "critical" => "bi-exclamation-octagon",
+            "warning" => "bi-exclamation-triangle",
+            "info" => "bi-info-circle",
+            _ => "bi-bell"
+        };
+
+    private static string GetSeverityClass(string severity) =>
+        severity.ToLowerInvariant() switch
+        {
+            "critical" => "severity-badge severity-critical",
+            "warning" => "severity-badge severity-warning",
+            "info" => "severity-badge severity-info",
+            _ => "severity-badge severity-default"
+        };
 }

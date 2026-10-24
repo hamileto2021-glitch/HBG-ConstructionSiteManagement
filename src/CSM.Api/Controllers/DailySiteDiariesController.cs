@@ -1,5 +1,6 @@
 using CSM.Application.Projects.DailySiteDiaries;
 using CSM.Application.Projects.DailySiteDiaries.Dtos;
+using CSM.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,8 +8,8 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/daily-site-diaries")]
-[Authorize]
-public class DailySiteDiaryController : ControllerBase
+[Authorize(Policy = AppPolicies.ProjectManagement)]
+public class DailySiteDiaryController : CurrentUserControllerBase
 {
     private readonly IDailySiteDiaryService _service;
 
@@ -24,7 +25,7 @@ public class DailySiteDiaryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetAllAsync(
-            Guid.Empty,
+            CurrentUserId,
             projectId,
             siteId,
             cancellationToken);
@@ -38,7 +39,7 @@ public class DailySiteDiaryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByIdAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 
@@ -54,7 +55,7 @@ public class DailySiteDiaryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var created = await _service.CreateAsync(
-            Guid.Empty,
+            CurrentUserId,
             request,
             cancellationToken);
 
@@ -71,7 +72,7 @@ public class DailySiteDiaryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var updated = await _service.UpdateAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             request,
             cancellationToken);
@@ -88,7 +89,7 @@ public class DailySiteDiaryController : ControllerBase
         CancellationToken cancellationToken)
     {
         var deleted = await _service.DeleteAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 

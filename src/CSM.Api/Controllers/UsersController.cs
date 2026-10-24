@@ -107,6 +107,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{userId:guid}/roles")]
+    [Authorize(Policy = AppPolicies.UserManagement)]
     public async Task<IActionResult> SetRoles(
         Guid userId,
         SetUserRolesRequest request,
@@ -215,21 +216,36 @@ public sealed class UsersController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
 
-        return Ok(await _userService.GetProfileAsync(
-            currentUserId,
-            userId,
-            cancellationToken));
+        try
+        {
+            return Ok(await _userService.GetProfileAsync(
+                currentUserId,
+                userId,
+                cancellationToken));
+        }
+        catch (UserManagementException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpGet("audit")]
+    [Authorize(Policy = AppPolicies.UserManagement)]
     public async Task<ActionResult<IReadOnlyCollection<UserAuditResponse>>> GetAudit(
         CancellationToken cancellationToken)
     {
         var currentUserId = GetCurrentUserId();
 
-        return Ok(await _userService.GetAuditAsync(
-            currentUserId,
-            cancellationToken));
+        try
+        {
+            return Ok(await _userService.GetAuditAsync(
+                currentUserId,
+                cancellationToken));
+        }
+        catch (UserManagementException)
+        {
+            return Forbid();
+        }
     }
 
     private Guid GetCurrentUserId()

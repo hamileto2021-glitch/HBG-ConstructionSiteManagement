@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 
 
@@ -40,6 +41,12 @@ class DailyProgressPhotoRepository {
   Future<void> delete(String photoId) async {
     await _apiClient.delete(
       '/daily-progress-photos/$photoId',
+    );
+  }
+
+  Future<Uint8List> getContent(String photoId) {
+    return _apiClient.getBytes(
+      '/daily-progress-photos/$photoId/content',
     );
   }
 }

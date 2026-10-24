@@ -19,6 +19,30 @@ public interface IAuthService
         string? ipAddress,
         CancellationToken cancellationToken = default);
 
+
+Task<IReadOnlyList<UserSessionResponse>> GetSessionsAsync(
+    Guid userId,
+    string? currentRefreshToken,
+    CancellationToken cancellationToken = default);
+
+
+Task<bool> RevokeSessionAsync(
+    Guid userId,
+    Guid sessionId,
+    string? ipAddress,
+    string? currentRefreshToken,
+    CancellationToken cancellationToken = default);
+
+
+Task<int> RevokeOtherSessionsAsync(
+    Guid userId,
+    string? currentRefreshToken,
+    string? ipAddress,
+    CancellationToken cancellationToken = default);
+
+
+
+
     Task ChangePasswordAsync(
         Guid userId,
         ChangePasswordRequest request,

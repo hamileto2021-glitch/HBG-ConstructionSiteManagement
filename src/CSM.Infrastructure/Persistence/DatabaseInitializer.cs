@@ -3,6 +3,7 @@ using CSM.Domain.Constants;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CSM.Infrastructure.Persistence;
@@ -20,12 +21,15 @@ public static class DatabaseInitializer
 
         var passwordHasher =
             scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var configuration =
+            scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
         await SeedRolesAsync(dbContext, cancellationToken);
 
         await SeedSuperAdminAsync(
             dbContext,
             passwordHasher,
+            configuration["CSM_BOOTSTRAP_ADMIN_PASSWORD"],
             cancellationToken);
 
         // Seed default RBAC permissions
@@ -68,6 +72,7 @@ public static class DatabaseInitializer
     private static async Task SeedSuperAdminAsync(
         ApplicationDbContext dbContext,
         IPasswordHasher passwordHasher,
+        string? bootstrapPassword,
         CancellationToken cancellationToken)
     {
         const string email = "admin@csm.local";
@@ -81,13 +86,19 @@ public static class DatabaseInitializer
 
         if (user is null)
         {
+            if (string.IsNullOrWhiteSpace(bootstrapPassword))
+            {
+                throw new InvalidOperationException(
+                    "Set CSM_BOOTSTRAP_ADMIN_PASSWORD before initializing a new database.");
+            }
+
             user = new User
             {
                 Email = email,
                 NormalizedEmail = normalizedEmail,
                 FirstName = "System",
                 LastName = "Administrator",
-                PasswordHash = passwordHasher.Hash("ChangeMe123!"),
+                PasswordHash = passwordHasher.Hash(bootstrapPassword),
                 IsActive = true,
                 MustChangePassword = true
             };

@@ -1,16 +1,16 @@
 using CSM.Application.Projects.ProjectMilestones;
 using CSM.Application.Projects.ProjectMilestones.Dtos;
+using CSM.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 
 namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/projectmilestones")]
-[Authorize]
-public class ProjectMilestonesController : ControllerBase
+[Authorize(Policy = AppPolicies.ProjectManagement)]
+public class ProjectMilestonesController : CurrentUserControllerBase
 {
     private readonly IProjectMilestoneService _service;
 
@@ -26,7 +26,7 @@ public class ProjectMilestonesController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetAllAsync(
-            GetCurrentUserId(),
+            CurrentUserId,
             projectId,
             cancellationToken);
 
@@ -39,7 +39,7 @@ public class ProjectMilestonesController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByIdAsync(
-            Guid.Empty,
+            CurrentUserId,
             id,
             cancellationToken);
 
@@ -55,7 +55,7 @@ public class ProjectMilestonesController : ControllerBase
         CancellationToken cancellationToken)
     {
         var created = await _service.CreateAsync(
-            Guid.Empty,
+            CurrentUserId,
             request,
             cancellationToken);
 
@@ -65,13 +65,4 @@ public class ProjectMilestonesController : ControllerBase
             created);
     }
 
-    private Guid GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(value, out var userId))
-            throw new Exception("Invalid authenticated user.");
-
-        return userId;
-    }
 }
