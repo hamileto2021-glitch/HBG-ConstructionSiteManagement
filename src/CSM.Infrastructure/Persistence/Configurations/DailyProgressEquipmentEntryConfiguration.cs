@@ -25,5 +25,7 @@ public class DailyProgressEquipmentEntryConfiguration
                .WithMany(x => x.EquipmentEntries)
                .HasForeignKey(x => x.DailyProgressTaskEntryId)
                .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(x => !x.DailyProgressTaskEntry.IsDeleted);
     }
 }

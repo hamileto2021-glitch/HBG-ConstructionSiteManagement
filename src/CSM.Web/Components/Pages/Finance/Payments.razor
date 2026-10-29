@@ -5,6 +5,7 @@
 @using CSM.Web.Services
 
 @inject IFinanceService FinanceService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Payments</PageTitle>
@@ -28,11 +29,21 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick="CreatePayment">
-                + Record Payment
-            </button>
+            @if (_canManagePayments)
+            {
+                <button class="btn btn-primary"
+                        @onclick="CreatePayment">
+                    + Record Payment
+                </button>
+            }
         </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-warning" role="alert">
+                @_error
+            </div>
+        }
 
         <div class="card shadow-sm border-0">
             <div class="table-responsive">
@@ -117,6 +128,8 @@ else
 
     private bool _loading = true;
     private bool _loaded;
+    private bool _canManagePayments;
+    private string? _error;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -125,14 +138,36 @@ else
 
         _loaded = true;
 
-        var items = await FinanceService.GetPaymentsAsync();
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canManagePayments =
+                permissions.Contains("Finance_Payment_Manage");
 
-        _payments.Clear();
-        _payments.AddRange(items);
+            if (!permissions.Contains("Finance_Payment_View"))
+            {
+                _error = "You do not have permission to view payments.";
+                return;
+            }
 
-        _loading = false;
-
-        StateHasChanged();
+            var items = await FinanceService.GetPaymentsAsync();
+            _payments.Clear();
+            _payments.AddRange(items);
+        }
+        catch (HttpRequestException ex) when (
+            ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _error = "You do not have access to these payments.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Payments could not be loaded right now. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void Open(Guid id)

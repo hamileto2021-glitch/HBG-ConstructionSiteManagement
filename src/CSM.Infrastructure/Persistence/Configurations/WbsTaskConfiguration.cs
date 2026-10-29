@@ -38,6 +38,8 @@ public sealed class WbsTaskConfiguration
             .HasForeignKey(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasQueryFilter(x => !x.Project.IsDeleted);
+
         builder.HasOne(x => x.Milestone)
             .WithMany()
             .HasForeignKey(x => x.MilestoneId)

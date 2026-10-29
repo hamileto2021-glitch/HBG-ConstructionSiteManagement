@@ -17,7 +17,7 @@ public sealed class UserPreferencesService
         _authService = authService;
     }
 
-    public async Task<UserPreferencesResponse?> GetAsync(
+    public async Task<UserPreferencesResponse> GetAsync(
         CancellationToken cancellationToken = default)
     {
         var client = await CreateAuthenticatedClientAsync();
@@ -26,13 +26,12 @@ public sealed class UserPreferencesService
             "user/preferences",
             cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            return null;
-        }
+        response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<UserPreferencesResponse>(
-            cancellationToken);
+                   cancellationToken)
+               ?? throw new InvalidOperationException(
+                   "The user preferences API returned an empty response.");
     }
 
     public async Task<UserPreferencesResponse> UpdateAsync(

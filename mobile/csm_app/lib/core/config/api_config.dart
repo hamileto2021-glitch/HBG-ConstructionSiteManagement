@@ -35,7 +35,7 @@ class ApiConfig {
 
     return Uri(
       scheme: 'http',
-      host: kIsWeb ? 'localhost' : '192.168.1.16',
+      host: kIsWeb ? '127.0.0.1' : '192.168.1.16',
       port: port,
       path: 'api',
     ).toString();

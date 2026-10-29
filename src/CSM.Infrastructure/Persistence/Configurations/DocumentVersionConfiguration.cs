@@ -38,5 +38,7 @@ public sealed class DocumentVersionConfiguration
             .WithMany(x => x.Versions)
             .HasForeignKey(x => x.DocumentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(x => !x.Document.IsDeleted);
     }
 }

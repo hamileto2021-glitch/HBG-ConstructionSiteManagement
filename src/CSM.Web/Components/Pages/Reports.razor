@@ -41,7 +41,7 @@
                     <select class="form-select"
                             @bind="_scope"
                             @bind:after="ScopeChangedAsync">
-                        <option value="All">All records in my reporting scope</option>
+                        <option value="All">Company + all sites</option>
                         <option value="Company">Company level (not tied to a site)</option>
                         <option value="Site">Site</option>
                     </select>
@@ -140,7 +140,7 @@
 
                         @Tile("Contract Value",
                             Money(Executive.TotalContractValue),
-                            hint: "Projects in your reporting scope",
+                            hint: "All projects",
                             col: "col-md-6 col-xl-3")
 
                         @Tile("Budget",
@@ -276,103 +276,127 @@
                 }
                 else if (Summary is not null)
                 {
-                    <div class="row g-3">
+                    <h6 class="fw-bold mb-1">1. Budget</h6>
+                    <div class="text-muted small mb-3">
+                        Remaining = budget - expenses. Expenses = approved and paid expense
+                        records + paid payroll + petty cash out.
+                    </div>
+
+                    <div class="row g-3 mb-4">
 
                         @Tile("Budget",
                             Money(Summary.TotalBudget),
-                            hint: Split(f => f.TotalBudget, "Approved, active and closed budgets"))
+                            hint: Split(f => f.TotalBudget, "Approved, active and closed budgets"),
+                            col: "col-md-6 col-xl-3")
 
-                        @Tile("Total Expenses",
+                        @Tile("Expenses",
                             Money(Summary.TotalExpenses),
                             css: "text-danger",
-                            hint: Split(f => f.TotalExpenses, "Approved and paid, including tax"))
+                            hint: "Expense records + paid payroll + petty cash out",
+                            col: "col-md-6 col-xl-3")
 
-                        @UsedTile(Summary.TotalBudget,
-                            Summary.TotalExpenses,
-                            "col-md-6 col-xl-4",
-                            reportedPercent: Summary.BudgetUtilizationPercent)
+                        @Tile("Remaining",
+                            Money(Summary.RemainingBudget),
+                            css: BalanceClass(Summary.RemainingBudget),
+                            hint: "Negative means over budget",
+                            col: "col-md-6 col-xl-3")
+
+                        @UsedTile(Summary.TotalBudget, Summary.TotalExpenses, "col-md-6 col-xl-3")
+
+                    </div>
+
+                    <div class="small text-muted mb-4">
+                        <strong>Expenses</strong> @Money(Summary.TotalExpenses) =
+                        expense records @Money(Summary.ExpenseRecords) +
+                        paid payroll @Money(Summary.PayrollPaid) +
+                        petty cash out @Money(Summary.PettyCashOut)
+                    </div>
+
+                    <h6 class="fw-bold mb-1">2. Invoices</h6>
+                    <div class="text-muted small mb-3">
+                        Worked out invoice by invoice: total minus the completed payments on it.
+                    </div>
+
+                    <div class="row g-3 mb-4">
 
                         @Tile("Invoiced to Clients",
-                            Money(Summary.TotalInvoices),
-                            hint: "Issued client invoices; drafts and cancelled excluded")
+                            Money(Summary.TotalInvoiced),
+                            hint: "Issued client invoices",
+                            col: "col-md-6 col-xl-4")
 
-                        @Tile("Outstanding Receivables",
+                        @Tile("Clients Owe Us",
                             Money(Summary.OutstandingReceivables),
                             css: "text-warning",
-                            hint: "Unpaid balance, worked out invoice by invoice")
+                            hint: "Unpaid balance of client invoices",
+                            col: "col-md-6 col-xl-4")
 
-                        @Tile("Outstanding Payables",
+                        @Tile("We Owe Vendors",
                             Money(Summary.OutstandingPayables),
                             css: "text-warning",
-                            hint: "Unpaid vendor bills, worked out bill by bill")
+                            hint: "Unpaid balance of vendor bills",
+                            col: "col-md-6 col-xl-4")
 
-                        @Tile("Cash In",
-                            Money(Summary.TotalCompletedPayments),
+                    </div>
+
+                    <h6 class="fw-bold mb-1">3. Petty Cash</h6>
+                    <div class="text-muted small mb-3">
+                        Opening balance + cash in - cash out = balance
+                        (@Summary.ActivePettyCashAccounts.ToString("N0") active accounts).
+                        Top-ups move money between your own accounts.
+                    </div>
+
+                    <div class="row g-3">
+
+                        @Tile("Opening Balance",
+                            Money(Summary.PettyCashOpeningBalance),
+                            hint: "Money the accounts were opened with",
+                            col: "col-md-6 col-xl-3")
+
+                        @Tile("+ Cash In",
+                            Money(Summary.PettyCashIn),
                             css: "text-success",
-                            hint: "Completed incoming payments")
+                            hint: "Top-ups recorded",
+                            col: "col-md-6 col-xl-3")
 
-                        @Tile("Pending Cash In",
-                            Money(Summary.PendingCashIn),
-                            css: Summary.PendingCashIn > 0m ? "text-warning" : "",
-                            hint: "Recorded but not completed, so not counted as cash in")
-
-                        @Tile("Total Expenditure",
-                            Money(Summary.TotalExpenditure),
+                        @Tile("- Cash Out",
+                            Money(Summary.PettyCashOut),
                             css: "text-danger",
-                            hint: "Outgoing payments plus petty cash spent")
+                            hint: "Spending recorded",
+                            col: "col-md-6 col-xl-3")
 
-                        @Tile("Pending Cash Out",
-                            Money(Summary.PendingCashOut),
-                            css: Summary.PendingCashOut > 0m ? "text-warning" : "",
-                            hint: "Recorded but not completed, so not counted as expenditure")
-
-                        @Tile("Cash Balance",
-                            Money(Summary.Balance),
-                            css: BalanceClass(Summary.Balance),
-                            hint: "Cash in minus total expenditure")
-
-                        @Tile("Net Cash Flow",
-                            Money(Summary.NetCashFlow),
-                            css: BalanceClass(Summary.NetCashFlow),
-                            hint: "Payments in minus payments out, plus petty cash movement")
-
-                        @Tile("Petty Cash Balance",
+                        @Tile("= Balance",
                             Money(Summary.PettyCashBalance),
-                            hint: "All petty cash accounts")
-
-                        @Tile("Petty Cash In",
-                            Money(PettyCashIn(Summary)),
-                            css: "text-success",
-                            hint: "Top-ups plus the money accounts were opened with")
-
-                        @Tile("Petty Cash Spent",
-                            Money(Summary.TotalPettyCashOut),
-                            css: "text-danger")
-
-                        @Tile("Active Petty Cash Accounts",
-                            Summary.ActivePettyCashAccounts.ToString("N0"))
+                            hint: "What the accounts hold now",
+                            col: "col-md-6 col-xl-3")
 
                     </div>
 
                     @if (HasPettyCashGap(Summary))
                     {
                         <div class="alert alert-warning mt-3 mb-0">
-                            <strong>Petty cash does not reconcile.</strong>
-                            The accounts hold @Money(Summary.PettyCashBalance), but cash in
-                            (@Money(PettyCashIn(Summary))) minus cash out
-                            (@Money(Summary.TotalPettyCashOut)) is
-                            @Money(PettyCashIn(Summary) - Summary.TotalPettyCashOut).
-                            @Money(-PettyCashGap(Summary)) of money left an account without
-                            a CashOut transaction, for example a balance changed directly.
-                            Net Cash Flow is overstated until that is corrected.
+                            <strong>Petty cash does not add up.</strong>
+                            @Money(-PettyCashGap(Summary)) left an account without a cash out
+                            transaction, for example a balance changed directly.
                         </div>
                     }
+
+                    <details class="mt-4">
+                        <summary class="fw-semibold">How these numbers are calculated</summary>
+                        <ul class="small mt-2 mb-0">
+                            <li><strong>Budget</strong>: approved, active and closed budgets.</li>
+                            <li><strong>Expenses</strong> = approved and paid expense records (including tax) + paid payroll (completed payments linked to a payroll record) + petty cash out. Payments on vendor bills and other payments are not expenses. Draft, submitted, rejected and cancelled expenses, and pending payments, are not counted.</li>
+                            <li><strong>Counted twice</strong>: payroll and petty cash are not linked to expense records, so a cost entered as an expense and also as payroll or petty cash is counted twice.</li>
+                            <li><strong>Invoices</strong>: issued invoices only. For each one, the unpaid balance is its total minus the completed payments on it (never below zero); the balances are then added up.</li>
+                            <li><strong>Petty cash</strong>: the opening balance is what an account was opened with, worked out as balance - cash in + cash out.</li>
+                            <li><strong>Where a record belongs</strong>: a payment belongs to its invoice's site, or to its own site when it has no invoice. Company level means records with no site.</li>
+                        </ul>
+                    </details>
                 }
 
             </div>
         </div>
 
-        <!-- Breakdown includes the site/company records returned for this user's reporting scope. -->
+        <!-- Company breakdown: head office + every site, with a total that adds up -->
         @if (_scope == "All" && _all is not null)
         {
             <div class="card shadow-sm mb-4">
@@ -384,10 +408,8 @@
                                 Breakdown by Site
                             </h5>
                             <small>
-                                Company-level figures where available, accessible
-                                construction sites, and historical activity included
-                                by your reporting scope. The total matches the
-                                financial report above.
+                                Head office and each construction site. The
+                                total row is the company-wide figure above.
                             </small>
                         </div>
                     </div>
@@ -404,14 +426,9 @@
                                     <th class="text-end">Expenses</th>
                                     <th class="text-end">Used</th>
                                     <th class="text-end">Invoiced</th>
-                                    <th class="text-end">Receivables</th>
-                                    <th class="text-end">Payables</th>
-                                    <th class="text-end">Cash In</th>
-                                    <th class="text-end">Expenditure</th>
-                                    <th class="text-end">Balance</th>
+                                    <th class="text-end">Clients Owe</th>
+                                    <th class="text-end">We Owe</th>
                                     <th class="text-end">Petty Cash</th>
-                                    <th class="text-end">Petty Spent</th>
-                                    <th class="text-end">Accounts</th>
                                 </tr>
                             </thead>
 
@@ -431,9 +448,8 @@
                     @if (HasOtherRow)
                     {
                         <div class="text-muted small">
-                            "Other" is activity included in your reporting scope
-                            that is not associated with a currently listed site.
-                            It is included in the total.
+                            "Other" is activity recorded against sites that no
+                            longer exist. It is included in the total.
                         </div>
                     }
                 </div>
@@ -473,7 +489,7 @@
 
 @code {
 
-    // All-scope data (kept while the user looks at a site).
+    // Company scope data (kept while the user looks at a site).
     private ExecutiveDashboardResponse? _allExecutive;
     private AllFinancialSummaryResponse? _all;
     private FinancialSummaryResponse? _companyLevelSummary;
@@ -495,8 +511,10 @@
     private string? _executiveError;
     private string? _financialError;
 
-    // What the two main sections show for the current scope.
-    // "All"     records included by the reporting service's access scope
+    // What the two main sections show, for the current scope. For the company
+    // scope this is the company-wide total (head office + all sites), not the
+    // head-office-only record set.
+    // "All"     company + every site (the combined total)
     // "Company" company-level records only, not tied to any site
     // "Site"    one construction site
     private ExecutiveDashboardResponse? Executive
@@ -533,24 +551,24 @@
     }
 
     private string CurrentScopeLabel
-        => _scope == "All" ? "All accessible records"
+        => _scope == "All" ? "Company + all sites"
          : _scope == "Company" ? "Company level"
          : _sites.FirstOrDefault(x => x.Id.ToString() == _selectedSiteId)?.Name
            ?? "Select a construction site";
 
     private string ScopeIntro
-        => _scope == "All" ? "Management and financial reports for records included in your reporting access."
+        => _scope == "All" ? "Company-wide management reports and financial analytics."
          : _scope == "Company" ? "Company-level financial records that are not tied to a construction site."
          : $"{CurrentScopeLabel} management reports and financial analytics.";
 
     private string ExecutiveSubtitle
         => _scope == "All"
-            ? "Management overview for sites and projects in your reporting scope"
+            ? "Company-wide management overview"
             : $"{CurrentScopeLabel} management overview";
 
     private string FinancialSubtitle
-        => _scope == "All" ? "Financial position for company and site records included in your reporting access"
-         : _scope == "Company" ? "Company-level financial records not tied to a construction site"
+        => _scope == "All" ? "Company-wide financial position (company level and all sites)"
+         : _scope == "Company" ? "Budgets, expenses and payments not tied to a construction site"
          : $"{CurrentScopeLabel} financial position";
 
     protected override async Task OnInitializedAsync()
@@ -665,7 +683,7 @@
             _executiveError = FriendlyError(ex);
         }
 
-        // One call returns company, accessible-site, and in-scope total figures.
+        // One call gives head office, every site and the company total.
         try
         {
             _all = await ReportingService.GetAllFinancialSummariesAsync();
@@ -735,16 +753,10 @@
         string Code,
         decimal Budget,
         decimal Expenses,
-        decimal BudgetUtilizationPercent,
         decimal Invoiced,
         decimal Receivables,
         decimal Payables,
-        decimal CashIn,
-        decimal Expenditure,
-        decimal Balance,
-        decimal PettyBalance,
-        decimal PettySpent,
-        int Accounts);
+        decimal PettyBalance);
 
     private static Row ToRow(string name, string code, FinancialSummaryResponse f)
         => new(
@@ -752,29 +764,23 @@
             code,
             f.TotalBudget,
             f.TotalExpenses,
-            f.BudgetUtilizationPercent,
-            f.TotalInvoices,
+            f.TotalInvoiced,
             f.OutstandingReceivables,
             f.OutstandingPayables,
-            f.TotalCompletedPayments,
-            f.TotalExpenditure,
-            f.Balance,
-            f.PettyCashBalance,
-            f.TotalPettyCashOut,
-            f.ActivePettyCashAccounts);
+            f.PettyCashBalance);
 
     private Row TotalRow
         => ToRow("Total", string.Empty, _all!.Total);
 
-    // Company-level records first, then each visible site, then residual
-    // activity included by the service but not represented by a visible site.
+    // Head office first, then each site, then "Other" when the total holds
+    // activity that belongs to no listed site (sites that were deleted).
     private List<Row> BreakdownRows
     {
         get
         {
             var rows = new List<Row>
             {
-                ToRow("Company level (not tied to a site)", string.Empty, _all!.Company)
+                ToRow("Head office (company level)", string.Empty, _all!.Company)
             };
 
             rows.AddRange(_all.Sites.Select(
@@ -805,36 +811,24 @@
 
             var total = TotalRow;
 
-            var otherBudget = total.Budget - listed.Sum(r => r.Budget);
-            var otherExpenses = total.Expenses - listed.Sum(r => r.Expenses);
+            decimal Gap(Func<Row, decimal> pick) => pick(total) - listed.Sum(pick);
 
             var other = new Row(
-                "Other (unlisted sites)",
+                "Other (deleted sites)",
                 string.Empty,
-                otherBudget,
-                otherExpenses,
-                UsedPercent(otherBudget, otherExpenses),
-                total.Invoiced - listed.Sum(r => r.Invoiced),
-                total.Receivables - listed.Sum(r => r.Receivables),
-                total.Payables - listed.Sum(r => r.Payables),
-                total.CashIn - listed.Sum(r => r.CashIn),
-                total.Expenditure - listed.Sum(r => r.Expenditure),
-                total.Balance - listed.Sum(r => r.Balance),
-                total.PettyBalance - listed.Sum(r => r.PettyBalance),
-                total.PettySpent - listed.Sum(r => r.PettySpent),
-                total.Accounts - listed.Sum(r => r.Accounts));
+                Gap(r => r.Budget),
+                Gap(r => r.Expenses),
+                Gap(r => r.Invoiced),
+                Gap(r => r.Receivables),
+                Gap(r => r.Payables),
+                Gap(r => r.PettyBalance));
 
-            var isEmpty =
-                Math.Abs(other.Budget) < 0.005m &&
-                Math.Abs(other.Expenses) < 0.005m &&
-                Math.Abs(other.Invoiced) < 0.005m &&
-                Math.Abs(other.Receivables) < 0.005m &&
-                Math.Abs(other.Payables) < 0.005m &&
-                Math.Abs(other.CashIn) < 0.005m &&
-                Math.Abs(other.Expenditure) < 0.005m &&
-                Math.Abs(other.PettyBalance) < 0.005m &&
-                Math.Abs(other.PettySpent) < 0.005m &&
-                other.Accounts == 0;
+            var isEmpty = new[]
+                {
+                    other.Budget, other.Expenses, other.Invoiced,
+                    other.Receivables, other.Payables, other.PettyBalance
+                }
+                .All(v => Math.Abs(v) < 0.005m);
 
             return isEmpty ? null : other;
         }
@@ -846,23 +840,22 @@
 
     private static string Money(decimal value) => value.ToString("N2");
 
-    // Net cash flow and balance differ only by the petty cash money in, so
-    // the response already carries it: NetCashFlow - Balance.
-    private static decimal PettyCashIn(FinancialSummaryResponse f)
-        => f.NetCashFlow - f.Balance;
 
-    // What the petty cash accounts hold, minus what their transactions explain.
+    // What the accounts hold, minus what opening + cash in - cash out allow.
+    // Zero when the figures add up.
     private static decimal PettyCashGap(FinancialSummaryResponse f)
-        => f.PettyCashBalance - (PettyCashIn(f) - f.TotalPettyCashOut);
+        => f.PettyCashBalance
+           - (f.PettyCashOpeningBalance + f.PettyCashIn - f.PettyCashOut);
 
     private static bool HasPettyCashGap(FinancialSummaryResponse f)
         => Math.Abs(PettyCashGap(f)) >= 0.005m;
 
-    // Under the combined view, show the split between company-level and
-    // other in-scope records. This may include historical activity.
+
+    // Under the combined view, show how a figure splits between the
+    // company-level (non-site) records and the sites.
     private string Split(Func<FinancialSummaryResponse, decimal> pick, string fallback)
         => _scope == "All" && _all is not null
-            ? $"Company level {Money(pick(_all.Company))} + other in-scope records {Money(pick(_all.Total) - pick(_all.Company))}"
+            ? $"Company level {Money(pick(_all.Company))} + sites {Money(pick(_all.Total) - pick(_all.Company))}"
             : fallback;
 
     private static string SitesText(ExecutiveDashboardResponse e)
@@ -872,7 +865,7 @@
         => value < 0 ? "text-danger" : "text-success";
 
     private static decimal UsedPercent(decimal budget, decimal expenses)
-        => budget == 0m ? 0m : Math.Round(expenses / budget * 100m, 2);
+        => budget <= 0m ? 0m : Math.Round(expenses / budget * 100m, 1);
 
     // Same thresholds as the budget alerts: 80% warning, 100% limit reached.
     private static string UsedClass(decimal percent)
@@ -899,26 +892,19 @@
             </div>
         </div>;
 
-    private RenderFragment UsedTile(
-        decimal budget,
-        decimal expenses,
-        string col,
-        decimal? reportedPercent = null)
+    private RenderFragment UsedTile(decimal budget, decimal expenses, string col)
     {
-        var percent = reportedPercent ?? UsedPercent(budget, expenses);
+        var percent = UsedPercent(budget, expenses);
 
         return @<div class="@col">
             <div class="card h-100 border">
                 <div class="card-body">
                     <div class="text-muted small">Budget Used</div>
-                    <div class="fs-5 fw-bold">@percent.ToString("0.00")%</div>
+                    <div class="fs-5 fw-bold">@percent.ToString("0.#")%</div>
                     <div class="progress mt-2" style="height: 8px;">
                         <div class="progress-bar @UsedClass(percent)"
                              role="progressbar"
-                             aria-valuenow="@percent.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
-                             aria-valuemin="0"
-                             aria-valuemax="100"
-                             style="width: @(Math.Clamp(percent, 0m, 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))%">
+                             style="width: @(Math.Min(percent, 100m).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%">
                         </div>
                     </div>
                     <div class="text-muted small mt-1">
@@ -931,17 +917,17 @@
 
     private RenderFragment DataRow(Row r, bool bold = false)
     {
+        var used = UsedPercent(r.Budget, r.Expenses);
+
         return @<tr class="@(bold ? "table-light fw-bold" : "")">
             <td class="@(bold ? "" : "fw-semibold")">@r.Name</td>
             <td>@r.Code</td>
             <td class="text-end">@Money(r.Budget)</td>
             <td class="text-end">@Money(r.Expenses)</td>
             <td class="text-end">
-                @if (r.Budget != 0m)
+                @if (r.Budget > 0m)
                 {
-                    <span class="badge @UsedClass(r.BudgetUtilizationPercent)">
-                        @r.BudgetUtilizationPercent.ToString("0.00")%
-                    </span>
+                    <span class="badge @UsedClass(used)">@used.ToString("0.#")%</span>
                 }
                 else
                 {
@@ -951,12 +937,7 @@
             <td class="text-end">@Money(r.Invoiced)</td>
             <td class="text-end">@Money(r.Receivables)</td>
             <td class="text-end">@Money(r.Payables)</td>
-            <td class="text-end text-success">@Money(r.CashIn)</td>
-            <td class="text-end text-danger">@Money(r.Expenditure)</td>
-            <td class="text-end @BalanceClass(r.Balance)">@Money(r.Balance)</td>
             <td class="text-end">@Money(r.PettyBalance)</td>
-            <td class="text-end text-danger">@Money(r.PettySpent)</td>
-            <td class="text-end">@r.Accounts</td>
         </tr>;
     }
 

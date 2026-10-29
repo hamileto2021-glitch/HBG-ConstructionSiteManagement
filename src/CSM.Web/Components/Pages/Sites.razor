@@ -30,10 +30,12 @@ else
                     <i class="bi bi-arrow-left" aria-hidden="true"></i>
                     <span>Back</span>
                 </button>
-                <button type="button" class="btn sites-create-button" @onclick="NewSite">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                    <span>New site</span>
-                </button>
+                <PermissionView AnyOf="@SiteManagePermission">
+                    <button type="button" class="btn sites-create-button" @onclick="NewSite">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        <span>New site</span>
+                    </button>
+                </PermissionView>
             </div>
         </header>
 
@@ -88,10 +90,12 @@ else
                     : "Try changing your search or selecting a different status.")</p>
                 @if (_sites.Count == 0)
                 {
-                    <button type="button" class="btn sites-create-button" @onclick="NewSite">
-                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                        <span>Create a site</span>
-                    </button>
+                    <PermissionView AnyOf="@SiteManagePermission">
+                        <button type="button" class="btn sites-create-button" @onclick="NewSite">
+                            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                            <span>Create a site</span>
+                        </button>
+                    </PermissionView>
                 }
             </section>
         }
@@ -138,13 +142,15 @@ else
                                 <i class="bi bi-arrow-up-right-square" aria-hidden="true"></i>
                                 <span>View site</span>
                             </button>
-                            <button type="button"
-                                    class="btn site-edit-button"
-                                    aria-label="@($"Edit {site.Name}")"
-                                    @onclick="() => EditSite(site.Id)">
-                                <i class="bi bi-pencil" aria-hidden="true"></i>
-                                <span>Edit</span>
-                            </button>
+                            <PermissionView AnyOf="@SiteManagePermission">
+                                <button type="button"
+                                        class="btn site-edit-button"
+                                        aria-label="@($"Edit {site.Name}")"
+                                        @onclick="() => EditSite(site.Id)">
+                                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                                    <span>Edit</span>
+                                </button>
+                            </PermissionView>
                         </footer>
                     </article>
                 }
@@ -154,6 +160,9 @@ else
 }
 
 @code {
+    private static readonly string[] SiteManagePermission =
+        ["Sites_Manage"];
+
     private List<SiteResponse> _sites = [];
     private bool _loading = true;
     private bool _loaded;

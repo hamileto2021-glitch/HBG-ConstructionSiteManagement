@@ -8,6 +8,7 @@
 @inject CSM.Web.Services.INotificationApiService NotificationService
 @inject CSM.Web.Services.IAuthService AuthService
 @inject NavigationManager NavigationManager
+@inject ILogger<NavMenu> Logger
 @implements IDisposable
 
 <button type="button"
@@ -33,9 +34,19 @@
 
         <nav class="@(_permissionsLoaded ? "" : "nav-loading")" aria-label="Main navigation">
 
-            <div class="section-title">
-                Construction Management
-            </div>
+            @if (HasAnyPermission(
+                "Projects_View",
+                "Sites_View",
+                "Sites_Manage",
+                "Procurement_MaterialRequest_View",
+                "Procurement_PurchaseOrder_View",
+                "Procurement_Inventory_View",
+                "Equipment_View"))
+            {
+                <div class="section-title">
+                    Construction Management
+                </div>
+            }
 
             <!-- Dashboard -->
             <div class="nav-item">
@@ -60,10 +71,12 @@
                 </div>
             }
 
+
+
             <!-- Procurement -->
-           @if (!_isSupervisor &&
-                (HasPermission("Procurement_MaterialRequest_View") ||
-                 HasPermission("Procurement_PurchaseOrder_View")))
+            @if (HasPermission("Procurement_MaterialRequest_View") ||
+                 HasPermission("Procurement_PurchaseOrder_View") ||
+                 HasPermission("Procurement_Vendor_View"))
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/procurement">
@@ -85,8 +98,8 @@
             }
 
             <!-- Equipment -->
-           @if (!_isSupervisor &&
-                HasPermission("Procurement_Inventory_View"))
+            @if (HasPermission("Equipment_View") ||
+                 HasPermission("Procurement_Inventory_View"))
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/equipment">
@@ -96,12 +109,30 @@
                 </div>
             }
 
-            <!-- Administration -->
-            <hr class="my-2" />
+            @if (HasAnyPermission(
+                "Users_View",
+                "Audit_View",
+                "HRM_Employee_View",
+                "HRM_Contractor_View",
+                "HRM_Payroll_View",
+                "HRM_Attendance_View",
+                "HRM_Leave_View",
+                "Finance_Budget_View",
+                "Finance_Expense_View",
+                "Finance_Invoice_View",
+                "Finance_Payment_View",
+                "Finance_PettyCash_View",
+                "Compliance_View",
+                "Reports_View",
+                "Reports_FinancialSummary_View",
+                "Notifications_View"))
+            {
+                <hr class="my-2" />
 
-            <div class="section-title">
-                Administration
-            </div>
+                <div class="section-title">
+                    Administration
+                </div>
+            }
 
             @if (HasPermission("Users_View"))
             {
@@ -123,7 +154,7 @@
                 </div>
             }
 
-            @if (HasPermission("Users_View"))
+            @if (HasPermission("Audit_View"))
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/users/audit">
@@ -228,8 +259,6 @@
     private bool _rememberNavigation;
     private bool _navigationPreferenceLoaded;
     private string? _navigationStorageKey;
-    private bool _roleCheckCompleted;
-    private bool _isSupervisor;
     private bool _signingOut;
 
     [Parameter]
@@ -247,10 +276,11 @@
             _unreadNotificationCount =
                 await NotificationService.GetUnreadCountAsync();
         }
-        catch
-        {
-            _unreadNotificationCount = 0;
-        }
+            catch (Exception ex)
+            {
+                _unreadNotificationCount = 0;
+                Logger.LogWarning(ex, "Unable to load the unread notification count for the navigation menu.");
+            }
 
         try
         {
@@ -268,28 +298,10 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _roleCheckCompleted)
-            return;
-
-        _roleCheckCompleted = true;
-
-        try
+        if (firstRender)
         {
-            var userScope = await AuthService.GetCurrentUserScopeAsync();
-
-            _isSupervisor = userScope.Roles.Any(role =>
-                string.Equals(
-                    role,
-                    "Supervisor",
-                    StringComparison.OrdinalIgnoreCase));
+            await InitializeRememberNavigationAsync();
         }
-        catch
-        {
-            _isSupervisor = false;
-        }
-
-        await InitializeRememberNavigationAsync();
-        await InvokeAsync(StateHasChanged);
     }
 
     private async Task InitializeRememberNavigationAsync()
@@ -442,10 +454,10 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
-        catch
-        {
-            // Keep the last known count and try again on the next tick.
-        }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Unable to refresh the unread notification count; retaining the last known value.");
+            }
     }
 
     public void Dispose()
@@ -458,6 +470,11 @@
     private bool HasPermission(string permission)
     {
         return _permissions.Contains(permission);
+    }
+
+    private bool HasAnyPermission(params string[] permissions)
+    {
+        return permissions.Any(HasPermission);
     }
 
     private Task CloseNavAsync()

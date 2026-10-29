@@ -11,6 +11,7 @@
 @inject IFinanceService FinanceService
 @inject IVendorService VendorService
 @inject IPayrollService PayrollService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Record Payment</PageTitle>
@@ -20,6 +21,17 @@
     <div class="container py-5 text-center">
         <div class="spinner-border text-primary"></div>
         <p class="mt-3">Loading payment information...</p>
+    </div>
+}
+else if (!_canManagePayments)
+{
+    <div class="container py-4">
+        <div class="alert alert-warning" role="alert">
+            You do not have permission to create or manage payments.
+        </div>
+        <button class="btn btn-outline-secondary" @onclick="Back">
+            Back to Finance
+        </button>
     </div>
 }
 else
@@ -244,6 +256,7 @@ else
 
     private string? _error;
     private bool _loading = true;
+    private bool _canManagePayments;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -252,6 +265,13 @@ else
 
         try
         {
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canManagePayments =
+                permissions.Contains("Finance_Payment_Manage");
+
+            if (!_canManagePayments)
+                return;
+
             // Read invoiceId from query string
             var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
             var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);

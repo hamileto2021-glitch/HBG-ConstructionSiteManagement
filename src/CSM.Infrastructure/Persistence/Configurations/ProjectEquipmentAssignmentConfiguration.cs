@@ -34,7 +34,7 @@ public sealed class ProjectEquipmentAssignmentConfiguration
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<Project>()
-            .WithMany()
+            .WithMany(x => x.EquipmentAssignments)
             .HasForeignKey(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
     }

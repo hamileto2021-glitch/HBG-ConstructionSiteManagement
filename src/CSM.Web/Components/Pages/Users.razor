@@ -27,10 +27,12 @@
     </div>
 
     <div class="col-md-5 text-end">
-        <button class="btn btn-primary"
-                @onclick="NewUser">
-            + New User
-        </button>
+        <PermissionView AnyOf="@UserCreatePermission">
+            <button class="btn btn-primary"
+                    @onclick="NewUser">
+                + New User
+            </button>
+        </PermissionView>
     </div>
 </div>
 
@@ -127,29 +129,37 @@ else
 
                 <td class="text-end">
 
-                    <button class="btn btn-sm btn-outline-primary me-1"
-                            @onclick="() => Edit(user.Id)">
-                        Edit
-                    </button>
+                    <PermissionView AnyOf="@UserEditPermission">
+                        <button class="btn btn-sm btn-outline-primary me-1"
+                                @onclick="() => Edit(user.Id)">
+                            Edit
+                        </button>
+                    </PermissionView>
 
                     @if (user.IsActive)
                     {
-                        <button class="btn btn-sm btn-outline-danger me-1"
-                                @onclick="() => Deactivate(user.Id)">
-                            Disable
-                        </button>
+                        <PermissionView AnyOf="@UserEditPermission">
+                            <button class="btn btn-sm btn-outline-danger me-1"
+                                    @onclick="() => Deactivate(user.Id)">
+                                Disable
+                            </button>
+                        </PermissionView>
                     }
                     else
                     {
-                        <button class="btn btn-sm btn-outline-success me-1"
-                                @onclick="() => Activate(user.Id)">
-                            Enable
-                        </button>
+                        <PermissionView AnyOf="@UserEditPermission">
+                            <button class="btn btn-sm btn-outline-success me-1"
+                                    @onclick="() => Activate(user.Id)">
+                                Enable
+                            </button>
+                        </PermissionView>
 
-                        <button class="btn btn-sm btn-danger"
-                                @onclick="() => ConfirmDelete(user.Id)">
-                            Delete
-                        </button>
+                        <PermissionView AnyOf="@UserDeletePermission">
+                            <button class="btn btn-sm btn-danger"
+                                    @onclick="() => ConfirmDelete(user.Id)">
+                                Delete
+                            </button>
+                        </PermissionView>
                     }
 
                 </td>
@@ -183,10 +193,12 @@ else
                         Cancel
                     </button>
 
-                    <button class="btn btn-danger"
-                            @onclick="DeleteUser">
-                        Delete
-                    </button>
+                    <PermissionView AnyOf="@UserDeletePermission">
+                        <button class="btn btn-danger"
+                                @onclick="DeleteUser">
+                            Delete
+                        </button>
+                    </PermissionView>
                 </div>
 
             </div>
@@ -195,6 +207,13 @@ else
 }
 
 @code {
+    private static readonly string[] UserCreatePermission =
+        ["Users_Create"];
+    private static readonly string[] UserEditPermission =
+        ["Users_Edit"];
+    private static readonly string[] UserDeletePermission =
+        ["Users_Delete"];
+
 
     private List<UserModel> users = [];
 

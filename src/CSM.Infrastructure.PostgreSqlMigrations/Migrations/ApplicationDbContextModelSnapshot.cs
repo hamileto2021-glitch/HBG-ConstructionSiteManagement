@@ -5514,9 +5514,6 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ProjectId1")
-                        .HasColumnType("uuid");
-
                     b.Property<DateOnly?>("ReleasedDate")
                         .HasColumnType("date");
 
@@ -5531,8 +5528,6 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
                     b.HasIndex("EquipmentId");
 
                     b.HasIndex("ProjectId");
-
-                    b.HasIndex("ProjectId1");
 
                     b.ToTable("ProjectEquipmentAssignments", (string)null);
                 });
@@ -5590,9 +5585,6 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ProjectId1")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("ProjectPhaseId")
                         .HasColumnType("uuid");
 
@@ -5609,12 +5601,7 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("ProjectId1");
-
                     b.HasIndex("ProjectPhaseId");
-
-                    b.HasIndex("CompanyId", "MilestoneNumber")
-                        .IsUnique();
 
                     b.HasIndex("CompanyId", "ProjectId", "MilestoneNumber")
                         .IsUnique();
@@ -7231,14 +7218,10 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
                         .IsRequired();
 
                     b.HasOne("CSM.Domain.Entities.Projects.Project", null)
-                        .WithMany()
+                        .WithMany("EquipmentAssignments")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("CSM.Domain.Entities.Projects.Project", null)
-                        .WithMany("EquipmentAssignments")
-                        .HasForeignKey("ProjectId1");
 
                     b.Navigation("Equipment");
                 });
@@ -7246,14 +7229,10 @@ namespace CSM.Infrastructure.PostgreSqlMigrations.Migrations
             modelBuilder.Entity("CSM.Domain.Entities.Projects.Milestone", b =>
                 {
                     b.HasOne("CSM.Domain.Entities.Projects.Project", "Project")
-                        .WithMany()
+                        .WithMany("Milestones")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("CSM.Domain.Entities.Projects.Project", null)
-                        .WithMany("Milestones")
-                        .HasForeignKey("ProjectId1");
 
                     b.HasOne("CSM.Domain.Entities.Projects.ProjectPhase", "ProjectPhase")
                         .WithMany("Milestones")

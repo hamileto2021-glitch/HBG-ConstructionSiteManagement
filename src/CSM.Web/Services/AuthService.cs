@@ -53,7 +53,7 @@ private sealed class CurrentUserScopeResponse
         if (result is not null &&
             !string.IsNullOrWhiteSpace(result.AccessToken))
         {
-            await _sessionStorage.SetAsync("authToken", result.AccessToken);
+            await _sessionStorage.SetAsync("jwt", result.AccessToken);
             await _sessionStorage.SetAsync("refreshToken", result.RefreshToken);
             _companyId = result.CompanyId;
             _permissions = null;
@@ -91,7 +91,7 @@ private sealed class CurrentUserScopeResponse
         }
         finally
         {
-            await _sessionStorage.DeleteAsync("authToken");
+            await _sessionStorage.DeleteAsync("jwt");
             await _sessionStorage.DeleteAsync("refreshToken");
             _permissions = null;
             _companyId = null;
@@ -101,7 +101,7 @@ private sealed class CurrentUserScopeResponse
     // NEW METHOD
     public async Task<string?> GetTokenAsync()
     {
-        var token = await _sessionStorage.GetAsync<string>("authToken");
+        var token = await _sessionStorage.GetAsync<string>("jwt");
 
         if (!token.Success || string.IsNullOrWhiteSpace(token.Value))
             return null;

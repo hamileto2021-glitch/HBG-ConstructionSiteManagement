@@ -27,6 +27,15 @@ public static class AppRoles
 
     public static readonly string[] All =
     {
+        Administrator,
+        ProjectManager,
+        SiteEngineer,
+        Storekeeper,
+        ProcurementOfficer,
+        FinanceOfficer,
+        HrOfficer,
+        EquipmentManager,
+        SafetyOfficer,
         SuperAdmin,
         CompanyAdmin,
         SiteManager,

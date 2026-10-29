@@ -147,6 +147,60 @@ public DbSet<RoleGranularPermission> RoleGranularPermissions { get; set; }
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ApplicationDbContext).Assembly);
 
+        modelBuilder.Entity<NonConformanceReport>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.ConstructionSite.IsDeleted);
+        modelBuilder.Entity<QualityChecklist>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.ConstructionSite.IsDeleted);
+        modelBuilder.Entity<QualityChecklistItem>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.QualityChecklist.IsDeleted);
+        modelBuilder.Entity<SafetyObservation>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.ConstructionSite.IsDeleted);
+
+        modelBuilder.Entity<EquipmentFuelLog>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Equipment.IsDeleted);
+        modelBuilder.Entity<EquipmentHourLog>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Equipment.IsDeleted);
+        modelBuilder.Entity<EquipmentTimesheet>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Equipment.IsDeleted);
+
+        modelBuilder.Entity<PettyCashAccount>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Company.IsDeleted);
+        modelBuilder.Entity<PettyCashTransaction>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted &&
+                !x.PettyCashAccount.IsDeleted &&
+                !x.CreatedByUser.IsDeleted);
+        modelBuilder.Entity<SalaryStructure>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Employee.IsDeleted);
+        modelBuilder.Entity<LoginHistoryEntry>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.User.IsDeleted);
+
+        modelBuilder.Entity<RoleGranularPermission>()
+            .HasQueryFilter(x => !x.Role.IsDeleted);
+        modelBuilder.Entity<RolePermission>()
+            .HasQueryFilter(x => !x.Role.IsDeleted);
+        modelBuilder.Entity<UserAudit>()
+            .HasQueryFilter(x => !x.ActorUser.IsDeleted && !x.TargetUser.IsDeleted);
+        modelBuilder.Entity<UserPreferences>()
+            .HasQueryFilter(x => !x.IsDeleted && x.User != null && !x.User.IsDeleted);
+        modelBuilder.Entity<UserSiteAccess>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted && !x.User.IsDeleted && !x.Site.IsDeleted);
+
+        modelBuilder.Entity<CSM.Domain.Entities.Procurement.EquipmentAssignment>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted && !x.ConstructionSite.IsDeleted && !x.Equipment.IsDeleted);
+        modelBuilder.Entity<DailyProgressTaskEntry>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.DailyProgressLog.IsDeleted);
+        modelBuilder.Entity<DailySiteDiary>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Site.IsDeleted);
+        modelBuilder.Entity<Milestone>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Project.IsDeleted);
+        modelBuilder.Entity<ProjectDelay>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Project.IsDeleted);
+        modelBuilder.Entity<TaskResourceAssignment>()
+            .HasQueryFilter(x => !x.IsDeleted && !x.Employee.IsDeleted);
+
         if (Database.ProviderName ==
             "Npgsql.EntityFrameworkCore.PostgreSQL")
         {
@@ -367,8 +421,6 @@ private void ApplyAuditInformation()
     }
 }
 }
-
-
 
 
 

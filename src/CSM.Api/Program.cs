@@ -5,12 +5,20 @@ using CSM.Application.Finance.Invoices;
 using CSM.Application.Finance.Payments;
 using CSM.Infrastructure.Services;
 using CSM.Api.Controllers;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddDataProtection()
+    .PersistKeysToFileSystem(
+        new DirectoryInfo(
+            builder.Configuration["DataProtection:KeysPath"]
+            ?? "/app/DataProtection-Keys"));
 
 // Infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -97,7 +105,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() &&
+    builder.Configuration.GetValue<bool>(
+        "HttpsRedirection:Enabled", true))
 {
     app.UseHttpsRedirection();
 }

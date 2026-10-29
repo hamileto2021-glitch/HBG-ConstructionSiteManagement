@@ -5,6 +5,7 @@
 @using CSM.Web.Services
 
 @inject IFinanceService FinanceService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Company Payments</PageTitle>
@@ -13,6 +14,17 @@
 {
     <div class="container py-5 text-center">
         <div class="spinner-border text-success"></div>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="container py-4">
+        <div class="alert alert-warning" role="alert">
+            @_error
+        </div>
+        <button class="btn btn-outline-secondary" @onclick="Back">
+            Back to Finance
+        </button>
     </div>
 }
 else
@@ -34,10 +46,13 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-success"
-                    @onclick="CreatePayment">
-                + New Payment
-            </button>
+            @if (_canManagePayments)
+            {
+                <button class="btn btn-success"
+                        @onclick="CreatePayment">
+                    + New Payment
+                </button>
+            }
 
         </div>
 
@@ -94,14 +109,39 @@ else
 @code {
 
     private bool _loading = true;
+    private bool _canManagePayments;
+    private string? _error;
 
     private List<PaymentResponse> _items = [];
 
     protected override async Task OnInitializedAsync()
     {
-        _items = await FinanceService.GetCompanyPaymentsAsync();
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+            if (!permissions.Contains("Finance_Payment_View"))
+            {
+                _error = "You do not have permission to view payments.";
+                return;
+            }
 
-        _loading = false;
+            _canManagePayments =
+                permissions.Contains("Finance_Payment_Manage");
+            _items = await FinanceService.GetCompanyPaymentsAsync();
+        }
+        catch (HttpRequestException ex) when (
+            ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _error = "You do not have access to company-level payments. Contact your administrator if you need this access.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Payments could not be loaded right now. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void Back()

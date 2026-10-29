@@ -28,5 +28,7 @@ public sealed class DailyProgressPhotoConfiguration
             .WithMany(x => x.ProgressPhotos)
             .HasForeignKey(x => x.DailySiteDiaryId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(x => !x.DailySiteDiary.IsDeleted);
     }
 }

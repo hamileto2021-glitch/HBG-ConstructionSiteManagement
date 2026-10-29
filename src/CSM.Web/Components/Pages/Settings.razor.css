@@ -538,6 +538,11 @@
         margin-right: auto;
     }
 
+    .settings-footer-note.settings-unsaved {
+        color: var(--bs-warning-text-emphasis, #8a5a00);
+        font-weight: 650;
+    }
+
     .settings-save-button {
         min-width: 165px;
     }

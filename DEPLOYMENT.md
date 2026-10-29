@@ -5,7 +5,37 @@ Docker web services: the ASP.NET Core API and Blazor Server web app. Both use
 Render's Free plan. SQL Server remains the default database for local
 Development; Render runs the separate PostgreSQL EF Core migration assembly.
 
-## Free-plan limitations
+## Run the Flutter web app locally
+
+The Flutter web app uses the local API at `http://127.0.0.1:5065/api` by
+default in debug mode. Start the API and Flutter app in separate terminals:
+
+1. Start the API from the repository root:
+
+   ```powershell
+   dotnet run --project src/CSM.Api/CSM.Api.csproj --launch-profile http
+   ```
+
+2. From `mobile/csm_app`, fetch Flutter dependencies and run the web app on
+   the port already allowed by the API's local CORS settings:
+
+   ```powershell
+   flutter pub get
+   flutter run -d chrome --web-hostname localhost --web-port 8080
+   ```
+
+Open `http://localhost:8080` in Chrome. The API's Development CORS settings
+already allow this origin. The default local database and JWT settings still
+need to be configured for your machine as described in the sections below.
+
+## Render deployment
+
+The root `render.yaml` Blueprint provisions a PostgreSQL database and two
+Docker web services: the ASP.NET Core API and Blazor Server web app. Both use
+Render's Free plan. SQL Server remains the default database for local
+Development; Render runs the separate PostgreSQL EF Core migration assembly.
+
+### Free-plan limitations
 
 Render describes its Free instances as suitable for hobby projects and
 previews, not production:

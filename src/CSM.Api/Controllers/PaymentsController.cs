@@ -183,11 +183,20 @@ public sealed class PaymentsController : ControllerBase
     public async Task<ActionResult<IReadOnlyCollection<PaymentResponse>>> GetCompany(
         CancellationToken cancellationToken)
     {
-        var payments = await _paymentService.GetCompanyPaymentsAsync(
-            GetCurrentUserId(),
-            cancellationToken);
+        try
+        {
+            var payments = await _paymentService.GetCompanyPaymentsAsync(
+                GetCurrentUserId(),
+                cancellationToken);
 
-        return Ok(payments);
+            return Ok(payments);
+        }
+        catch (PaymentManagementException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}/print")]

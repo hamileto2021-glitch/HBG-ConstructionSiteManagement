@@ -10,30 +10,42 @@ using Microsoft.EntityFrameworkCore;
 namespace CSM.Infrastructure.Services;
 
 /// <summary>
-/// All reports are built from ONE set of calculations (LoadRawBySiteAsync),
-/// so the dashboards, the company summary, the site summaries and the
-/// "all" total always agree, and the total equals company + sites.
+/// Every report is built from ONE calculation (LoadRawBySiteAsync), so the
+/// dashboards, the company summary, the site summaries and the total always
+/// agree, and the total is exactly company level + sites.
 ///
-/// Definitions
-///   Budget        Approved, Active and Closed budgets.
-///   Expenses      Approved and Paid expenses, Amount + TaxAmount.
-///   Invoiced      Client invoices that are issued (not Draft, not Cancelled).
-///   Outstanding   Per invoice: max(0, invoice total - completed payments
-///                 linked to that invoice), then summed. This is the same sum
-///                 PaymentService uses to recalculate an invoice.
-///   Cash in/out   COMPLETED payments only. A payment on an invoice follows
-///                 the invoice (client invoice = in, vendor bill = out);
-///                 otherwise its own Direction is used.
-///   Pending       Pending payments: recorded but not yet completed. They are
-///                 shown separately and never counted as cash.
-///   Payment site  The invoice's site when the payment is on an invoice,
-///                 otherwise the payment's own site (as PaymentService).
-///   Petty cash    Balance of all accounts; count of active accounts. Money
-///                 in = recorded CashIn plus each account's opening balance
-///                 (balance - CashIn + CashOut, when positive).
+/// THE RULES
+///
+///  1. Budget    Approved, Active and Closed budgets.
+///
+///  2. Expenses  = expense records + paid payroll + petty cash out
+///       expense records  Approved and Paid expenses, including tax.
+///       paid payroll     COMPLETED payments linked to a payroll record.
+///       petty cash out   Petty cash CashOut transactions.
+///     Payments on vendor bills and other payments are NOT expenses.
+///     Remaining = Budget - Expenses.      Used % = Expenses / Budget.
+///
+///  3. Invoices  Issued invoices only (not Draft, not Cancelled).
+///     Invoiced               Client invoices.
+///     Receivables / Payables Per invoice: total minus the COMPLETED payments
+///                            on it (never below zero), then added up. This
+///                            is the same sum PaymentService uses.
+///
+///  4. Petty cash   Opening + Cash In - Cash Out = Balance.
+///     Cash In / Out are the recorded CashIn / CashOut transactions. Opening
+///     is what an account was opened with (no transaction): balance - cash in
+///     + cash out, never below zero.
+///
+///  Executive dashboard "Collected" = completed incoming client payments.
+///
+///  Where a record belongs
+///     Every record belongs to its own site; no site = company level. A
+///     payment on an invoice belongs to the invoice's site.
 /// </summary>
 public sealed class ReportingService : IReportingService
 {
+    private const string CompanyLevelKey = "";
+
     private readonly ApplicationDbContext _dbContext;
 
     public ReportingService(ApplicationDbContext dbContext)
@@ -49,14 +61,16 @@ public sealed class ReportingService : IReportingService
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var context = await GetReportContextAsync(
-            currentUserId,
-            GranularPermission.Reports_View,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureHasPermission(actor, GranularPermission.Reports_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
 
         return await BuildDashboardAsync(
-            context.CompanyId,
-            context.Scope,
+            companyId,
+            scope,
             onlySiteId: null,
             cancellationToken);
     }
@@ -67,21 +81,23 @@ public sealed class ReportingService : IReportingService
             Guid constructionSiteId,
             CancellationToken cancellationToken = default)
     {
-        var context = await GetReportContextAsync(
-            currentUserId,
-            GranularPermission.Reports_View,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureHasPermission(actor, GranularPermission.Reports_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
 
         await EnsureSiteExistsAsync(
-            context.CompanyId,
+            companyId,
             constructionSiteId,
             cancellationToken);
 
-        EnsureSiteInScope(context.Scope, constructionSiteId);
+        EnsureSiteInScope(scope, constructionSiteId);
 
         return await BuildDashboardAsync(
-            context.CompanyId,
-            context.Scope,
+            companyId,
+            scope,
             onlySiteId: constructionSiteId,
             cancellationToken);
     }
@@ -93,7 +109,28 @@ public sealed class ReportingService : IReportingService
         CancellationToken cancellationToken)
     {
         var rawBySite = await LoadRawBySiteAsync(companyId, cancellationToken);
-        var total = rawBySite.TotalFor(scope, onlySiteId);
+
+        bool KeyInScope(string key)
+        {
+            if (onlySiteId.HasValue)
+            {
+                return key == onlySiteId.Value.ToString();
+            }
+
+            return key == CompanyLevelKey
+                ? scope.All
+                : scope.Includes(Guid.Parse(key));
+        }
+
+        var total = new Raw();
+
+        foreach (var (key, raw) in rawBySite)
+        {
+            if (KeyInScope(key))
+            {
+                total.Add(raw);
+            }
+        }
 
         var sites = (await _dbContext.ConstructionSites
                 .AsNoTracking()
@@ -126,7 +163,7 @@ public sealed class ReportingService : IReportingService
             projects.Count,
             projects.Sum(p => p.ContractValue),
             total.Budget,
-            total.Expenses,
+            total.Spent,
             total.ClientInvoiced,
             total.PaymentsIn,
             total.ClientOutstanding,
@@ -147,23 +184,28 @@ public sealed class ReportingService : IReportingService
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var context = await GetReportContextAsync(
-            currentUserId,
-            GranularPermission.Reports_FinancialSummary_View,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureHasPermission(
+            actor,
+            GranularPermission.Reports_FinancialSummary_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
 
         // Company-level figures are not tied to any site, so only users with
         // company-wide access may see them.
-        if (!context.Scope.All)
+        if (!scope.All)
         {
             throw new ReportingManagementException(
                 "You are not authorized to view company-level financial reports.");
         }
 
-        var rawBySite = await LoadRawBySiteAsync(context.CompanyId, cancellationToken);
-        var raw = rawBySite.Company;
+        var rawBySite = await LoadRawBySiteAsync(companyId, cancellationToken);
 
-        return ToResponse(raw, raw.PettyBalance, raw.PettyActive);
+        var raw = rawBySite.GetValueOrDefault(CompanyLevelKey) ?? new Raw();
+
+        return ToResponse(raw);
     }
 
     public async Task<FinancialSummaryResponse>
@@ -172,23 +214,28 @@ public sealed class ReportingService : IReportingService
             Guid constructionSiteId,
             CancellationToken cancellationToken = default)
     {
-        var context = await GetReportContextAsync(
-            currentUserId,
-            GranularPermission.Reports_FinancialSummary_View,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureHasPermission(
+            actor,
+            GranularPermission.Reports_FinancialSummary_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
 
         await EnsureSiteExistsAsync(
-            context.CompanyId,
+            companyId,
             constructionSiteId,
             cancellationToken);
 
-        EnsureSiteInScope(context.Scope, constructionSiteId);
+        EnsureSiteInScope(scope, constructionSiteId);
 
-        var rawBySite = await LoadRawBySiteAsync(context.CompanyId, cancellationToken);
-        var raw = rawBySite.ForSite(constructionSiteId);
+        var rawBySite = await LoadRawBySiteAsync(companyId, cancellationToken);
 
-        // Site reports have no company-level petty cash figures.
-        return ToResponse(raw, 0m, 0);
+        var raw = rawBySite.GetValueOrDefault(constructionSiteId.ToString())
+                  ?? new Raw();
+
+        return ToResponse(raw);
     }
 
     public async Task<AllFinancialSummaryResponse>
@@ -196,56 +243,67 @@ public sealed class ReportingService : IReportingService
             Guid currentUserId,
             CancellationToken cancellationToken = default)
     {
-        var context = await GetReportContextAsync(
-            currentUserId,
-            GranularPermission.Reports_FinancialSummary_View,
-            cancellationToken);
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+
+        EnsureHasPermission(
+            actor,
+            GranularPermission.Reports_FinancialSummary_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
 
         // One load feeds the company summary, every site and the total.
-        var rawBySite = await LoadRawBySiteAsync(context.CompanyId, cancellationToken);
+        var rawBySite = await LoadRawBySiteAsync(companyId, cancellationToken);
 
         var sites = (await _dbContext.ConstructionSites
                 .AsNoTracking()
-                .Where(s => s.CompanyId == context.CompanyId && !s.IsDeleted)
+                .Where(s => s.CompanyId == companyId && !s.IsDeleted)
                 .OrderBy(s => s.Name)
                 .Select(s => new { s.Id, s.Name, s.SiteCode })
                 .ToListAsync(cancellationToken))
-            .Where(s => context.Scope.Includes(s.Id))
+            .Where(s => scope.Includes(s.Id))
             .ToList();
 
         // Company-level figures: company-wide users only; others see zeros.
-        var companyRaw = context.Scope.All
-            ? rawBySite.Company
+        var companyRaw = scope.All
+            ? rawBySite.GetValueOrDefault(CompanyLevelKey) ?? new Raw()
             : new Raw();
 
-        var companySummary = ToResponse(
-            companyRaw,
-            companyRaw.PettyBalance,
-            companyRaw.PettyActive);
+        var companySummary = ToResponse(companyRaw);
 
         var siteSummaries = new List<SiteFinancialSummaryResponse>();
 
         foreach (var site in sites)
         {
-            var raw = rawBySite.ForSite(site.Id);
+            var raw = rawBySite.GetValueOrDefault(site.Id.ToString())
+                      ?? new Raw();
 
             siteSummaries.Add(
                 new SiteFinancialSummaryResponse(
                     site.Id,
                     site.Name,
                     site.SiteCode,
-                    ToResponse(raw, 0m, 0)));
+                    ToResponse(raw)));
         }
 
         // The total is the sum of the same raw figures, so it always equals
         // company + sites (plus records of deleted sites, for company-wide
         // users). Ratios are recalculated from the sums, never added.
-        var total = rawBySite.TotalFor(context.Scope);
+        var total = new Raw();
 
-        var totalSummary = ToResponse(
-            total,
-            total.PettyBalance,
-            total.PettyActive);
+        foreach (var (key, raw) in rawBySite)
+        {
+            var inScope = key == CompanyLevelKey
+                ? scope.All
+                : scope.Includes(Guid.Parse(key));
+
+            if (inScope)
+            {
+                total.Add(raw);
+            }
+        }
+
+        var totalSummary = ToResponse(total);
 
         return new AllFinancialSummaryResponse(
             companySummary,
@@ -253,42 +311,27 @@ public sealed class ReportingService : IReportingService
             totalSummary);
     }
 
-    // The single place the response is built. Order must match the
-    // FinancialSummaryResponse constructor.
-    private static FinancialSummaryResponse ToResponse(
-        Raw r,
-        decimal companyPettyCashBalance,
-        int companyPettyCashAccounts)
+    // The only place the response is built. Named arguments, so a value can
+    // never land in the wrong field.
+    private static FinancialSummaryResponse ToResponse(Raw r)
     {
-        var totalExpenditure = r.PaymentsOut + r.PettyOut;
-
-        var balance = r.PaymentsIn - totalExpenditure;
-
-        var netCashFlow =
-            r.PaymentsIn - r.PaymentsOut + (r.PettyIn - r.PettyOut);
-
-        var budgetUtilization = r.Budget == 0m
-            ? 0m
-            : Math.Round(r.Expenses / r.Budget * 100m, 2);
-
         return new FinancialSummaryResponse(
-            r.Budget,                    //  1 total budget
-            r.Expenses,                  //  2 total expenses
-            totalExpenditure,            //  3 total expenditure
-            balance,                     //  4 balance
-            r.ClientInvoiced,            //  5 total invoices (client)
-            r.PaymentsIn,                //  6 total cash in
-            r.ClientOutstanding,         //  7 outstanding receivables
-            r.VendorOutstanding,         //  8 outstanding payables
-            netCashFlow,                 //  9 net cash flow
-            r.PettyBalance,              // 10 petty cash balance
-            r.PettyOut,                  // 11 petty cash spent
-            r.PettyActive,               // 12 active petty cash accounts
-            budgetUtilization,           // 13 budget utilization %
-            companyPettyCashBalance,     // 14 company petty cash balance
-            companyPettyCashAccounts,    // 15 company petty cash accounts
-            r.PendingIn,                 // 16 pending cash in (not completed)
-            r.PendingOut);               // 17 pending cash out (not completed)
+            TotalBudget: r.Budget,
+            TotalExpenses: r.Spent,
+            ExpenseRecords: r.Expenses,
+            PayrollPaid: r.PayrollPaid,
+            RemainingBudget: r.Budget - r.Spent,
+            BudgetUsedPercent: r.Budget == 0m
+                ? 0m
+                : Math.Round(r.Spent / r.Budget * 100m, 2),
+            TotalInvoiced: r.ClientInvoiced,
+            OutstandingReceivables: r.ClientOutstanding,
+            OutstandingPayables: r.VendorOutstanding,
+            PettyCashOpeningBalance: r.PettyOpening,
+            PettyCashIn: r.PettyIn,
+            PettyCashOut: r.PettyOut,
+            PettyCashBalance: r.PettyBalance,
+            ActivePettyCashAccounts: r.PettyActive);
     }
 
     // ------------------------------------------------------------------
@@ -298,94 +341,65 @@ public sealed class ReportingService : IReportingService
     private sealed class Raw
     {
         public decimal Budget;
-        public decimal Expenses;
+
+        // Expenses
+        public decimal Expenses;      // approved and paid expense records
+        public decimal PayrollPaid;   // completed payroll payments
+        public decimal PettyOut;      // petty cash out
+
+        // Invoices
         public decimal ClientInvoiced;
         public decimal ClientOutstanding;
         public decimal VendorOutstanding;
+
+        // Completed incoming client payments (executive "Collected")
         public decimal PaymentsIn;
-        public decimal PaymentsOut;
-        public decimal PendingIn;
-        public decimal PendingOut;
+
+        // Petty cash
+        public decimal PettyOpening;
         public decimal PettyIn;
-        public decimal PettyOut;
         public decimal PettyBalance;
         public int PettyActive;
+
+        // All spending.
+        public decimal Spent => Expenses + PayrollPaid + PettyOut;
 
         public void Add(Raw o)
         {
             Budget += o.Budget;
             Expenses += o.Expenses;
+            PayrollPaid += o.PayrollPaid;
+            PettyOut += o.PettyOut;
             ClientInvoiced += o.ClientInvoiced;
             ClientOutstanding += o.ClientOutstanding;
             VendorOutstanding += o.VendorOutstanding;
             PaymentsIn += o.PaymentsIn;
-            PaymentsOut += o.PaymentsOut;
-            PendingIn += o.PendingIn;
-            PendingOut += o.PendingOut;
+            PettyOpening += o.PettyOpening;
             PettyIn += o.PettyIn;
-            PettyOut += o.PettyOut;
             PettyBalance += o.PettyBalance;
             PettyActive += o.PettyActive;
         }
     }
 
-    private sealed class RawBySite
+    // Key: "" for company-level records, otherwise the site id as text.
+    private async Task<Dictionary<string, Raw>> LoadRawBySiteAsync(
+        Guid companyId,
+        CancellationToken cancellationToken)
     {
-        public Raw Company { get; } = new();
+        var result = new Dictionary<string, Raw>();
 
-        public Dictionary<Guid, Raw> Sites { get; } = new();
-
-        public Raw For(Guid? siteId)
+        Raw For(Guid? siteId)
         {
-            if (!siteId.HasValue)
-            {
-                return Company;
-            }
+            var key = siteId?.ToString() ?? CompanyLevelKey;
 
-            if (!Sites.TryGetValue(siteId.Value, out var raw))
+            if (!result.TryGetValue(key, out var raw))
             {
                 raw = new Raw();
-                Sites.Add(siteId.Value, raw);
+                result[key] = raw;
             }
 
             return raw;
         }
-
-        public Raw ForSite(Guid siteId) =>
-            Sites.TryGetValue(siteId, out var raw) ? raw : new Raw();
-
-        public Raw TotalFor(Scope scope, Guid? onlySiteId = null)
-        {
-            var total = new Raw();
-
-            if (onlySiteId.HasValue)
-            {
-                total.Add(ForSite(onlySiteId.Value));
-                return total;
-            }
-
-            if (scope.All)
-            {
-                total.Add(Company);
-            }
-
-            foreach (var (siteId, raw) in Sites)
-            {
-                if (scope.Includes(siteId))
-                {
-                    total.Add(raw);
-                }
-            }
-
-            return total;
-        }
-    }
-
-    private async Task<RawBySite> LoadRawBySiteAsync(
-        Guid companyId,
-        CancellationToken cancellationToken)
-    {
-        var result = new RawBySite();
 
         // Budgets in force or finished (not Draft, PendingApproval, Cancelled).
         var budgets = await _dbContext.Budgets
@@ -406,7 +420,7 @@ public sealed class ReportingService : IReportingService
 
         foreach (var b in budgets)
         {
-            result.For(b.Site).Budget += b.Total;
+            For(b.Site).Budget += b.Total;
         }
 
         // Spent = approved and paid expenses, including tax.
@@ -427,7 +441,7 @@ public sealed class ReportingService : IReportingService
 
         foreach (var e in expenses)
         {
-            result.For(e.Site).Expenses += e.Total;
+            For(e.Site).Expenses += e.Total;
         }
 
         // Issued invoices (not Draft, not Cancelled).
@@ -447,20 +461,20 @@ public sealed class ReportingService : IReportingService
             })
             .ToListAsync(cancellationToken);
 
-        // Completed payments are cash. Pending ones are only recorded.
+        // Completed payments only. Pending, failed, cancelled and reversed
+        // payments are not money that moved.
         var payments = await _dbContext.Payments
             .AsNoTracking()
             .Where(p =>
                 p.CompanyId == companyId &&
                 !p.IsDeleted &&
-                (p.Status == PaymentStatus.Completed ||
-                 p.Status == PaymentStatus.Pending))
+                p.Status == PaymentStatus.Completed)
             .Select(p => new
             {
-                p.Status,
                 p.Direction,
                 p.Amount,
                 p.InvoiceId,
+                p.PayrollRecordId,
                 InvoiceType = p.Invoice != null
                     ? (InvoiceType?)p.Invoice.Type
                     : null,
@@ -474,9 +488,7 @@ public sealed class ReportingService : IReportingService
         // Direction field says. This is exactly how PaymentService
         // recalculates an invoice's paid amount.
         var paidByInvoice = payments
-            .Where(p =>
-                p.Status == PaymentStatus.Completed &&
-                p.InvoiceId.HasValue)
+            .Where(p => p.InvoiceId.HasValue)
             .GroupBy(p => p.InvoiceId!.Value)
             .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
 
@@ -485,7 +497,7 @@ public sealed class ReportingService : IReportingService
             paidByInvoice.TryGetValue(invoice.Id, out var paid);
 
             var outstanding = Math.Max(0m, invoice.TotalAmount - paid);
-            var raw = result.For(invoice.ConstructionSiteId);
+            var raw = For(invoice.ConstructionSiteId);
 
             if (invoice.Type == InvoiceType.ClientInvoice)
             {
@@ -500,44 +512,26 @@ public sealed class ReportingService : IReportingService
 
         foreach (var payment in payments)
         {
-            // A payment on an invoice follows the invoice: a client invoice
-            // is money in, a vendor bill is money out. This protects the
-            // report from a payment saved with the wrong Direction.
-            bool? isIncoming =
-                payment.InvoiceType == InvoiceType.ClientInvoice ? true
-                : payment.InvoiceType == InvoiceType.VendorBill ? false
-                : payment.Direction == PaymentDirection.Incoming ? true
-                : payment.Direction == PaymentDirection.Outgoing ? false
-                : null;
+            var raw = For(payment.Site);
 
-            if (isIncoming is null)
+            // Payroll is money out and counts as an expense.
+            if (payment.PayrollRecordId.HasValue)
             {
+                raw.PayrollPaid += payment.Amount;
                 continue;
             }
 
-            var raw = result.For(payment.Site);
+            // Money in: a client invoice payment, or an incoming payment that
+            // is not on a vendor bill. Other payments out (vendor bills,
+            // vendors) are not expenses and are not counted here.
+            var isIncoming =
+                payment.InvoiceType == InvoiceType.ClientInvoice ||
+                (payment.InvoiceType != InvoiceType.VendorBill &&
+                 payment.Direction == PaymentDirection.Incoming);
 
-            if (payment.Status == PaymentStatus.Completed)
+            if (isIncoming)
             {
-                if (isIncoming.Value)
-                {
-                    raw.PaymentsIn += payment.Amount;
-                }
-                else
-                {
-                    raw.PaymentsOut += payment.Amount;
-                }
-            }
-            else
-            {
-                if (isIncoming.Value)
-                {
-                    raw.PendingIn += payment.Amount;
-                }
-                else
-                {
-                    raw.PendingOut += payment.Amount;
-                }
+                raw.PaymentsIn += payment.Amount;
             }
         }
 
@@ -562,9 +556,6 @@ public sealed class ReportingService : IReportingService
                 Total = g.Sum(t => t.Amount)
             })
             .ToListAsync(cancellationToken);
-        var movementByAccountAndType = pettyMovement.ToDictionary(
-            movement => (movement.AccountId, movement.Type),
-            movement => movement.Total);
 
         var pettyAccounts = await _dbContext.PettyCashAccounts
             .AsNoTracking()
@@ -580,26 +571,28 @@ public sealed class ReportingService : IReportingService
 
         foreach (var account in pettyAccounts)
         {
-            var raw = result.For(account.ConstructionSiteId);
+            var raw = For(account.ConstructionSiteId);
 
-            movementByAccountAndType.TryGetValue(
-                (account.Id, "CashIn"),
-                out var cashIn);
-            movementByAccountAndType.TryGetValue(
-                (account.Id, "CashOut"),
-                out var cashOut);
+            var cashIn = pettyMovement
+                .Where(m => m.AccountId == account.Id && m.Type == "CashIn")
+                .Sum(m => m.Total);
+
+            var cashOut = pettyMovement
+                .Where(m => m.AccountId == account.Id && m.Type == "CashOut")
+                .Sum(m => m.Total);
 
             // balance = opening + cash in - cash out, so the money an account
             // was opened with, which has no CashIn transaction, is
             //   opening = balance - cash in + cash out.
-            // It is money that went into petty cash, so it counts as cash in.
-            // A negative figure (balance below what the transactions allow) is
+            // It is shown as its own figure, never mixed into cash in. A
+            // negative figure (balance below what the transactions allow) is
             // left unexplained and the report page warns about it.
             var opening = Math.Max(
                 0m,
                 account.CurrentBalance - cashIn + cashOut);
 
-            raw.PettyIn += cashIn + opening;
+            raw.PettyOpening += opening;
+            raw.PettyIn += cashIn;
             raw.PettyOut += cashOut;
             raw.PettyBalance += account.CurrentBalance;
 
@@ -615,22 +608,6 @@ public sealed class ReportingService : IReportingService
     // ------------------------------------------------------------------
     // Access
     // ------------------------------------------------------------------
-
-    private sealed record ReportContext(Guid CompanyId, Scope Scope);
-
-    private async Task<ReportContext> GetReportContextAsync(
-        Guid currentUserId,
-        GranularPermission permission,
-        CancellationToken cancellationToken)
-    {
-        var actor = await GetActorAsync(currentUserId, cancellationToken);
-        EnsureHasPermission(actor, permission);
-
-        var companyId = GetCompanyId(actor);
-        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
-
-        return new ReportContext(companyId, scope);
-    }
 
     private sealed class Scope
     {

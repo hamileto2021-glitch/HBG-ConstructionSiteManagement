@@ -18,83 +18,95 @@
     <!-- Finance Modules -->
     <div class="row g-3 mb-4">
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/invoices")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">🧾 Invoices</h4>
-                    <div class="text-muted">
-                        Vendor bills & client invoice management
+        <PermissionView AnyOf="@InvoiceViewPermission">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/company/invoices")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">🧾 Invoices</h4>
+                        <div class="text-muted">
+                            Vendor bills & client invoice management
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/payments")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">💳 Payments</h4>
-                    <div class="text-muted">
-                        Supplier and client payment records
+        <PermissionView AnyOf="@PaymentViewPermission">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/payments")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">💳 Payments</h4>
+                        <div class="text-muted">
+                            Supplier and client payment records
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/petty-cash")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">💵 Petty Cash</h4>
-                    <div class="text-muted">
-                        Site cash accounts & transactions
+        <PermissionView AnyOf="@PettyCashViewPermission">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/petty-cash")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">💵 Petty Cash</h4>
+                        <div class="text-muted">
+                            Site cash accounts & transactions
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/budgets")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">📊 Budgets</h4>
-                    <div class="text-muted">
-                        Budget planning & budget lines
+        <PermissionView AnyOf="@BudgetViewPermission">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/company/budgets")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">📊 Budgets</h4>
+                        <div class="text-muted">
+                            Budget planning & budget lines
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/expenses")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">📑 Expenses</h4>
-                    <div class="text-muted">
-                        Project expenditure & approvals
+        <PermissionView AnyOf="@ExpensePermissions">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/company/expenses")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">📑 Expenses</h4>
+                        <div class="text-muted">
+                            Project expenditure & approvals
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card h-100 shadow-sm border-0 finance-card"
-                 @onclick='() => Open("/finance/cost-codes")'
-                 style="cursor:pointer">
-                <div class="card-body">
-                    <h4 class="mb-2">🏷 Cost Codes</h4>
-                    <div class="text-muted">
-                        Work breakdown cost code structure
+        <PermissionView AnyOf="@CostCodeViewPermission">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0 finance-card"
+                     @onclick='() => Open("/finance/company/cost-codes")'
+                     style="cursor:pointer">
+                    <div class="card-body">
+                        <h4 class="mb-2">🏷 Cost Codes</h4>
+                        <div class="text-muted">
+                            Work breakdown cost code structure
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
     </div>
 
@@ -152,6 +164,23 @@
 </style>
 
 @code{
+    private static readonly string[] InvoiceViewPermission =
+        ["Finance_Invoice_View"];
+    private static readonly string[] PaymentViewPermission =
+        ["Finance_Payment_View"];
+    private static readonly string[] PettyCashViewPermission =
+        ["Finance_PettyCash_View"];
+    private static readonly string[] BudgetViewPermission =
+        ["Finance_Budget_View"];
+    private static readonly string[] ExpensePermissions =
+    [
+        "Finance_Expense_View",
+        "Finance_Expense_Submit",
+        "Finance_Expense_Approve"
+    ];
+    private static readonly string[] CostCodeViewPermission =
+        ["Finance_CostCode_View"];
+
     void Open(string url)
     {
         Navigation.NavigateTo(url);

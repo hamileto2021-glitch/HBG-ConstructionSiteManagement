@@ -31,6 +31,8 @@ public sealed class DailySiteDiaryConfiguration
             .HasForeignKey(x => x.SiteId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasQueryFilter(x => !x.Site.IsDeleted);
+
         builder.HasOne(x => x.Project)
             .WithMany()
             .HasForeignKey(x => x.ProjectId)

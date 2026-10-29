@@ -21,3 +21,5 @@
 # OS files
 Thumbs.db
 .DS_Store
+.neon
+node_modules/

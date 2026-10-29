@@ -80,26 +80,28 @@
         {
             var result = await AuthService.LoginAsync(_model);
 
-            Console.WriteLine($"TOKEN: {result?.AccessToken}");
-
             if (result is null)
             {
                 _error = "Invalid email or password.";
                 return;
             }
 
-            await SessionStorage.SetAsync("jwt", result.AccessToken);
-            await SessionStorage.SetAsync("refreshToken", result.RefreshToken);
             await SessionStorage.SetAsync("userName", result.FullName);
             await SessionStorage.SetAsync("email", result.Email);
             await SessionStorage.SetAsync("roles", result.Roles);
+
+            if (result.MustChangePassword)
+            {
+                Navigation.NavigateTo("/change-password-required", true);
+                return;
+            }
 
             Navigation.NavigateTo("/dashboard", true);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Login failed");
-            _error = ex.Message;
+            _error = "Unable to sign in right now. Please try again.";
         }
         finally
         {

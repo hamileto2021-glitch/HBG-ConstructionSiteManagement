@@ -25,14 +25,10 @@ public class ProcurementService : IProcurementService
         if (!token.Success || string.IsNullOrWhiteSpace(token.Value))
             return null;
 
-        Console.WriteLine($"JWT: {token.Value[..30]}...");
-
         var client = _factory.CreateClient("CSM.Api");
 
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token.Value);
-
-        Console.WriteLine(client.DefaultRequestHeaders.Authorization);
 
         return client;
     }

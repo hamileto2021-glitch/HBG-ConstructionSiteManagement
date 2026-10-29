@@ -14,60 +14,89 @@
 
     <div class="row g-3">
 
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100" style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/materials")'>
-                <div class="card-body">
-                    <h5>📦 Materials</h5>
-                    <div class="text-muted">Material master list</div>
+        <PermissionView AnyOf="@InventoryViewPermission">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100" style="cursor:pointer"
+                     @onclick='() => Navigation.NavigateTo("/materials")'>
+                    <div class="card-body">
+                        <h5>📦 Materials</h5>
+                        <div class="text-muted">Material master list</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100" style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/vendors")'>
-                <div class="card-body">
-                    <h5>🏢 Vendors</h5>
-                    <div class="text-muted">Supplier management</div>
+        <PermissionView AnyOf="@VendorViewPermission">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100" style="cursor:pointer"
+                     @onclick='() => Navigation.NavigateTo("/vendors")'>
+                    <div class="card-body">
+                        <h5>🏢 Vendors</h5>
+                        <div class="text-muted">Supplier management</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100" style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/material-requests")'>
-                <div class="card-body">
-                    <h5>📝 Material Requests</h5>
-                    <div class="text-muted">Request & approval workflow</div>
+        <PermissionView AnyOf="@MaterialRequestPermissions">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100" style="cursor:pointer"
+                     @onclick='() => Navigation.NavigateTo("/material-requests")'>
+                    <div class="card-body">
+                        <h5>📝 Material Requests</h5>
+                        <div class="text-muted">Request & approval workflow</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100" style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/purchase-orders")'>
-                <div class="card-body">
-                    <h5>🧾 Purchase Orders</h5>
-                    <div class="text-muted">Purchase order management</div>
+        <PermissionView AnyOf="@PurchaseOrderPermissions">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100" style="cursor:pointer"
+                     @onclick='() => Navigation.NavigateTo("/purchase-orders")'>
+                    <div class="card-body">
+                        <h5>🧾 Purchase Orders</h5>
+                        <div class="text-muted">Purchase order management</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100" style="cursor:pointer"
-                 @onclick='() => Navigation.NavigateTo("/goods-receipts")'>
-                <div class="card-body">
-                    <h5>📥 Goods Receipts</h5>
-                    <div class="text-muted">Receive purchased materials</div>
+        <PermissionView AnyOf="@PurchaseOrderPermissions">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100" style="cursor:pointer"
+                     @onclick='() => Navigation.NavigateTo("/goods-receipts")'>
+                    <div class="card-body">
+                        <h5>📥 Goods Receipts</h5>
+                        <div class="text-muted">Receive purchased materials</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
 
 
 
 
 
     </div>
+
+    @code {
+        private static readonly string[] InventoryViewPermission =
+            ["Procurement_Inventory_View"];
+        private static readonly string[] VendorViewPermission =
+            ["Procurement_Vendor_View"];
+        private static readonly string[] MaterialRequestPermissions =
+        [
+            "Procurement_MaterialRequest_View",
+            "Procurement_MaterialRequest_Submit",
+            "Procurement_MaterialRequest_Approve"
+        ];
+        private static readonly string[] PurchaseOrderPermissions =
+        [
+            "Procurement_PurchaseOrder_View",
+            "Procurement_PurchaseOrder_Manage",
+            "Procurement_PurchaseOrder_Approve"
+        ];
+    }
 
 </div>

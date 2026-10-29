@@ -184,7 +184,19 @@
   <data name="Settings.Notifications.EmailDescription" xml:space="preserve">
     <value>የሚደገፉ ዝማኔዎችን በኢሜይል ይቀበሉ።</value>
   </data>
+  <data name="Settings.Notifications.Push" xml:space="preserve">
+    <value>የግፊት ማሳወቂያዎች</value>
+  </data>
+  <data name="Settings.Notifications.PushDescription" xml:space="preserve">
+    <value>በሚደገፉ መሣሪያዎች ላይ የግፊት ማሳወቂያዎችን መቀበል እንደሚፈልጉ ይምረጡ። የአሳሽ ፈቃድ ሊያስፈልግ ይችላል።</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlerts" xml:space="preserve">
+    <value>የደህንነት ማሳወቂያዎች</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlertsDescription" xml:space="preserve">
+    <value>ከመግቢያ እና ከመለያ ደህንነት ጋር የተያያዙ ዝማኔዎች።</value>
+  </data>
   <data name="Settings.Notifications.Info" xml:space="preserve">
-    <value>እነዚህ ቁጥጥሮች የማሳወቂያ ምርጫዎች ከቋሚ ማከማቻ እና ከማሳወቂያ አገልግሎቱ ጋር እስኪገናኙ ድረስ የገጹን ሁኔታ ብቻ ያዋቅራሉ።</value>
+    <value>ምርጫዎችዎ በመለያዎ ውስጥ ይቀመጣሉ። የማሳወቂያ ማድረሻ ሂደቱ እነዚህን ምርጫዎች ገና አያስፈጽምም።</value>
   </data>
 </root>

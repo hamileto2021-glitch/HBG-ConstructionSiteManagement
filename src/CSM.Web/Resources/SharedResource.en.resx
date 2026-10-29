@@ -184,7 +184,19 @@
   <data name="Settings.Notifications.EmailDescription" xml:space="preserve">
     <value>Receive supported updates by email.</value>
   </data>
+  <data name="Settings.Notifications.Push" xml:space="preserve">
+    <value>Push notifications</value>
+  </data>
+  <data name="Settings.Notifications.PushDescription" xml:space="preserve">
+    <value>Choose whether to receive push notifications on supported devices. Browser permission may be required.</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlerts" xml:space="preserve">
+    <value>Security alerts</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlertsDescription" xml:space="preserve">
+    <value>Sign-in and account security-related updates.</value>
+  </data>
   <data name="Settings.Notifications.Info" xml:space="preserve">
-    <value>These controls configure the page state only until notification preferences are connected to persistent storage and the notification service.</value>
+    <value>Your preferences are saved to your account. The notification delivery pipeline does not yet enforce these choices.</value>
   </data>
 </root>

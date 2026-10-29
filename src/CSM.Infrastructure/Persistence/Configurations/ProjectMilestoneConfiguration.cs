@@ -25,7 +25,7 @@ public sealed class ProjectMilestoneConfiguration
             .IsRequired();
 
         builder.HasOne(x => x.Project)
-            .WithMany()
+            .WithMany(x => x.Milestones)
             .HasForeignKey(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 

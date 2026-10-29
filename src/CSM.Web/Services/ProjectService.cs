@@ -332,7 +332,7 @@ public class ProjectService : IProjectService
     {
         var client = _factory.CreateClient("CSM.Api");
 
-        var token = await _storage.GetAsync<string>("authToken");
+        var token = await _storage.GetAsync<string>("jwt");
 
         if (token.Success && !string.IsNullOrWhiteSpace(token.Value))
         {
@@ -353,7 +353,7 @@ public class ProjectService : IProjectService
     {
         var client = _factory.CreateClient("CSM.Api");
 
-        var token = await _storage.GetAsync<string>("authToken");
+        var token = await _storage.GetAsync<string>("jwt");
 
         if (token.Success && !string.IsNullOrWhiteSpace(token.Value))
         {

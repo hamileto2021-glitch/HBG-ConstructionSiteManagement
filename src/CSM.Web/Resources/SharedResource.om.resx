@@ -182,7 +182,19 @@
   <data name="Settings.Notifications.EmailDescription">
     <value>Haaromsa deeggaraman imeeliin argadhu.</value>
   </data>
+  <data name="Settings.Notifications.Push">
+    <value>Beeksisawwan push</value>
+  </data>
+  <data name="Settings.Notifications.PushDescription">
+    <value>Meeshaalee deeggaraman irratti beeksisa push argachuu kee filadhu. Eeyyamni biraawzarii barbaachisuu danda'a.</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlerts">
+    <value>Beeksisawwan nageenyaa</value>
+  </data>
+  <data name="Settings.Notifications.SecurityAlertsDescription">
+    <value>Haaromsa seensa fi nageenya herregaa waliin walqabatan.</value>
+  </data>
   <data name="Settings.Notifications.Info">
-    <value>To'annoon kun hanga filannoowwan beeksisaa kuusaa dhaabbataa fi tajaajila beeksisaa waliin walitti hidhamiinanitti haala fuulaa qofa qindeessa.</value>
+    <value>Filannoowwan kee herrega kee keessatti ni kuufamu. Adeemsi dabarsaa beeksisaa filannoowwan kana ammaaf hin hojiirra oolchu.</value>
   </data>
 </root>

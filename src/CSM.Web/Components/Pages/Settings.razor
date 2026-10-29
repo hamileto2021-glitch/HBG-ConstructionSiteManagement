@@ -9,6 +9,7 @@
 @using CSM.Web
 @inject IStringLocalizer<SharedResource> L
 @inject ILogger<Settings> Logger
+@inject NavigationManager Navigation
 
 @inject UserSessionsService SessionsService
 @inject LoginHistoryService LoginHistory
@@ -171,6 +172,7 @@
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox"
+                                       aria-label="@L["Settings.General.CompactInterface"]"
                                        @bind="_compactMode"
                                        @bind:after="ApplyCompactModeAsync" />
                                 <span class="switch-slider"></span>
@@ -185,7 +187,7 @@
                             <label class="settings-switch">
                                 <input type="checkbox"
                                        @bind="_confirmActions"
-                                       @bind:after="ApplyConfirmationPreferenceAsync" />
+                                       aria-label="@L["Settings.General.ConfirmationPrompts"]" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -196,7 +198,9 @@
                                 <p>@L["Settings.General.RememberNavigationDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_rememberNavigation" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.General.RememberNavigation"]"
+                                       @bind="_rememberNavigation" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -261,6 +265,7 @@
                         <div class="theme-grid">
                             <button type="button"
                                     class="@($"theme-option {(_theme == "light" ? "theme-selected" : "")}")"
+                                    aria-pressed="@(_theme == "light")"
                                     @onclick='() => SetThemeAsync("light")'>
                                 <div class="theme-preview theme-light">
                                     <div class="theme-preview-sidebar"></div>
@@ -274,6 +279,7 @@
 
                             <button type="button"
                                     class="@($"theme-option {(_theme == "dark" ? "theme-selected" : "")}")"
+                                    aria-pressed="@(_theme == "dark")"
                                     @onclick='() => SetThemeAsync("dark")'>
                                 <div class="theme-preview theme-dark">
                                     <div class="theme-preview-sidebar"></div>
@@ -287,6 +293,7 @@
 
                             <button type="button"
                                     class="@($"theme-option {(_theme == "system" ? "theme-selected" : "")}")"
+                                    aria-pressed="@(_theme == "system")"
                                     @onclick='() => SetThemeAsync("system")'>
                                 <div class="theme-preview theme-system">
                                     <div class="theme-preview-sidebar"></div>
@@ -305,7 +312,10 @@
                                 <p>@L["Settings.Appearance.CompactInterfaceDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_compactMode" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Appearance.CompactInterface"]"
+                                       @bind="_compactMode"
+                                       @bind:after="ApplyCompactModeAsync" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -343,7 +353,9 @@
                                 <p>@L["Settings.Notifications.ProjectUpdatesDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_projectNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.ProjectUpdates"]"
+                                       @bind="_projectNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -354,7 +366,9 @@
                                 <p>@L["Settings.Notifications.ApprovalRequestsDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_approvalNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.ApprovalRequests"]"
+                                       @bind="_approvalNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -365,7 +379,9 @@
                                 <p>@L["Settings.Notifications.InventoryAlertsDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_inventoryNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.InventoryAlerts"]"
+                                       @bind="_inventoryNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -376,7 +392,9 @@
                                 <p>@L["Settings.Notifications.HrAttendanceDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_hrNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.HrAttendance"]"
+                                       @bind="_hrNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -387,7 +405,22 @@
                                 <p>@L["Settings.Notifications.FinancialAlertsDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_financialNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.FinancialAlerts"]"
+                                       @bind="_financialNotifications" />
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-description">
+                                <strong>@L["Settings.Notifications.SecurityAlerts"]</strong>
+                                <p>@L["Settings.Notifications.SecurityAlertsDescription"]</p>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.SecurityAlerts"]"
+                                       @bind="_securityAlerts" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -405,7 +438,9 @@
                                 <p>@L["Settings.Notifications.InAppDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_inAppNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.InApp"]"
+                                       @bind="_inAppNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -416,7 +451,22 @@
                                 <p>@L["Settings.Notifications.EmailDescription"]</p>
                             </div>
                             <label class="settings-switch">
-                                <input type="checkbox" @bind="_emailNotifications" />
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.Email"]"
+                                       @bind="_emailNotifications" />
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-description">
+                                <strong>@L["Settings.Notifications.Push"]</strong>
+                                <p>@L["Settings.Notifications.PushDescription"]</p>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox"
+                                       aria-label="@L["Settings.Notifications.Push"]"
+                                       @bind="_pushNotifications" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -737,6 +787,9 @@
             <input id="newPassword"
                    type="password"
                    class="form-control"
+                   inputmode="numeric"
+                   pattern="[0-9]{6}"
+                   maxlength="6"
                    autocomplete="new-password"
                    @bind="_newPassword"
                    disabled="@_passwordChangeSubmitting" />
@@ -749,6 +802,9 @@
             <input id="confirmNewPassword"
                    type="password"
                    class="form-control"
+                   inputmode="numeric"
+                   pattern="[0-9]{6}"
+                   maxlength="6"
                    autocomplete="new-password"
                    @bind="_confirmNewPassword"
                    disabled="@_passwordChangeSubmitting" />
@@ -990,8 +1046,8 @@ else if (_activeTab == "privacy")
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox"
-                                       @bind="_analyticsConsent"
-                                       @bind:after="SavePreferencesAsync" />
+                                       aria-label="Optional usage analytics"
+                                       @bind="_analyticsConsent" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -1003,8 +1059,8 @@ else if (_activeTab == "privacy")
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox"
-                                       @bind="_productImprovementConsent"
-                                       @bind:after="SavePreferencesAsync" />
+                                       aria-label="Optional product improvement data"
+                                       @bind="_productImprovementConsent" />
                                 <span class="switch-slider"></span>
                             </label>
                         </div>
@@ -1318,21 +1374,54 @@ else if (_activeTab == "privacy")
             <!-- Footer actions -->
 
 <div class="settings-footer">
-    <div class="settings-footer-note">
-        <i class="bi bi-info-circle"></i>
-        Preferences are saved to your account.
+    <div class="settings-footer-note @(HasUnsavedChanges ? "settings-unsaved" : string.Empty)"
+         aria-live="polite">
+        @if (_isLoading)
+        {
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span>Loading preferences...</span>
+        }
+        else if (!_preferencesLoaded)
+        {
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+            <span>Preferences are unavailable until they load successfully.</span>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    @onclick="LoadPreferencesAsync"
+                    disabled="@_isLoading">
+                Retry
+            </button>
+        }
+        else if (HasUnsavedChanges)
+        {
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+            <span>You have unsaved changes.</span>
+        }
+        else
+        {
+            <i class="bi bi-check-circle" aria-hidden="true"></i>
+            <span>All preferences are saved.</span>
+        }
     </div>
 
     <button type="button"
             class="btn btn-outline-secondary"
-            @onclick="ResetPreferences">
-        Reset page
+            @onclick="DiscardPreferenceChangesAsync"
+            disabled="@(_isLoading || _isSaving || !HasUnsavedChanges)">
+        Discard changes
+    </button>
+
+    <button type="button"
+            class="btn btn-outline-secondary"
+            @onclick="ResetPreferencesAsync"
+            disabled="@(_isLoading || _isSaving || !_preferencesLoaded)">
+        Restore defaults
     </button>
 
     <button type="button"
             class="btn btn-primary settings-save-button"
             @onclick="SavePreferencesAsync"
-            disabled="@(_isSaving || _isLoading)">
+            disabled="@(_isSaving || _isLoading || !_preferencesLoaded || !HasUnsavedChanges)">
         <i class="bi bi-check2-circle me-2"></i>
         @(_isSaving ? "Saving..." : "Save preferences")
     </button>
@@ -1358,6 +1447,8 @@ else if (_activeTab == "privacy")
     private string _language = "en";
     private string _dateFormat = "dd/MM/yyyy";
     private string _timeFormat = "24";
+    private string _timeZone = "UTC";
+    private string _numberFormat = "en-US";
 
     private bool _compactMode;
     private bool _confirmActions = true;
@@ -1416,45 +1507,56 @@ else if (_activeTab == "privacy")
 
     private bool _isLoading;
     private bool _isSaving;
+    private bool _preferencesLoaded;
+    private UpdateUserPreferencesRequest? _savedPreferences;
     private string _message = string.Empty;
     private bool _messageIsError;
 
-    protected override async Task OnInitializedAsync()
+    private bool HasUnsavedChanges =>
+        _preferencesLoaded &&
+        _savedPreferences is not null &&
+        BuildPreferencesRequest() != _savedPreferences;
+
+    protected override Task OnInitializedAsync() =>
+        LoadPreferencesAsync();
+
+    private async Task LoadPreferencesAsync()
     {
         _isLoading = true;
+        ClearMessage();
 
         try
         {
             var preferences = await PreferencesService.GetAsync();
+            ApplyPreferences(preferences);
+            _savedPreferences = BuildPreferencesRequest();
+            _preferencesLoaded = true;
 
-            if (preferences is not null)
+            try
             {
-                _theme = preferences.Theme.ToLowerInvariant();
-                await JS.InvokeVoidAsync("csmTheme.apply", _theme);
+                await JS.InvokeVoidAsync("csmCulture.set", _language);
+                await JS.InvokeVoidAsync("csmTheme.persist", _theme);
+                await JS.InvokeVoidAsync("csmTheme.persistCompact", _compactMode);
+            }
+            catch (JSException ex)
+            {
+                Logger.LogWarning(
+                    ex,
+                    "Preferences loaded, but browser settings could not be applied.");
+                _message =
+                    "Preferences loaded, but some display settings may require a refresh.";
+                return;
+            }
 
-                _language = preferences.Language;
-                _dateFormat = preferences.DateFormat;
-                _timeFormat = preferences.TimeFormat.StartsWith(
-                    "12", StringComparison.OrdinalIgnoreCase) ? "12" : "24";
-
-                _compactMode = preferences.CompactMode;
-                await JS.InvokeVoidAsync("csmTheme.setCompact", _compactMode);
-                _confirmActions = preferences.ConfirmActions;
-                _rememberNavigation = preferences.RememberNavigation;
-
-                _projectNotifications = preferences.ProjectNotificationsEnabled;
-                _approvalNotifications = preferences.ApprovalNotificationsEnabled;
-                _inventoryNotifications = preferences.InventoryNotificationsEnabled;
-                _hrNotifications = preferences.HRNotificationsEnabled;
-                _financialNotifications = preferences.FinanceNotificationsEnabled;
-
-                _inAppNotifications = preferences.InAppNotificationsEnabled;
-                _emailNotifications = preferences.EmailNotificationsEnabled;
-                _pushNotifications = preferences.PushNotificationsEnabled;
-                _securityAlerts = preferences.SecurityAlertsEnabled;
-
-                _analyticsConsent = preferences.AnalyticsConsent;
-                _productImprovementConsent = preferences.ProductImprovementConsent;
+            var currentLanguage =
+                System.Globalization.CultureInfo.CurrentUICulture
+                    .TwoLetterISOLanguageName;
+            if (!string.Equals(
+                    currentLanguage,
+                    _language,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
             }
         }
         catch (Exception ex)
@@ -1545,6 +1647,21 @@ else if (_activeTab == "privacy")
 
     private async Task RevokeSessionAsync(Guid sessionId)
     {
+        var session = _sessions.FirstOrDefault(item => item.Id == sessionId);
+
+        if (session is null || session.IsCurrent)
+        {
+            return;
+        }
+
+        if (_confirmActions &&
+            !await JS.InvokeAsync<bool>(
+                "confirm",
+                $"Revoke the session for {session.DeviceName ?? "this device"}?"))
+        {
+            return;
+        }
+
         _revokingSessionId = sessionId;
         _sessionsError = null;
 
@@ -1568,6 +1685,14 @@ else if (_activeTab == "privacy")
 
 private async Task RevokeOtherSessionsAsync()
 {
+    if (_confirmActions &&
+        !await JS.InvokeAsync<bool>(
+            "confirm",
+            "Sign out all other devices? This action cannot be undone."))
+    {
+        return;
+    }
+
     _revokingOtherSessions = true;
     _revokeOtherSessionsMessage = null;
 
@@ -1700,12 +1825,6 @@ private async Task RetryPrivacyDataRequestsAsync()
         await JS.InvokeVoidAsync("csmTheme.setCompact", _compactMode);
     }
 
-    private async Task ApplyConfirmationPreferenceAsync()
-    {
-        await SavePreferencesAsync();
-    }
-
-
 private string _privacyRequestType = "DataAccess";
 private string? _privacyRequestDescription;
 private bool _privacyRequestSubmitting;
@@ -1771,6 +1890,14 @@ private async Task SubmitPrivacyDataRequestAsync()
         {
             await LoadSessionsAsync();
         }
+        else if (tab == "account" && !_currentUserProfileLoaded)
+        {
+            await LoadCurrentUserProfileAsync();
+        }
+        else if (tab == "security" && !_loginHistoryLoaded)
+        {
+            await LoadLoginHistoryAsync();
+        }
     }
 
     private void ClearMessage()
@@ -1781,47 +1908,50 @@ private async Task SubmitPrivacyDataRequestAsync()
 
     private async Task SavePreferencesAsync()
     {
+        if (_isSaving || !_preferencesLoaded || !HasUnsavedChanges)
+        {
+            return;
+        }
+
         _isSaving = true;
         ClearMessage();
 
         try
         {
-            var request = new UpdateUserPreferencesRequest(
-                Theme: _theme.Equals("dark", StringComparison.OrdinalIgnoreCase)
-                    ? "Dark"
-                    : _theme.Equals("system", StringComparison.OrdinalIgnoreCase)
-                        ? "System"
-                        : "Light",
-                Language: _language,
-                TimeZone: "UTC",
-                DateFormat: _dateFormat,
-                TimeFormat: _timeFormat == "12" ? "12h" : "24h",
-                NumberFormat: "en-US",
-                CompactMode: _compactMode,
-                ConfirmActions: _confirmActions,
-                RememberNavigation: _rememberNavigation,
-                EmailNotificationsEnabled: _emailNotifications,
-                InAppNotificationsEnabled: _inAppNotifications,
-                PushNotificationsEnabled: _pushNotifications,
-                SecurityAlertsEnabled: _securityAlerts,
-                ProjectNotificationsEnabled: _projectNotifications,
-                ApprovalNotificationsEnabled: _approvalNotifications,
-                InventoryNotificationsEnabled: _inventoryNotifications,
-                HRNotificationsEnabled: _hrNotifications,
-                FinanceNotificationsEnabled: _financialNotifications,
-                AnalyticsConsent: _analyticsConsent,
-                ProductImprovementConsent: _productImprovementConsent);
+            var oldLanguage = _savedPreferences!.Language;
+            var savedPreferences = await PreferencesService.UpdateAsync(
+                BuildPreferencesRequest());
 
-            await PreferencesService.UpdateAsync(request);
-
-            await JS.InvokeVoidAsync(
-                "csmCulture.set",
-                _language);
-
+            ApplyPreferences(savedPreferences);
+            _savedPreferences = BuildPreferencesRequest();
             _messageIsError = false;
             _message = "Preferences saved successfully.";
 
-            await JS.InvokeVoidAsync("location.reload");
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "csmCulture.set",
+                    savedPreferences.Language);
+                await JS.InvokeVoidAsync("csmTheme.persist", _theme);
+                await JS.InvokeVoidAsync("csmTheme.persistCompact", _compactMode);
+            }
+            catch (JSException ex)
+            {
+                Logger.LogWarning(
+                    ex,
+                    "Preferences were saved, but browser settings could not be applied.");
+                _message =
+                    "Preferences were saved, but some display changes will apply after you refresh.";
+                return;
+            }
+
+            if (!string.Equals(
+                    oldLanguage,
+                    savedPreferences.Language,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+            }
         }
         catch (Exception ex)
         {
@@ -1835,12 +1965,121 @@ private async Task SubmitPrivacyDataRequestAsync()
         }
     }
 
-    private void ResetPreferences()
+    private UpdateUserPreferencesRequest BuildPreferencesRequest() =>
+        new(
+            Theme: _theme.Equals("dark", StringComparison.OrdinalIgnoreCase)
+                ? "Dark"
+                : _theme.Equals("system", StringComparison.OrdinalIgnoreCase)
+                    ? "System"
+                    : "Light",
+            Language: _language,
+            TimeZone: _timeZone,
+            DateFormat: _dateFormat,
+            TimeFormat: _timeFormat == "12" ? "12h" : "24h",
+            NumberFormat: _numberFormat,
+            CompactMode: _compactMode,
+            ConfirmActions: _confirmActions,
+            RememberNavigation: _rememberNavigation,
+            EmailNotificationsEnabled: _emailNotifications,
+            InAppNotificationsEnabled: _inAppNotifications,
+            PushNotificationsEnabled: _pushNotifications,
+            SecurityAlertsEnabled: _securityAlerts,
+            ProjectNotificationsEnabled: _projectNotifications,
+            ApprovalNotificationsEnabled: _approvalNotifications,
+            InventoryNotificationsEnabled: _inventoryNotifications,
+            HRNotificationsEnabled: _hrNotifications,
+            FinanceNotificationsEnabled: _financialNotifications,
+            AnalyticsConsent: _analyticsConsent,
+            ProductImprovementConsent: _productImprovementConsent);
+
+    private void ApplyPreferences(UserPreferencesResponse preferences)
+    {
+        ApplyPreferences(
+            new UpdateUserPreferencesRequest(
+                preferences.Theme,
+                preferences.Language,
+                preferences.TimeZone,
+                preferences.DateFormat,
+                preferences.TimeFormat,
+                preferences.NumberFormat,
+                preferences.CompactMode,
+                preferences.ConfirmActions,
+                preferences.RememberNavigation,
+                preferences.EmailNotificationsEnabled,
+                preferences.InAppNotificationsEnabled,
+                preferences.PushNotificationsEnabled,
+                preferences.SecurityAlertsEnabled,
+                preferences.ProjectNotificationsEnabled,
+                preferences.ApprovalNotificationsEnabled,
+                preferences.InventoryNotificationsEnabled,
+                preferences.HRNotificationsEnabled,
+                preferences.FinanceNotificationsEnabled,
+                preferences.AnalyticsConsent,
+                preferences.ProductImprovementConsent));
+    }
+
+    private void ApplyPreferences(UpdateUserPreferencesRequest preferences)
+    {
+        _theme = preferences.Theme.ToLowerInvariant() switch
+        {
+            "dark" => "dark",
+            "system" => "system",
+            _ => "light"
+        };
+        _language = preferences.Language;
+        _timeZone = preferences.TimeZone;
+        _dateFormat = preferences.DateFormat;
+        _timeFormat = preferences.TimeFormat.StartsWith(
+            "12",
+            StringComparison.OrdinalIgnoreCase)
+            ? "12"
+            : "24";
+        _numberFormat = preferences.NumberFormat;
+
+        _compactMode = preferences.CompactMode;
+        _confirmActions = preferences.ConfirmActions;
+        _rememberNavigation = preferences.RememberNavigation;
+
+        _projectNotifications = preferences.ProjectNotificationsEnabled;
+        _approvalNotifications = preferences.ApprovalNotificationsEnabled;
+        _inventoryNotifications = preferences.InventoryNotificationsEnabled;
+        _hrNotifications = preferences.HRNotificationsEnabled;
+        _financialNotifications = preferences.FinanceNotificationsEnabled;
+
+        _inAppNotifications = preferences.InAppNotificationsEnabled;
+        _emailNotifications = preferences.EmailNotificationsEnabled;
+        _pushNotifications = preferences.PushNotificationsEnabled;
+        _securityAlerts = preferences.SecurityAlertsEnabled;
+
+        _analyticsConsent = preferences.AnalyticsConsent;
+        _productImprovementConsent = preferences.ProductImprovementConsent;
+    }
+
+    private async Task DiscardPreferenceChangesAsync()
+    {
+        var savedPreferences = _savedPreferences;
+
+        if (savedPreferences is null)
+        {
+            return;
+        }
+
+        ApplyPreferences(savedPreferences);
+        _savedPreferences = BuildPreferencesRequest();
+        ClearMessage();
+
+        await JS.InvokeVoidAsync("csmTheme.persist", _theme);
+        await JS.InvokeVoidAsync("csmTheme.persistCompact", _compactMode);
+    }
+
+    private async Task ResetPreferencesAsync()
     {
         _theme = "light";
         _language = "en";
         _dateFormat = "dd/MM/yyyy";
         _timeFormat = "24";
+        _timeZone = "UTC";
+        _numberFormat = "en-US";
 
         _compactMode = false;
         _confirmActions = true;
@@ -1862,6 +2101,9 @@ private async Task SubmitPrivacyDataRequestAsync()
 
         _messageIsError = false;
         _message = "Defaults restored on this page. Select Save to persist them.";
+
+        await JS.InvokeVoidAsync("csmTheme.apply", _theme);
+        await JS.InvokeVoidAsync("csmTheme.setCompact", _compactMode);
     }
 
 

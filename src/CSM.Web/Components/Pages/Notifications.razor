@@ -98,54 +98,38 @@
         <section class="notifications-panel" aria-labelledby="notification-list-title">
             <div class="notifications-panel-header">
                 <div>
-                    <h2 id="notification-list-title">Your activity</h2>
-                    <p>Review updates and open related records.</p>
+                    <h2 id="notification-list-title">@(_activeFilter == "inbox" ? "Inbox" : "Notification history")</h2>
+                    <p>@(_activeFilter == "inbox"
+                           ? "Notifications move to History after you read them."
+                           : "Read notifications stay here for future reference.")</p>
                 </div>
                 <div class="notification-filters" role="group" aria-label="Filter notifications">
                     <button type="button"
-                            class="@FilterClass("all")"
-                            aria-pressed="@(_activeFilter == "all")"
-                            @onclick='() => SetFilter("all")'>
-                        All <span>@_notifications.Count</span>
+                            class="@FilterClass("inbox")"
+                            aria-pressed="@(_activeFilter == "inbox")"
+                            @onclick='() => SetFilter("inbox")'>
+                        Inbox <span>@UnreadCount</span>
                     </button>
                     <button type="button"
-                            class="@FilterClass("unread")"
-                            aria-pressed="@(_activeFilter == "unread")"
-                            @onclick='() => SetFilter("unread")'>
-                        Unread <span>@UnreadCount</span>
-                    </button>
-                    <button type="button"
-                            class="@FilterClass("read")"
-                            aria-pressed="@(_activeFilter == "read")"
-                            @onclick='() => SetFilter("read")'>
-                        Read
+                            class="@FilterClass("history")"
+                            aria-pressed="@(_activeFilter == "history")"
+                            @onclick='() => SetFilter("history")'>
+                        History <span>@ReadCount</span>
                     </button>
                 </div>
             </div>
 
-            @if (_notifications.Count == 0)
+            @if (!FilteredNotifications.Any())
             {
                 <div class="notifications-state notifications-empty">
                     <span class="notifications-state-icon">
-                        <i class="bi bi-bell-slash" aria-hidden="true"></i>
+                        <i class="bi @(_activeFilter == "inbox" ? "bi-bell-slash" : "bi-archive")"
+                           aria-hidden="true"></i>
                     </span>
-                    <h2>You’re all caught up</h2>
-                    <p>There are no notifications to show right now.</p>
-                </div>
-            }
-            else if (!FilteredNotifications.Any())
-            {
-                <div class="notifications-state notifications-empty">
-                    <span class="notifications-state-icon">
-                        <i class="bi bi-check2-circle" aria-hidden="true"></i>
-                    </span>
-                    <h2>No @(_activeFilter) notifications</h2>
-                    <p>Try another filter to see more activity.</p>
-                    <button class="notifications-text-button"
-                            type="button"
-                            @onclick='() => SetFilter("all")'>
-                        Show all notifications
-                    </button>
+                    <h2>@(_activeFilter == "inbox" ? "You’re all caught up" : "No notification history yet")</h2>
+                    <p>@(_activeFilter == "inbox"
+                           ? "Read notifications are saved in History."
+                           : "Notifications you read will be saved here.")</p>
                 </div>
             }
             else
@@ -183,6 +167,12 @@
                                         <i class="bi bi-clock" aria-hidden="true"></i>
                                         @notification.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, h:mm tt")
                                     </time>
+                                    @if (notification.IsRead && notification.ReadAtUtc is DateTime readAtUtc)
+                                    {
+                                        <span class="notification-read-time">
+                                            Read @readAtUtc.ToLocalTime().ToString("dd MMM yyyy, h:mm tt")
+                                        </span>
+                                    }
 
                                     @if (link is not null || !notification.IsRead)
                                     {
@@ -233,9 +223,10 @@
     private bool _loading = true;
     private string? _error;
     private string? _actionError;
-    private string _activeFilter = "all";
+    private string _activeFilter = "inbox";
 
     private int UnreadCount => _notifications.Count(notification => !notification.IsRead);
+    private int ReadCount => _notifications.Count(notification => notification.IsRead);
 
     private int PriorityCount => _notifications.Count(notification =>
         !notification.IsRead &&
@@ -247,9 +238,8 @@
             .OrderByDescending(notification => notification.CreatedAtUtc)
             .Where(notification => _activeFilter switch
             {
-                "unread" => !notification.IsRead,
-                "read" => notification.IsRead,
-                _ => true
+                "history" => notification.IsRead,
+                _ => !notification.IsRead
             });
 
     protected override async Task OnInitializedAsync()
@@ -343,6 +333,7 @@
             catch (Exception ex)
             {
                 _actionError = ex.Message;
+                return;
             }
         }
 
