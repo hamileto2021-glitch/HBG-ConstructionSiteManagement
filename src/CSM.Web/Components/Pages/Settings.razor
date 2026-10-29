@@ -34,9 +34,9 @@
         </div>
 
         <div class="settings-header-actions">
-            <span class="settings-status">
-                <span class="status-dot"></span>
-                Account settings
+            <span class="settings-status @(SettingsStatusClass)" role="status" aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
+                @SettingsStatusText
             </span>
         </div>
     </div>
@@ -547,7 +547,6 @@
                             <h3>Account management</h3>
                             <p>Manage your account through the application's authorized workflows.</p>
                         </div>
-
 
 <div class="setting-row">
     <div class="setting-description">
@@ -1091,6 +1090,7 @@ else if (_activeTab == "privacy")
                         </div>
 
 
+<PermissionView AnyOf="@AuditViewPermission">
 <div class="setting-row">
     <div class="setting-description">
         <strong>Audit trail</strong>
@@ -1157,6 +1157,7 @@ else if (_activeTab == "privacy")
     </div>
     <span class="badge bg-info text-dark">Permission controlled</span>
 </div>
+</PermissionView>
 
                     </div>
                 </section>
@@ -1180,6 +1181,7 @@ else if (_activeTab == "privacy")
                             <p>Data operations must respect company boundaries and authorization rules.</p>
                         </div>
 
+                        <PermissionView AnyOf="@DataExportPermission">
                         <div class="setting-row">
                             <div class="setting-description">
                                 <strong>Export personal account data</strong>
@@ -1216,6 +1218,7 @@ else if (_activeTab == "privacy")
                                 @_dataExportMessage
                             </div>
                         }
+                        </PermissionView>
 
                         <div class="setting-row">
                             <div class="setting-description">
@@ -1436,6 +1439,9 @@ else if (_activeTab == "privacy")
 
 
 @code {
+    private static readonly string[] AuditViewPermission = ["Audit_View"];
+    private static readonly string[] DataExportPermission = ["Data_Export"];
+
     [Inject]
     private UserPreferencesService PreferencesService { get; set; } = default!;
 
@@ -1516,6 +1522,18 @@ else if (_activeTab == "privacy")
         _preferencesLoaded &&
         _savedPreferences is not null &&
         BuildPreferencesRequest() != _savedPreferences;
+
+    private string SettingsStatusText => !_preferencesLoaded
+        ? "Preferences unavailable"
+        : HasUnsavedChanges
+            ? "Unsaved changes"
+            : "All changes saved";
+
+    private string SettingsStatusClass => !_preferencesLoaded
+        ? "settings-status-unavailable"
+        : HasUnsavedChanges
+            ? "settings-status-unsaved"
+            : "settings-status-saved";
 
     protected override Task OnInitializedAsync() =>
         LoadPreferencesAsync();

@@ -31,10 +31,12 @@ else
                 </p>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick='() => Navigation.NavigateTo($"/projects/create/{SiteId}")'>
-                + New Project
-            </button>
+            <PermissionView AnyOf="@ProjectManagePermission">
+                <button class="btn btn-primary"
+                        @onclick='() => Navigation.NavigateTo($"/projects/create/{SiteId}")'>
+                    + New Project
+                </button>
+            </PermissionView>
 
         </div>
 
@@ -163,6 +165,8 @@ else
 }
 
 @code {
+    private static readonly string[] ProjectManagePermission = ["Projects_Manage"];
+
     [Parameter]
     public Guid SiteId { get; set; }
 

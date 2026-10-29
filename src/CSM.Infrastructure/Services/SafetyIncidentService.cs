@@ -28,7 +28,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.SafetyIncidents
             .AsNoTracking()
@@ -37,8 +37,14 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
 
         if (!IsSuperAdmin(actor))
         {
-            query = query.Where(
-                x => x.CompanyId == GetActorCompanyId(actor));
+            var companyId = GetActorCompanyId(actor);
+            query = query.Where(x => x.CompanyId == companyId);
+
+            var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+            if (siteIds.Count > 0)
+            {
+                query = query.Where(x => siteIds.Contains(x.ConstructionSiteId));
+            }
         }
 
         var incidents = await query
@@ -57,7 +63,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var incident = await _dbContext.SafetyIncidents
             .AsNoTracking()
@@ -70,6 +76,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
                 "Safety incident was not found.");
 
         EnsureCompanyAccess(actor, incident.CompanyId);
+        await EnsureSiteScopeAsync(actor, incident.ConstructionSiteId, cancellationToken);
 
         return Map(incident);
     }
@@ -101,6 +108,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             request.ClosedAtUtc);
 
         await EnsureConstructionSiteAccess(
+            actor,
             companyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -197,6 +205,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
         EnsureCompanyAccess(
             actor,
             incident.CompanyId);
+        await EnsureSiteScopeAsync(actor, incident.ConstructionSiteId, cancellationToken);
 
         Validate(
             request.IncidentNumber,
@@ -212,6 +221,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             request.ClosedAtUtc);
 
         await EnsureConstructionSiteAccess(
+            actor,
             incident.CompanyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -297,6 +307,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
         return await _dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
+                    .ThenInclude(role => role.GranularPermissions)
             .SingleOrDefaultAsync(
                 x => x.Id == currentUserId,
                 cancellationToken)
@@ -304,12 +315,21 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanView(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_View) ||
+            HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
+        {
+            return;
+        }
+
+        throw new SafetyIncidentManagementException(
+            "You are not authorized to view safety incidents.");
+    }
+
+    private static void EnsureCanManage(User actor)
+    {
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
         {
             return;
         }
@@ -348,6 +368,7 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
     }
 
     private async Task EnsureConstructionSiteAccess(
+        User actor,
         Guid companyId,
         Guid constructionSiteId,
         CancellationToken cancellationToken)
@@ -365,7 +386,42 @@ public sealed class SafetyIncidentService : ISafetyIncidentService
             throw new SafetyIncidentManagementException(
                 "The selected construction site is invalid or inaccessible.");
         }
+
+        await EnsureSiteScopeAsync(actor, constructionSiteId, cancellationToken);
     }
+
+    private async Task EnsureSiteScopeAsync(
+        User actor,
+        Guid siteId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor)) return;
+        var assignedSiteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+        if (assignedSiteIds.Count > 0 && !assignedSiteIds.Contains(siteId))
+        {
+            throw new SafetyIncidentManagementException(
+                "This safety incident is outside your assigned site scope.");
+        }
+    }
+
+    private Task<List<Guid>> GetAuthorizedSiteIdsAsync(
+        User actor,
+        CancellationToken cancellationToken)
+    {
+        return _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(access => access.UserId == actor.Id &&
+                             access.CompanyId == actor.CompanyId &&
+                             access.IsActive && !access.IsDeleted)
+            .Select(access => access.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
+    private static bool HasCompliancePermission(User actor, GranularPermission permission) =>
+        actor.UserRoles.Any(userRole => !userRole.IsDeleted && !userRole.Role.IsDeleted &&
+            userRole.Role.GranularPermissions.Any(rolePermission =>
+                rolePermission.Permission == permission));
 
     private async Task EnsureProjectAccess(
         Guid companyId,

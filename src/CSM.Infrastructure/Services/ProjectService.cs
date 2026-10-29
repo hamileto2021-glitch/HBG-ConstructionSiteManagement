@@ -44,28 +44,24 @@ if (!IsSuperAdmin(actor))
     query = query.Where(
         x => x.CompanyId == actor.CompanyId.Value);
 
-    if (HasRole(actor, AppRoles.CompanyAdmin))
+    var activeAssignments = _dbContext.UserSiteAccesses
+        .AsNoTracking()
+        .Where(access =>
+            access.UserId == actor.Id &&
+            access.CompanyId == actor.CompanyId.Value &&
+            access.IsActive &&
+            !access.IsDeleted)
+        .Select(access => access.SiteId);
+
+    if (await activeAssignments.AnyAsync(cancellationToken))
     {
-        // CompanyAdmin can see all projects within the company.
+        query = query.Where(project =>
+            activeAssignments.Contains(project.ConstructionSiteId));
     }
-    else if (HasRole(actor, AppRoles.SiteManager))
+    else if (HasRole(actor, AppRoles.CompanyAdmin))
     {
-        var activeAssignments = _dbContext.UserSiteAccesses
-            .AsNoTracking()
-            .Where(access =>
-                access.UserId == actor.Id &&
-                access.CompanyId == actor.CompanyId.Value &&
-                access.IsActive)
-            .Select(access => access.SiteId);
-
-        var hasSiteAssignments =
-            await activeAssignments.AnyAsync(cancellationToken);
-
-        if (hasSiteAssignments)
-        {
-            query = query.Where(project =>
-                activeAssignments.Contains(project.ConstructionSiteId));
-        }
+        // CompanyAdmin can see all projects within the company when no
+        // active site assignment narrows the user's scope.
     }
     else if (await HasProjectViewPermissionAsync(actor.Id, cancellationToken))
     {
@@ -387,12 +383,31 @@ private void EnsureProjectAccess(
     User actor,
     Project project)
 {
+    EnsureProjectRole(actor);
+
+    var activeAssignments = _dbContext.UserSiteAccesses
+        .Where(access =>
+            access.UserId == actor.Id &&
+            access.CompanyId == project.CompanyId &&
+            access.IsActive &&
+            !access.IsDeleted);
+
+    if (activeAssignments.Any())
+    {
+        if (activeAssignments.Any(access =>
+                access.SiteId == project.ConstructionSiteId))
+        {
+            return;
+        }
+
+        throw new ProjectManagementException(
+            "You are not assigned to this project's site.");
+    }
+
     if (IsSuperAdmin(actor))
     {
         return;
     }
-
-    EnsureProjectRole(actor);
 
     if (!actor.CompanyId.HasValue ||
         actor.CompanyId.Value != project.CompanyId)
@@ -405,12 +420,6 @@ private void EnsureProjectAccess(
     {
         return;
     }
-
-    var activeAssignments = _dbContext.UserSiteAccesses
-        .Where(access =>
-            access.UserId == actor.Id &&
-            access.CompanyId == project.CompanyId &&
-            access.IsActive);
 
 
     if (HasRole(actor, AppRoles.SiteManager) &&
@@ -529,7 +538,8 @@ private void EnsureProjectAccess(
 
     private static void EnsureProjectRole(User actor)
     {
-        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+        if (HasRole(actor, AppRoles.SuperAdmin) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.Supervisor))
         {

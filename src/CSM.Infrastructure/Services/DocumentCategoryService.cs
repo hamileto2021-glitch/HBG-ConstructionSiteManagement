@@ -5,6 +5,7 @@ using CSM.Application.Compliance.DocumentCategories.Dtos;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Compliance;
 using CSM.Domain.Entities.Identity;
+using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +31,7 @@ public sealed class DocumentCategoryService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.DocumentCategories
             .AsNoTracking()
@@ -75,7 +76,7 @@ public sealed class DocumentCategoryService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var category = await _dbContext.DocumentCategories
             .AsNoTracking()
@@ -104,6 +105,8 @@ public sealed class DocumentCategoryService
             cancellationToken);
 
         EnsureCanManage(actor);
+
+        await EnsureCompanyCatalogManagementScopeAsync(actor, cancellationToken);
 
         var companyId = GetActorCompanyId(actor);
 
@@ -158,6 +161,8 @@ public sealed class DocumentCategoryService
             cancellationToken);
 
         EnsureCanManage(actor);
+
+        await EnsureCompanyCatalogManagementScopeAsync(actor, cancellationToken);
 
         var category = await _dbContext.DocumentCategories
             .SingleOrDefaultAsync(
@@ -214,6 +219,7 @@ public sealed class DocumentCategoryService
         return await _dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
+                    .ThenInclude(role => role.GranularPermissions)
             .SingleOrDefaultAsync(
                 x => x.Id == currentUserId,
                 cancellationToken)
@@ -221,12 +227,22 @@ public sealed class DocumentCategoryService
                 "Authenticated user was not found.");
     }
 
+    private static void EnsureCanView(User actor)
+    {
+        if (HasPermission(actor, GranularPermission.Compliance_View) ||
+            HasPermission(actor, GranularPermission.Compliance_Manage))
+        {
+            return;
+        }
+
+        throw new DocumentCategoryManagementException(
+            "You are not authorized to view document categories.");
+    }
+
     private static void EnsureCanManage(
         User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasPermission(actor, GranularPermission.Compliance_Manage))
         {
             return;
         }
@@ -234,6 +250,33 @@ public sealed class DocumentCategoryService
         throw new DocumentCategoryManagementException(
             "You are not authorized to manage document categories.");
     }
+
+    private async Task EnsureCompanyCatalogManagementScopeAsync(
+        User actor,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor) || !actor.CompanyId.HasValue)
+        {
+            return;
+        }
+
+        var hasActiveSiteAccess = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .AnyAsync(access => access.UserId == actor.Id &&
+                                access.CompanyId == actor.CompanyId.Value &&
+                                access.IsActive && !access.IsDeleted,
+                cancellationToken);
+        if (hasActiveSiteAccess)
+        {
+            throw new DocumentCategoryManagementException(
+                "Document categories are company-wide and cannot be changed from a site-scoped account.");
+        }
+    }
+
+    private static bool HasPermission(User actor, GranularPermission permission) =>
+        actor.UserRoles.Any(userRole => !userRole.IsDeleted && !userRole.Role.IsDeleted &&
+            userRole.Role.GranularPermissions.Any(rolePermission =>
+                rolePermission.Permission == permission));
 
     private static void EnsureCompanyAccess(
         User actor,

@@ -44,12 +44,8 @@ public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
 
         var companyId = actor.CompanyId.Value;
 
-        if (HasRole(actor, AppRoles.CompanyAdmin))
-        {
-            query = query.Where(
-                x => x.CompanyId == companyId);
-        }
-        else if (HasRole(actor, AppRoles.SiteManager) ||
+        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.SiteManager) ||
                  HasRole(actor, AppRoles.Accountant) ||
                  HasRole(actor, AppRoles.HROfficer) ||
                  HasRole(actor, AppRoles.HrOfficer))
@@ -73,8 +69,8 @@ public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
                 query = query.Where(
                     site => assignedSiteIds.Contains(site.Id));
             }
-            // No active assignments: preserve company-wide access,
-            // matching the existing SiteManager behavior.
+            // Users without active assignments retain their role-based
+            // company scope.
         }
         else
         {
@@ -426,22 +422,28 @@ public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
                 "You cannot access a site outside your company.");
         }
 
-        if (HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
-        {
-            return;
-        }
-
         var activeAssignments = _dbContext.UserSiteAccesses
             .Where(access =>
                 access.UserId == actor.Id &&
                 access.CompanyId == site.CompanyId &&
                 access.IsActive);
 
-        // Match GetAllAsync: a Site Manager with no active
-        // assignments can access sites within their company.
-        if (HasRole(actor, AppRoles.SiteManager) &&
-            !activeAssignments.Any())
+        // Any active assignment narrows access, even for roles that
+        // otherwise have company-wide site access.
+        if (activeAssignments.Any())
+        {
+            if (activeAssignments.Any(access => access.SiteId == site.Id))
+            {
+                return;
+            }
+
+            throw new SiteManagementException(
+                "You are not assigned to this site.");
+        }
+
+        if (HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
         {
             return;
         }

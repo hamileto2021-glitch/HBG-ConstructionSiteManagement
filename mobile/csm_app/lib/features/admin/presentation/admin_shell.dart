@@ -135,11 +135,12 @@ class _AdminShellState extends State<AdminShell> {
     );
 
     _items = [
-      AdminNavItem(
-        label: 'Dashboard',
-        route: '/dashboard',
-        policy: AdminNavPolicy.dashboard,
-      ),
+      if (_authorization.canAccessReportManagement())
+        AdminNavItem(
+          label: 'Dashboard',
+          route: '/dashboard',
+          policy: AdminNavPolicy.dashboard,
+        ),
 
       if (_authorization.canAccessProjectManagement())
         AdminNavItem(
@@ -190,17 +191,19 @@ class _AdminShellState extends State<AdminShell> {
           policy: AdminNavPolicy.inventoryManagement,
         ),
 
-      AdminNavItem(
-        label: 'Compliance',
-        route: '/compliance',
-        policy: AdminNavPolicy.complianceManagement,
-      ),
+      if (_authorization.canAccessComplianceManagement())
+        AdminNavItem(
+          label: 'Compliance',
+          route: '/compliance',
+          policy: AdminNavPolicy.complianceManagement,
+        ),
 
-      AdminNavItem(
-        label: 'Reports',
-        route: '/reports',
-        policy: AdminNavPolicy.reportManagement,
-      ),
+      if (_authorization.canAccessReportManagement())
+        AdminNavItem(
+          label: 'Reports',
+          route: '/reports',
+          policy: AdminNavPolicy.reportManagement,
+        ),
 
       if (_authorization.canAccessCompanyManagement())
         AdminNavItem(
@@ -224,6 +227,20 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_items.isEmpty) {
+      return const Scaffold(
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'No application modules are assigned to your account. Contact your administrator for access.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final selectedItem = _items[_selectedIndex];
 
     return ResponsiveScaffold(

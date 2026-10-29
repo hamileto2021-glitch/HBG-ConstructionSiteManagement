@@ -16,6 +16,7 @@ public class ComplianceAlertService
 
     public async Task<List<ComplianceAlertResponse>> GetAsync(
         Guid companyId,
+        IReadOnlyCollection<Guid>? siteIds = null,
         CancellationToken cancellationToken = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -26,6 +27,7 @@ public class ComplianceAlertService
             .Include(x => x.ConstructionSite)
             .Where(x =>
                 x.CompanyId == companyId &&
+                (siteIds == null || siteIds.Contains(x.ConstructionSiteId)) &&
                 x.Status == PermitStatus.Active &&
                 x.ExpiryDate != null &&
                 x.ExpiryDate <= limit)

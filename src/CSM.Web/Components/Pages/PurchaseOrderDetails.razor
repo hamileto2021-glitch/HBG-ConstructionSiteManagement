@@ -42,24 +42,30 @@ else
 
             @if (order.Status == "Draft")
             {
-                <button class="btn btn-warning"
-                        @onclick="SubmitForApproval">
-                    Submit for Approval
-                </button>
+                <PermissionView AnyOf="@PurchaseOrderManagePermission">
+                    <button class="btn btn-warning"
+                            @onclick="SubmitForApproval">
+                        Submit for Approval
+                    </button>
+                </PermissionView>
             }
             else if (order.Status == "PendingApproval")
             {
-                <button class="btn btn-success"
-                        @onclick="ApprovePurchaseOrder">
-                    Approve
-                </button>
+                <PermissionView AnyOf="@PurchaseOrderApprovePermission">
+                    <button class="btn btn-success"
+                            @onclick="ApprovePurchaseOrder">
+                        Approve
+                    </button>
+                </PermissionView>
             }
             else if (order.Status == "Approved")
             {
-                <button class="btn btn-primary"
-                        @onclick="SendToVendor">
-                    Send to Vendor
-                </button>
+                <PermissionView AnyOf="@PurchaseOrderManagePermission">
+                    <button class="btn btn-primary"
+                            @onclick="SendToVendor">
+                        Send to Vendor
+                    </button>
+                </PermissionView>
             }
             else
             {
@@ -154,6 +160,11 @@ else
 }
 
 @code {
+    private static readonly string[] PurchaseOrderManagePermission =
+        ["Procurement_PurchaseOrder_Manage"];
+    private static readonly string[] PurchaseOrderApprovePermission =
+        ["Procurement_PurchaseOrder_Approve"];
+
     [Parameter] public Guid Id { get; set; }
 
     private bool loading = true;

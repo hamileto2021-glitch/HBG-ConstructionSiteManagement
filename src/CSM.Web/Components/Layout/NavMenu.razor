@@ -48,15 +48,17 @@
                 </div>
             }
 
-            <!-- Dashboard -->
-            <div class="nav-item">
-                <NavLink class="nav-link"
-                         href="/dashboard"
-                         Match="NavLinkMatch.All">
-                    <span class="bi bi-speedometer2-nav-menu nav-icon" aria-hidden="true"></span>
-                    <span class="nav-label">Dashboard</span>
-                </NavLink>
-            </div>
+            @if (HasPermission("Reports_View"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link"
+                             href="/dashboard"
+                             Match="NavLinkMatch.All">
+                        <span class="bi bi-speedometer2 nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Dashboard</span>
+                    </NavLink>
+                </div>
+            }
 
             <!-- Project Tracking -->
             @if (HasPermission("Projects_View"))
@@ -65,13 +67,23 @@
                     <NavLink class="nav-link"
                              href="/project-tracking"
                              Match="NavLinkMatch.All">
-                        <span class="bi bi-kanban-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-kanban nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Project Tracking</span>
                     </NavLink>
                 </div>
             }
 
-
+            @if (HasPermission("Sites_View") || HasPermission("Sites_Manage"))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link"
+                             href="/sites-management"
+                             Match="NavLinkMatch.Prefix">
+                        <span class="bi bi-geo-alt nav-icon" aria-hidden="true"></span>
+                        <span class="nav-label">Construction Sites</span>
+                    </NavLink>
+                </div>
+            }
 
             <!-- Procurement -->
             @if (HasPermission("Procurement_MaterialRequest_View") ||
@@ -80,7 +92,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/procurement">
-                        <span class="bi bi-box-seam-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-box-seam nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Procurement</span>
                     </NavLink>
                 </div>
@@ -91,7 +103,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/inventory">
-                        <span class="bi bi-box-seam-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-box-seam nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Inventory</span>
                     </NavLink>
                 </div>
@@ -103,7 +115,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/equipment">
-                        <span class="bi bi-truck-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-truck nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Equipment</span>
                     </NavLink>
                 </div>
@@ -138,7 +150,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/users">
-                        <span class="bi bi-people-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-people nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Users</span>
                     </NavLink>
                 </div>
@@ -148,7 +160,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/roles">
-                        <span class="bi bi-shield-lock-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-shield-lock nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Role Permissions</span>
                     </NavLink>
                 </div>
@@ -158,7 +170,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/users/audit">
-                        <span class="bi bi-clock-history-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-clock-history nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">User Audit</span>
                     </NavLink>
                 </div>
@@ -172,7 +184,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/hr">
-                        <span class="bi bi-person-badge-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-person-badge nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">HR Management</span>
                     </NavLink>
                 </div>
@@ -188,7 +200,7 @@
                     <NavLink class="nav-link"
                              href="/finance/sites"
                              Match="NavLinkMatch.Prefix">
-                        <span class="bi bi-wallet2-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-wallet2 nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Finance</span>
                     </NavLink>
                 </div>
@@ -198,7 +210,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/compliance">
-                        <span class="bi bi-shield-check-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-shield-check nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Compliance</span>
                     </NavLink>
                 </div>
@@ -209,7 +221,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/reports">
-                        <span class="bi bi-bar-chart-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-bar-chart nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Reports</span>
                     </NavLink>
                 </div>
@@ -219,7 +231,7 @@
             {
                 <div class="nav-item">
                     <NavLink class="nav-link" href="/notifications">
-                        <span class="bi bi-bell-nav-menu nav-icon" aria-hidden="true"></span>
+                        <span class="bi bi-bell nav-icon" aria-hidden="true"></span>
                         <span class="nav-label">Notifications</span>
 
                         @if (_unreadNotificationCount > 0)
@@ -234,7 +246,7 @@
 
             <div class="nav-item">
                 <NavLink class="nav-link" href="/settings">
-                    <span class="bi bi-gear-nav-menu nav-icon" aria-hidden="true"></span>
+                    <span class="bi bi-gear nav-icon" aria-hidden="true"></span>
                     <span class="nav-label">Settings & Privacy</span>
                 </NavLink>
             </div>
@@ -246,7 +258,7 @@
     <!-- Sign Out -->
     <div class="signout">
         <button type="button" class="nav-link signout-btn" @onclick="SignOutAsync" disabled="@_signingOut">
-            <span class="bi bi-box-arrow-right-nav-menu nav-icon" aria-hidden="true"></span>
+            <span class="bi bi-box-arrow-right nav-icon" aria-hidden="true"></span>
             <span>@(_signingOut ? "Signing out..." : "Sign Out")</span>
         </button>
     </div>
@@ -271,27 +283,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            _unreadNotificationCount =
-                await NotificationService.GetUnreadCountAsync();
-        }
-            catch (Exception ex)
-            {
-                _unreadNotificationCount = 0;
-                Logger.LogWarning(ex, "Unable to load the unread notification count for the navigation menu.");
-            }
-
-        try
-        {
-            _permissions = await AuthService.GetPermissionsAsync();
-
-        }
-        finally
-        {
-            _permissionsLoaded = true;
-        }
-
         NavigationManager.LocationChanged += OnLocationChanged;
         _ = RefreshLoopAsync();
     }
@@ -300,7 +291,38 @@
     {
         if (firstRender)
         {
-            await InitializeRememberNavigationAsync();
+            try
+            {
+                _permissions = await AuthService.GetPermissionsAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Unable to load navigation permissions.");
+            }
+            finally
+            {
+                _permissionsLoaded = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(await AuthService.GetTokenAsync()))
+            {
+                _navigationPreferenceLoaded = true;
+            }
+            else
+            {
+                try
+                {
+                    await InitializeRememberNavigationAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogDebug(ex, "Unable to initialize remembered navigation.");
+                    _navigationPreferenceLoaded = true;
+                }
+            }
+
+            await RefreshUnreadCountAsync();
+            await InvokeAsync(StateHasChanged);
         }
     }
 

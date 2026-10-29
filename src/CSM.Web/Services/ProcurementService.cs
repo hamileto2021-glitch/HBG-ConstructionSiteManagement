@@ -136,8 +136,23 @@ public class ProcurementService : IProcurementService
        if (client is null)
            return [];
 
-       return await client.GetFromJsonAsync<List<StockItemResponse>>(
-           "stockitems") ?? [];
+       var balances = await client.GetFromJsonAsync<List<StockBalanceResponse>>(
+           "stockbalances") ?? [];
+
+       return balances.Select(balance => new StockItemResponse
+       {
+           Id = balance.StockItemId,
+           MaterialId = balance.MaterialId,
+           ConstructionSiteId = balance.ConstructionSiteId,
+           MaterialCode = balance.MaterialCode,
+           MaterialName = balance.MaterialName,
+           SiteCode = balance.SiteCode,
+           SiteName = balance.SiteName,
+           QuantityOnHand = balance.QuantityOnHand,
+           QuantityReserved = balance.QuantityReserved,
+           ReorderLevel = balance.ReorderLevel,
+           UnitOfMeasure = balance.UnitOfMeasure
+       }).ToList();
    }
 
    public async Task<List<MaterialRequestResponse>> GetMaterialRequestsAsync()

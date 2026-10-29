@@ -9,6 +9,7 @@ namespace CSM.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
+[Authorize(Policy = "Reports.View")]
 public sealed class DashboardController : ControllerBase
 {
     private readonly IExecutiveDashboardService _dashboardService;

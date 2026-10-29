@@ -28,11 +28,13 @@
 
             @if (_contractor is not null)
             {
-                <button class="btn btn-primary"
-                        @onclick="EditContractor">
-                    <i class="bi bi-pencil"></i>
-                    Edit Contractor
-                </button>
+                <PermissionView AnyOf="@ContractorManagePermission">
+                    <button class="btn btn-primary"
+                            @onclick="EditContractor">
+                        <i class="bi bi-pencil"></i>
+                        Edit Contractor
+                    </button>
+                </PermissionView>
             }
         </div>
     </div>
@@ -222,6 +224,8 @@
 </div>
 
 @code {
+    private static readonly string[] ContractorManagePermission = ["HRM_Contractor_Manage"];
+
     [Parameter]
     public Guid contractorId { get; set; }
 

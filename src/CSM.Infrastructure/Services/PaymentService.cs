@@ -647,23 +647,32 @@ public sealed class PaymentService : IPaymentService
         User actor,
         CancellationToken cancellationToken)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
-        {
-            return null;
-        }
-
         var companyId = GetActorCompanyId(actor);
 
-        return await _dbContext.UserSiteAccesses
+        var assignedSiteIds = await _dbContext.UserSiteAccesses
             .AsNoTracking()
             .Where(x =>
                 x.UserId == actor.Id &&
                 x.CompanyId == companyId &&
-                x.IsActive)
+                x.IsActive &&
+                !x.IsDeleted)
             .Select(x => x.SiteId)
             .ToListAsync(cancellationToken);
+
+        if (assignedSiteIds.Count > 0)
+        {
+            return assignedSiteIds;
+        }
+
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant) ||
+            HasRole(actor, AppRoles.SiteManager))
+        {
+            return null;
+        }
+
+        return assignedSiteIds;
     }
 
     private async Task EnsureSiteAccess(
@@ -671,16 +680,17 @@ public sealed class PaymentService : IPaymentService
         Guid? siteId,
         CancellationToken cancellationToken)
     {
-        // Company-level payment: site managers cannot access these.
+        // A user with active site assignments cannot access unscoped payments.
         if (!siteId.HasValue)
         {
-            if (HasRole(actor, AppRoles.SiteManager) &&
-                !HasRole(actor, AppRoles.CompanyAdmin) &&
-                !HasRole(actor, AppRoles.Accountant) &&
-                !IsSuperAdmin(actor))
+            var assignedSites = await GetVisibleSiteIdsAsync(
+                actor,
+                cancellationToken);
+
+            if (assignedSites is { Count: > 0 })
             {
                 throw new PaymentManagementException(
-                    "You are not authorized to access this payment.");
+                    "Company-level payments are outside your assigned site scope.");
             }
 
             return;

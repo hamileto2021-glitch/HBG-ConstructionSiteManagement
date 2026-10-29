@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class PermitsController : ControllerBase
 {
     private readonly IPermitService _permitService;
@@ -22,6 +22,7 @@ public sealed class PermitsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Compliance.View")]
     public async Task<
         ActionResult<IReadOnlyCollection<PermitResponse>>> GetAll(
         CancellationToken cancellationToken)
@@ -42,6 +43,7 @@ public sealed class PermitsController : ControllerBase
     }
 
     [HttpGet("{permitId:guid}")]
+    [Authorize(Policy = "Compliance.View")]
     public async Task<ActionResult<PermitResponse>> GetById(
         Guid permitId,
         CancellationToken cancellationToken)
@@ -63,6 +65,7 @@ public sealed class PermitsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Compliance.Manage")]
     public async Task<ActionResult<PermitResponse>> Create(
         [FromBody] CreatePermitRequest request,
         CancellationToken cancellationToken)
@@ -87,6 +90,7 @@ public sealed class PermitsController : ControllerBase
     }
 
     [HttpPut("{permitId:guid}")]
+    [Authorize(Policy = "Compliance.Manage")]
     public async Task<ActionResult<PermitResponse>> Update(
         Guid permitId,
         [FromBody] UpdatePermitRequest request,

@@ -33,11 +33,13 @@
                 Back
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="CreateEmployee">
-                <i class="bi bi-person-plus me-2"></i>
-                Add Employee
-            </button>
+            <PermissionView AnyOf="@EmployeeManagePermission">
+                <button class="btn btn-primary"
+                        @onclick="CreateEmployee">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Add Employee
+                </button>
+            </PermissionView>
         </div>
     </div>
 
@@ -198,10 +200,12 @@
                                                 View
                                             </button>
 
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="() => EditSiteEmployee(assignment.EmployeeId)">
-                                                Edit
-                                            </button>
+                                            <PermissionView AnyOf="@EmployeeManagePermission">
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => EditSiteEmployee(assignment.EmployeeId)">
+                                                    Edit
+                                                </button>
+                                            </PermissionView>
                                         </td>
                                     </tr>
                                 }
@@ -317,10 +321,12 @@
                                                 View
                                             </button>
 
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="() => EditEmployee(employee.Id)">
-                                                Edit
-                                            </button>
+                                            <PermissionView AnyOf="@EmployeeManagePermission">
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => EditEmployee(employee.Id)">
+                                                    Edit
+                                                </button>
+                                            </PermissionView>
                                         </td>
                                     </tr>
                                 }
@@ -334,6 +340,8 @@
 </div>
 
 @code {
+    private static readonly string[] EmployeeManagePermission = ["HRM_Employee_Manage"];
+
     [Parameter]
     public string? Scope { get; set; }
 

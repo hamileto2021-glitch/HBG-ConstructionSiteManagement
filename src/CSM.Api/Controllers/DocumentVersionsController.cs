@@ -10,7 +10,7 @@ namespace CSM.Api.Controllers;
 
 [ApiController]
 [Route("api/documents/{documentId:guid}/versions")]
-[Authorize(Policy = AppPolicies.ProcurementManagement)]
+[Authorize]
 public sealed class DocumentVersionsController : ControllerBase
 {
     private readonly IDocumentVersionService _service;
@@ -22,6 +22,7 @@ public sealed class DocumentVersionsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "Compliance.View")]
     public async Task<ActionResult<IReadOnlyCollection<DocumentVersionResponse>>> GetAll(
         Guid documentId,
         CancellationToken cancellationToken)
@@ -42,6 +43,7 @@ public sealed class DocumentVersionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Compliance.Manage")]
     public async Task<ActionResult<DocumentVersionResponse>> Create(
         Guid documentId,
         CreateDocumentVersionRequest request,
@@ -64,6 +66,7 @@ public sealed class DocumentVersionsController : ControllerBase
     }
 
     [HttpGet("{versionId:guid}/download")]
+    [Authorize(Policy = "Compliance.View")]
     public async Task<IActionResult> Download(
         Guid documentId,
         Guid versionId,

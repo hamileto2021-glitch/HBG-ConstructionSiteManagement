@@ -40,6 +40,7 @@ public sealed class BudgetService : IBudgetService
             .AsNoTracking()
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+                .ThenInclude(x => x!.ConstructionSite)
             .Where(x => !x.IsDeleted);
 
         if (!IsSuperAdmin(actor))
@@ -48,27 +49,28 @@ public sealed class BudgetService : IBudgetService
 
             query = query.Where(x => x.CompanyId == companyId);
 
-            if (!IsCompanyWide(actor))
+            var siteIds = await _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == actor.Id &&
+                    x.CompanyId == companyId &&
+                    x.IsActive &&
+                    !x.IsDeleted)
+                .Select(x => x.SiteId)
+                .ToListAsync(cancellationToken);
+
+            if (siteIds.Count > 0)
             {
-                var siteIds = await _dbContext.UserSiteAccesses
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.UserId == actor.Id &&
-                        x.CompanyId == companyId &&
-                        x.IsActive)
-                    .Select(x => x.SiteId)
-                    .ToListAsync(cancellationToken);
-
-                var seesAllSites =
-                    HasRole(actor, AppRoles.SiteManager) &&
-                    siteIds.Count == 0;
-
-                if (!seesAllSites)
-                {
-                    query = query.Where(x =>
-                        x.ConstructionSiteId != null &&
-                        siteIds.Contains(x.ConstructionSiteId.Value));
-                }
+                query = query.Where(x =>
+                    (x.ConstructionSiteId.HasValue &&
+                     siteIds.Contains(x.ConstructionSiteId.Value)) ||
+                    (x.Project != null &&
+                     siteIds.Contains(x.Project.ConstructionSiteId)));
+            }
+            else if (!IsCompanyWide(actor) &&
+                     !HasRole(actor, AppRoles.SiteManager))
+            {
+                query = query.Where(_ => false);
             }
         }
 
@@ -103,9 +105,12 @@ public sealed class BudgetService : IBudgetService
             .AsNoTracking()
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+                .ThenInclude(x => x!.ConstructionSite)
             .Where(x =>
                 x.CompanyId == companyId &&
-                x.ConstructionSiteId == siteId &&
+                (x.ConstructionSiteId == siteId ||
+                 (x.Project != null &&
+                  x.Project.ConstructionSiteId == siteId)) &&
                 !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
@@ -134,11 +139,25 @@ public sealed class BudgetService : IBudgetService
             actor,
             budget.CompanyId);
 
-        // Company-level budgets are for company-wide roles only.
-        if (!budget.ConstructionSiteId.HasValue && !IsCompanyWide(actor))
+        if (!budget.ConstructionSiteId.HasValue)
         {
-            throw new BudgetManagementException(
-                "You are not authorized to access this budget.");
+            var hasActiveSiteAssignment = await _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.UserId == actor.Id &&
+                    x.CompanyId == budget.CompanyId &&
+                    x.IsActive &&
+                    !x.IsDeleted,
+                    cancellationToken);
+
+            var hasCompanyBudgetAccess = IsCompanyWide(actor) ||
+                HasRole(actor, AppRoles.SiteManager);
+
+            if (hasActiveSiteAssignment || !hasCompanyBudgetAccess)
+            {
+                throw new BudgetManagementException(
+                    "You are not authorized to access this budget.");
+            }
         }
 
         await EnsureSiteAccess(
@@ -438,6 +457,7 @@ public sealed class BudgetService : IBudgetService
         var budget = await _dbContext.Budgets
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+                .ThenInclude(x => x!.ConstructionSite)
             .SingleOrDefaultAsync(
                 x => x.Id == budgetId && !x.IsDeleted,
                 cancellationToken);
@@ -457,6 +477,7 @@ public sealed class BudgetService : IBudgetService
         var budget = await _dbContext.Budgets
             .Include(x => x.ConstructionSite)
             .Include(x => x.Project)
+                .ThenInclude(x => x!.ConstructionSite)
             .SingleOrDefaultAsync(
                 x => x.Id == budgetId && !x.IsDeleted,
                 cancellationToken);
@@ -496,20 +517,33 @@ public sealed class BudgetService : IBudgetService
                 "The selected construction site is invalid or inaccessible.");
         }
 
+        var activeSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(
+                x =>
+                    x.UserId == actor.Id &&
+                    x.CompanyId == companyId &&
+                    x.IsActive &&
+                    !x.IsDeleted)
+            .Select(x => x.SiteId)
+            .ToListAsync(cancellationToken);
+
+        if (activeSiteIds.Count > 0)
+        {
+            if (activeSiteIds.Contains(siteId.Value))
+            {
+                return;
+            }
+
+            throw new BudgetManagementException(
+                "You are not assigned to this site's budget scope.");
+        }
+
         if (HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.Accountant))
         {
             return;
         }
-
-        var activeSiteIds = await _dbContext.UserSiteAccesses
-            .Where(
-                x =>
-                    x.UserId == actor.Id &&
-                    x.CompanyId == companyId &&
-                    x.IsActive)
-            .Select(x => x.SiteId)
-            .ToListAsync(cancellationToken);
 
         // Company-level Site Managers can access sites within their company
         // when they have no active site-specific assignments.
@@ -684,8 +718,10 @@ public sealed class BudgetService : IBudgetService
             Id = budget.Id,
             CompanyId = budget.CompanyId,
 
-            ConstructionSiteId = budget.ConstructionSiteId,
-            ConstructionSiteName = budget.ConstructionSite?.Name ?? string.Empty,
+            ConstructionSiteId = budget.ConstructionSiteId ??
+                budget.Project?.ConstructionSiteId,
+            ConstructionSiteName = budget.ConstructionSite?.Name ??
+                budget.Project?.ConstructionSite?.Name ?? string.Empty,
 
             ProjectId = budget.ProjectId,
             ProjectName = budget.Project == null

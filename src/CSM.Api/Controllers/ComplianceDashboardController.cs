@@ -4,28 +4,35 @@ using CSM.Application.Compliance.Dashboard;
 using CSM.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CSM.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[Authorize(Policy = "Compliance.View")]
 [Route("api/[controller]")]
 public class ComplianceDashboardController : ControllerBase
 {
     private readonly ComplianceDashboardService _service;
+    private readonly ApplicationDbContext _dbContext;
 
-    public ComplianceDashboardController(ComplianceDashboardService service)
+    public ComplianceDashboardController(ComplianceDashboardService service, ApplicationDbContext dbContext)
     {
         _service = service;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
     public async Task<ActionResult<ComplianceDashboardResponse>> Get(
         CancellationToken cancellationToken)
     {
-        var result = await _service.GetAsync(
-            GetCurrentCompanyId(),
-            cancellationToken);
+        var companyId = GetCurrentCompanyId();
+        var siteIds = await ComplianceScopeResolver.GetAssignedSiteIdsAsync(
+            _dbContext, GetCurrentUserId(), companyId,
+            User.IsInRole(CSM.Domain.Constants.AppRoles.SuperAdmin), cancellationToken);
+        var result = await _service.GetAsync(companyId, siteIds, cancellationToken);
 
         return Ok(result);
     }
@@ -42,4 +49,9 @@ public class ComplianceDashboardController : ControllerBase
 
         return companyId;
     }
+
+    private Guid GetCurrentUserId() =>
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            ? userId
+            : throw new UnauthorizedAccessException("Authenticated user identifier is invalid.");
 }

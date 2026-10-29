@@ -937,6 +937,20 @@ options.AddPolicy(
                             GranularPermission.Equipment_Manage.ToString()));
                 });
 
+            options.AddPolicy("Compliance.View", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new PermissionRequirement(
+                    GranularPermission.Compliance_View.ToString()));
+            });
+
+            options.AddPolicy("Compliance.Manage", policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new PermissionRequirement(
+                    GranularPermission.Compliance_Manage.ToString()));
+            });
+
 
 
         });

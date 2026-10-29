@@ -164,6 +164,7 @@
                 </dl>
             </section>
 
+            <PermissionView AnyOf="@EmployeeManagePermission">
             <section class="employee-info-card employee-status-card">
                 <header class="employee-card-heading">
                     <span class="employee-card-icon employee-tone-slate" aria-hidden="true">
@@ -227,6 +228,7 @@
                     </button>
                 </div>
             </section>
+            </PermissionView>
         </div>
 
         <footer class="employee-details-footer">
@@ -239,6 +241,8 @@
 </main>
 
 @code {
+    private static readonly string[] EmployeeManagePermission = ["HRM_Employee_Manage"];
+
     [Parameter]
     public Guid EmployeeId { get; set; }
 

@@ -32,10 +32,12 @@
                 <div class="text-muted">@equipment.EquipmentCode</div>
             </div>
 
-            <button class="btn btn-outline-primary"
-                    @onclick="EditEquipment">
-                Edit
-            </button>
+            <PermissionView AnyOf="@EquipmentManagePermission">
+                <button class="btn btn-outline-primary"
+                        @onclick="EditEquipment">
+                    Edit
+                </button>
+            </PermissionView>
         </div>
 
         <div class="card shadow-sm mb-3">
@@ -143,6 +145,8 @@
 </div>
 
 @code {
+    private static readonly string[] EquipmentManagePermission = ["Equipment_Manage"];
+
     [Parameter]
     public Guid Id { get; set; }
 

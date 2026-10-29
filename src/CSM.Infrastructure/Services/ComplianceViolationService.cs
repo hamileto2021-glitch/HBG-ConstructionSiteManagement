@@ -15,6 +15,7 @@ public class ComplianceViolationService
 
     public async Task<List<ViolationResponse>> GetAllAsync(
         Guid companyId,
+        IReadOnlyCollection<Guid>? siteIds = null,
         CancellationToken cancellationToken = default)
     {
         return await _db.InspectionChecklistItems
@@ -23,6 +24,7 @@ public class ComplianceViolationService
             .ThenInclude(x => x.ConstructionSite)
             .Where(x =>
                 x.CompanyId == companyId &&
+                (siteIds == null || siteIds.Contains(x.Inspection.ConstructionSiteId)) &&
                 !x.IsResolved)
             .OrderBy(x => x.DueDate)
             .Select(x => new ViolationResponse(

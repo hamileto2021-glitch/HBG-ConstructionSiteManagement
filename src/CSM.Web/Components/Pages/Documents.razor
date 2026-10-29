@@ -20,10 +20,12 @@
         </div>
 
         <div class="d-flex gap-2">
-            <button class="btn btn-primary"
-                    @onclick='() => Navigation.NavigateTo("/compliance/documents/create")'>
-                Add Document
-            </button>
+            <PermissionView AnyOf="@ComplianceManagePermission">
+                <button class="btn btn-primary"
+                        @onclick='() => Navigation.NavigateTo("/compliance/documents/create")'>
+                    Add Document
+                </button>
+            </PermissionView>
 
             <button class="btn btn-secondary"
                     @onclick="Back">
@@ -127,10 +129,12 @@
                                     </td>
 
                                     <td>
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => EditDocument(document.Id)">
-                                            Edit
-                                        </button>
+                                        <PermissionView AnyOf="@ComplianceManagePermission">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => EditDocument(document.Id)">
+                                                Edit
+                                            </button>
+                                        </PermissionView>
                                     </td>
                                 </tr>
                             }
@@ -146,6 +150,7 @@
 </div>
 
 @code {
+    private static readonly string[] ComplianceManagePermission = ["Compliance_Manage"];
     private List<DocumentResponse> _documents = [];
 
     private bool _loading = true;

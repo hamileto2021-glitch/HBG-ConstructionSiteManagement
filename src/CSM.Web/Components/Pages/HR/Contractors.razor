@@ -33,11 +33,13 @@
                 Refresh
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="CreateContractor">
-                <i class="bi bi-plus-lg"></i>
-                Add Contractor
-            </button>
+            <PermissionView AnyOf="@ContractorManagePermission">
+                <button class="btn btn-primary"
+                        @onclick="CreateContractor">
+                    <i class="bi bi-plus-lg"></i>
+                    Add Contractor
+                </button>
+            </PermissionView>
         </div>
     </div>
 
@@ -153,10 +155,12 @@
                                                 View
                                             </button>
 
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="() => EditContractor(contractor.Id)">
-                                                Edit
-                                            </button>
+                                            <PermissionView AnyOf="@ContractorManagePermission">
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => EditContractor(contractor.Id)">
+                                                    Edit
+                                                </button>
+                                            </PermissionView>
 
                                         </div>
                                     </td>
@@ -174,6 +178,8 @@
 </div>
 
 @code {
+    private static readonly string[] ContractorManagePermission = ["HRM_Contractor_Manage"];
+
     private List<ContractorResponse> _contractors = [];
     private bool _loading = true;
     private string? _errorMessage;

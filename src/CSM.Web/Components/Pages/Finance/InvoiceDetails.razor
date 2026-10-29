@@ -51,14 +51,10 @@ else
 
 
             <div class="d-flex gap-2">
+                <PermissionView AnyOf="@InvoiceManagePermission">
                 <button class="btn btn-success"
                         @onclick="AddLine">
                     + Add Line
-                </button>
-
-                <button class="btn btn-success"
-                        @onclick="RecordPayment">
-                    <i class="bi bi-wallet2"></i> Record Payment
                 </button>
 
                 <button class="btn btn-primary"
@@ -81,6 +77,14 @@ else
                         Cancel Invoice
                     </button>
                 }
+                </PermissionView>
+
+                <PermissionView AnyOf="@PaymentManagePermission">
+                    <button class="btn btn-success"
+                            @onclick="RecordPayment">
+                        <i class="bi bi-wallet2"></i> Record Payment
+                    </button>
+                </PermissionView>
             </div>
 
         </div>
@@ -313,6 +317,11 @@ else
 }
 
 @code {
+    private static readonly string[] InvoiceManagePermission =
+        ["Finance_Invoice_Manage"];
+    private static readonly string[] PaymentManagePermission =
+        ["Finance_Payment_Manage"];
+
 
     [Parameter]
         public Guid Id { get; set; }

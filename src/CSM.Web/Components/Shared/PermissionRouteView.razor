@@ -67,37 +67,67 @@ else
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _isAllowed = false;
         _permissionCheckFailed = false;
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
         var required =
             PermissionRoutePolicy.GetRequiredPermissions(path);
+        var isPublicRoute = string.Equals(
+            path.Split('?', '#')[0].Trim('/'),
+            "login",
+            StringComparison.OrdinalIgnoreCase);
 
-        if (required.Count == 0)
-        {
-            _isAllowed = true;
-        }
-        else
+        if (!isPublicRoute)
         {
             try
             {
                 var token = await AuthService.GetTokenAsync();
                 if (string.IsNullOrWhiteSpace(token))
                 {
-                    Navigation.NavigateTo("/login");
+                    _loading = false;
+                    Navigation.NavigateTo("/login", forceLoad: true);
                     return;
                 }
 
-                var permissions = await AuthService.GetPermissionsAsync();
-                _isAllowed = required.Any(permissions.Contains);
+                if (PermissionRoutePolicy.IsCompanyFinanceRoute(path) ||
+                    PermissionRoutePolicy.IsCompanyComplianceMutationRoute(path))
+                {
+                    var scope = await AuthService.GetCurrentUserScopeAsync();
+                    var isSuperAdmin = scope.Roles.Contains(
+                        "SuperAdmin",
+                        StringComparer.OrdinalIgnoreCase);
+                    if (scope.HasActiveSiteAccess && !isSuperAdmin)
+                    {
+                        _isAllowed = false;
+                        _loading = false;
+                        return;
+                    }
+                }
+
+                if (required.Count == 0)
+                {
+                    _isAllowed = true;
+                }
+                else
+                {
+                    var permissions = await AuthService.GetPermissionsAsync();
+                    _isAllowed = required.Contains("__AnyPermission")
+                        ? permissions.Count > 0
+                        : required.Any(permissions.Contains);
+                }
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
-                Logger.LogWarning(
+                Logger.LogError(
                     ex,
                     "Could not verify permissions for route {Route}.",
                     path);
                 _permissionCheckFailed = true;
             }
+        }
+        else
+        {
+            _isAllowed = true;
         }
 
         _loading = false;

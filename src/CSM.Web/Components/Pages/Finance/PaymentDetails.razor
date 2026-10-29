@@ -69,6 +69,7 @@ else
 
         <div class="d-flex gap-2 mb-4">
 
+            <PermissionView AnyOf="@PaymentManagePermission">
             @if (_payment.Status == "Pending")
             {
                 <button class="btn btn-success" @onclick="CompletePayment">
@@ -96,6 +97,7 @@ else
                     Delete Payment
                 </button>
             }
+            </PermissionView>
 
             <button class="btn btn-outline-dark"
                     @onclick="PrintReceipt">
@@ -164,6 +166,9 @@ else
 }
 
 @code {
+    private static readonly string[] PaymentManagePermission =
+        ["Finance_Payment_Manage"];
+
     [Parameter] public Guid Id { get; set; }
 
     [Parameter] public Guid? SiteId { get; set; }

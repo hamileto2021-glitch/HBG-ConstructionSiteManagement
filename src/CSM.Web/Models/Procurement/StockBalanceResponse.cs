@@ -17,5 +17,7 @@ public class StockBalanceResponse
     public decimal QuantityReserved { get; set; }
     public decimal AvailableQuantity { get; set; }
 
+    public decimal ReorderLevel { get; set; }
+
     public string UnitOfMeasure { get; set; } = "";
 }

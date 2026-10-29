@@ -68,49 +68,55 @@ else
                 @if (string.Equals(request.Status, "Draft",
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    <button class="btn btn-success material-request-action"
-                            @onclick="SubmitForApproval"
-                            disabled="@submitting">
-                        @(submitting ? "Submitting..." : "Submit for Approval")
-                    </button>
+                    <PermissionView AnyOf="@MaterialRequestSubmitPermission">
+                        <button class="btn btn-success material-request-action"
+                                @onclick="SubmitForApproval"
+                                disabled="@submitting">
+                            @(submitting ? "Submitting..." : "Submit for Approval")
+                        </button>
 
-                    <button class="btn btn-outline-primary material-request-action"
-                            @onclick="EditRequest">
-                        Edit Request
-                    </button>
+                        <button class="btn btn-outline-primary material-request-action"
+                                @onclick="EditRequest">
+                            Edit Request
+                        </button>
+                    </PermissionView>
                 }
 
                 @if (string.Equals(request.Status, "Submitted",
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    <button class="btn btn-success material-request-action"
-                            @onclick="ApproveRequest"
-                            disabled="@processing">
-                        @(processing ? "Processing..." : "Approve")
-                    </button>
+                    <PermissionView AnyOf="@MaterialRequestApprovePermission">
+                        <button class="btn btn-success material-request-action"
+                                @onclick="ApproveRequest"
+                                disabled="@processing">
+                            @(processing ? "Processing..." : "Approve")
+                        </button>
 
-                    <div style="width: 220px;">
-                        <input class="form-control"
-                               placeholder="Reason for rejection (required)"
-                               @bind="rejectionRemarks"
-                               disabled="@processing" />
-                    </div>
+                        <div style="width: 220px;">
+                            <input class="form-control"
+                                   placeholder="Reason for rejection (required)"
+                                   @bind="rejectionRemarks"
+                                   disabled="@processing" />
+                        </div>
 
-                    <button class="btn btn-danger material-request-action"
-                            @onclick="RejectRequest"
-                            disabled="@processing">
-                        Reject
-                    </button>
+                        <button class="btn btn-danger material-request-action"
+                                @onclick="RejectRequest"
+                                disabled="@processing">
+                            Reject
+                        </button>
+                    </PermissionView>
                 }
 
                 @if (string.Equals(request.Status, "Rejected",
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    <button class="btn btn-outline-secondary material-request-action"
-                            @onclick="MakeDraft"
-                            disabled="@processing">
-                        @(processing ? "Processing..." : "Make Draft")
-                    </button>
+                    <PermissionView AnyOf="@MaterialRequestSubmitPermission">
+                        <button class="btn btn-outline-secondary material-request-action"
+                                @onclick="MakeDraft"
+                                disabled="@processing">
+                            @(processing ? "Processing..." : "Make Draft")
+                        </button>
+                    </PermissionView>
                 }
             </div>
         </div>
@@ -214,6 +220,11 @@ else
 }
 
 @code {
+    private static readonly string[] MaterialRequestSubmitPermission =
+        ["Procurement_MaterialRequest_Submit"];
+    private static readonly string[] MaterialRequestApprovePermission =
+        ["Procurement_MaterialRequest_Approve"];
+
     [Parameter]
     public Guid Id { get; set; }
 

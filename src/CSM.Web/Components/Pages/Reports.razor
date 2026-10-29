@@ -3,13 +3,28 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @using System.Net
+@using System.Text.Json
 @using CSM.Web.Models.Reporting
 @using CSM.Web.Models.Sites
+@using CSM.Web.Models.Projects
+@using CSM.Web.Models.Procurement
+@using CSM.Web.Models.Equipment
+@using CSM.Web.Models.HRM
+@using CSM.Web.Models.Compliance
 @using CSM.Web.Services
 
 @inject IReportingService ReportingService
 @inject IProjectService ProjectService
 @inject IAuthService AuthService
+@inject IProcurementService ProcurementService
+@inject IEquipmentService EquipmentService
+@inject IEmployeeService EmployeeService
+@inject IAttendanceService AttendanceService
+@inject ITimesheetService TimesheetService
+@inject ILeaveService LeaveService
+@inject IPayrollService PayrollService
+@inject IComplianceService ComplianceService
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Reports & Analytics</PageTitle>
 
@@ -476,29 +491,28 @@
             </div>
         }
 
-        <!-- Future report modules -->
+        <!-- Operational report modules -->
         <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">Additional Management Reports</h5>
             </div>
 
             <div class="card-body">
+                @if (_operationalBusy)
+                {
+                    <div class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading scoped report summaries…</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_operationalError))
+                {
+                    <div class="alert alert-warning">Some operational summaries could not be loaded: @_operationalError</div>
+                }
                 <div class="row g-3">
 
-                    @Upcoming("bi-kanban", "Project Progress Report",
-                        "Planned versus actual progress, milestones and delays.")
-
-                    @Upcoming("bi-building", "Site Operations Report",
-                        "Site activity, materials, equipment and progress.")
-
-                    @Upcoming("bi-people", "HR Report",
-                        "Employees, attendance, timesheets, leave and payroll.")
-
-                    @Upcoming("bi-box-seam", "Procurement & Inventory",
-                        "Requests, purchase orders, receipts and stock.")
-
-                    @Upcoming("bi-shield-check", "Safety & Compliance",
-                        "Incidents, inspections, permits and corrective actions.")
+                    @if (CanProjectProgress) { @ProjectProgressReport() }
+                    @if (CanSiteOperations) { @SiteOperationsReport() }
+                    @if (CanHrReport) { @HrReport() }
+                    @if (CanProcurementReport) { @ProcurementReport() }
+                    @if (CanSafetyReport) { @SafetyReport() }
 
                 </div>
             </div>
@@ -526,6 +540,43 @@
     private bool _busy = true;
     private bool _userScopeLoaded;
     private bool _canViewCompanyWideFinancials;
+    private bool _hasActiveSiteAccess;
+    private bool _operationalBusy;
+    private string? _operationalError;
+    private HashSet<string> _permissions = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool CanProjectProgress => _permissions.Contains("Projects_View");
+    private bool CanSiteOperations => CanProjectProgress ||
+        _permissions.Contains("Procurement_Inventory_View") ||
+        _permissions.Contains("Equipment_View");
+    private bool CanHrReport => _permissions.Overlaps(new[]
+    {
+        "HRM_Employee_View", "HRM_Attendance_View", "HRM_Timesheet_View",
+        "HRM_Leave_View", "HRM_Payroll_View"
+    });
+    private bool CanProcurementReport => _permissions.Overlaps(new[]
+    {
+        "Procurement_MaterialRequest_View", "Procurement_PurchaseOrder_View",
+        "Procurement_Inventory_View"
+    });
+    private bool CanSafetyReport => _permissions.Contains("Compliance_View");
+
+    private List<ProjectSummary> _projects = [];
+    private Dictionary<Guid, List<ProjectMilestone>> _milestones = [];
+    private Dictionary<Guid, DailyProgressLogResponse> _latestProgress = [];
+    private List<MaterialRequestResponse> _materialRequests = [];
+    private List<PurchaseOrderResponse> _purchaseOrders = [];
+    private List<GoodsReceiptResponse> _goodsReceipts = [];
+    private List<StockItemResponse> _stockItems = [];
+    private List<EquipmentAssignmentResponse> _equipmentAssignments = [];
+    private List<EmployeeResponse> _employees = [];
+    private List<AttendanceResponse> _attendance = [];
+    private List<TimesheetResponse> _timesheets = [];
+    private List<LeaveResponse> _leave = [];
+    private List<PayrollResponse> _payroll = [];
+    private List<SafetyIncidentResponse> _incidents = [];
+    private List<JsonElement> _inspections = [];
+    private List<JsonElement> _permits = [];
 
     // Each section reports its own problem, so one failure never blanks
     // the page or hides the selectors.
@@ -615,7 +666,10 @@
 
         try
         {
+            _permissions = (await AuthService.GetPermissionsAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var userScope = await AuthService.GetCurrentUserScopeAsync();
+            _hasActiveSiteAccess = userScope.HasActiveSiteAccess;
             var isSuperAdmin = userScope.Roles.Contains(
                 "SuperAdmin",
                 StringComparer.OrdinalIgnoreCase);
@@ -645,6 +699,7 @@
         }
 
         await LoadAllAsync();
+        await LoadOperationalReportsAsync();
     }
 
     private async Task ScopeChangedAsync()
@@ -661,6 +716,9 @@
         {
             _siteExecutive = null;
             _siteSummary = null;
+            _projects.Clear();
+            _milestones.Clear();
+            _latestProgress.Clear();
             return;
         }
 
@@ -677,6 +735,8 @@
         {
             await LoadCompanyLevelAsync();
         }
+
+        await LoadOperationalReportsAsync();
     }
 
     private async Task SiteChangedAsync()
@@ -687,10 +747,14 @@
         {
             _siteExecutive = null;
             _siteSummary = null;
+            _projects.Clear();
+            _milestones.Clear();
+            _latestProgress.Clear();
             return;
         }
 
         await LoadSiteAsync(siteId);
+        await LoadOperationalReportsAsync();
     }
 
     private async Task RefreshAsync()
@@ -713,6 +777,7 @@
         {
             await LoadAllAsync();
         }
+        await LoadOperationalReportsAsync();
     }
 
     private async Task LoadCompanyLevelAsync()
@@ -804,6 +869,153 @@
         _executiveError = null;
         _financialError = null;
     }
+
+    private async Task LoadOperationalReportsAsync()
+    {
+        if (_scope == "Company" || (_scope == "Site" && !HasSelectedSite)) return;
+
+        _operationalBusy = true;
+        _operationalError = null;
+        var siteId = _scope == "Site" && Guid.TryParse(_selectedSiteId, out var parsed)
+            ? parsed : (Guid?)null;
+        bool InScope(Guid id) => !siteId.HasValue || id == siteId.Value;
+
+        try
+        {
+            if (CanProjectProgress)
+            {
+                _projects = (await ProjectService.GetProjectsAsync())
+                    .Where(p => InScope(p.ConstructionSiteId)).ToList();
+                var milestoneTasks = _projects.Select(async p => (p.Id, Items: await ProjectService.GetProjectMilestonesAsync(p.Id)));
+                foreach (var result in await Task.WhenAll(milestoneTasks)) _milestones[result.Id] = result.Items;
+                if (CanSiteOperations)
+                {
+                    var progressTasks = _projects.Select(async p => (p.Id, Items: await ProjectService.GetDailyProgressLogsAsync(p.Id)));
+                    foreach (var result in await Task.WhenAll(progressTasks))
+                        if (result.Items.Count > 0) _latestProgress[result.Id] = result.Items.OrderByDescending(x => x.LogDate).First();
+                }
+            }
+
+            if (CanSiteOperations && _permissions.Contains("Procurement_Inventory_View"))
+                _stockItems = (await ProcurementService.GetStockItemsAsync()).Where(x => InScope(x.ConstructionSiteId)).ToList();
+            if (_permissions.Contains("Equipment_View"))
+                _equipmentAssignments = (await EquipmentService.GetAssignmentsAsync()).Where(x => InScope(x.ConstructionSiteId)).ToList();
+
+            if (CanProcurementReport)
+            {
+                var calls = new List<Task>();
+                if (_permissions.Contains("Procurement_MaterialRequest_View")) calls.Add(LoadRequestsAsync(InScope));
+                if (_permissions.Contains("Procurement_PurchaseOrder_View")) calls.Add(LoadOrdersAsync(InScope));
+                if (_permissions.Contains("Procurement_Inventory_View"))
+                {
+                    if (_stockItems.Count == 0) _stockItems = (await ProcurementService.GetStockItemsAsync()).Where(x => InScope(x.ConstructionSiteId)).ToList();
+                    calls.Add(LoadReceiptsAsync(InScope));
+                }
+                await Task.WhenAll(calls);
+            }
+
+            if (CanHrReport)
+            {
+                var tasks = new List<Task>();
+                if (_permissions.Contains("HRM_Employee_View")) tasks.Add(LoadEmployeesAsync());
+                if (_permissions.Contains("HRM_Attendance_View")) tasks.Add(LoadAttendanceAsync(siteId));
+                await Task.WhenAll(tasks);
+                var employeeIds = _employees.Select(x => x.Id).ToHashSet();
+                if (siteId.HasValue && _attendance.Count > 0) employeeIds.IntersectWith(_attendance.Select(x => x.EmployeeId));
+                if (_hasActiveSiteAccess && employeeIds.Count == 0)
+                {
+                    _timesheets.Clear();
+                    _leave.Clear();
+                    _payroll.Clear();
+                }
+                else
+                {
+                    tasks.Clear();
+                    if (_permissions.Contains("HRM_Timesheet_View")) tasks.Add(LoadTimesheetsAsync(employeeIds, siteId));
+                    if (_permissions.Contains("HRM_Leave_View")) tasks.Add(LoadLeaveAsync(employeeIds, siteId));
+                    if (_permissions.Contains("HRM_Payroll_View")) tasks.Add(LoadPayrollAsync(employeeIds, siteId));
+                    await Task.WhenAll(tasks);
+                }
+            }
+
+            if (CanSafetyReport)
+            {
+                _incidents = (await ComplianceService.GetSafetyIncidentsAsync()).Where(x => InScope(x.ConstructionSiteId)).ToList();
+                var client = HttpClientFactory.CreateClient("CSM.Api");
+                await AuthService.ApplyAuthenticationAsync(client);
+                var inspections = await client.GetFromJsonAsync<List<JsonElement>>("Inspections") ?? [];
+                var permits = await client.GetFromJsonAsync<List<JsonElement>>("Permits") ?? [];
+                _inspections = inspections.Where(x => InScope(JsonGuid(x, "constructionSiteId"))).ToList();
+                _permits = permits.Where(x => InScope(JsonGuid(x, "constructionSiteId"))).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _operationalError = FriendlyError(ex);
+        }
+        finally { _operationalBusy = false; }
+    }
+
+    private async Task LoadRequestsAsync(Func<Guid, bool> inScope) => _materialRequests = (await ProcurementService.GetMaterialRequestsAsync()).Where(x => inScope(x.ConstructionSiteId)).ToList();
+    private async Task LoadOrdersAsync(Func<Guid, bool> inScope) => _purchaseOrders = (await ProcurementService.GetPurchaseOrdersAsync()).Where(x => inScope(x.ConstructionSiteId)).ToList();
+    private async Task LoadReceiptsAsync(Func<Guid, bool> inScope) => _goodsReceipts = (await ProcurementService.GetGoodsReceiptsAsync()).Where(x => inScope(x.ConstructionSiteId)).ToList();
+    private async Task LoadEmployeesAsync() => _employees = (await EmployeeService.GetEmployeesAsync(employeeScope: _scope == "Site" ? "Site" : null)).ToList();
+    private async Task LoadAttendanceAsync(Guid? siteId) => _attendance = (await AttendanceService.GetAttendancesAsync(constructionSiteId: siteId)).ToList();
+    private async Task LoadTimesheetsAsync(HashSet<Guid> ids, Guid? siteId) { var all = await TimesheetService.GetAllAsync(); _timesheets = all.Where(x => (ids.Count == 0 || ids.Contains(x.EmployeeId)) && (siteId is null || _attendance.Any(a => a.EmployeeId == x.EmployeeId))).ToList(); }
+    private async Task LoadLeaveAsync(HashSet<Guid> ids, Guid? siteId) { var all = await LeaveService.GetAllAsync(); _leave = all.Where(x => (ids.Count == 0 || ids.Contains(x.EmployeeId)) && (siteId is null || _attendance.Any(a => a.EmployeeId == x.EmployeeId))).ToList(); }
+    private async Task LoadPayrollAsync(HashSet<Guid> ids, Guid? siteId) { var all = await PayrollService.GetAllAsync(); _payroll = all.Where(x => (ids.Count == 0 || ids.Contains(x.EmployeeId)) && (siteId is null || _attendance.Any(a => a.EmployeeId == x.EmployeeId))).ToList(); }
+
+    private RenderFragment ProjectProgressReport() => @<div class="col-12"><div class="card border h-100"><div class="card-body">
+        <h6><i class="bi bi-kanban me-2"></i>Project Progress Report</h6><p class="text-muted small mb-3">Planned schedule, reported progress, milestone completion and overdue items.</p>
+        @if (_operationalBusy) { <span class="spinner-border spinner-border-sm"></span> }
+        else if (_projects.Count == 0) { <div class="text-muted">No projects are available in this scope.</div> }
+        else { <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Project</th><th>Site</th><th>Planned end</th><th>Actual progress</th><th>Milestones</th><th>Delayed</th></tr></thead><tbody>
+        @foreach (var p in _projects) { var milestones = _milestones.GetValueOrDefault(p.Id) ?? []; var late = milestones.Count(m => !m.ActualDate.HasValue && m.PlannedDate < DateOnly.FromDateTime(DateTime.Today));
+        <tr><td>@p.Name</td><td>@p.ConstructionSiteName</td><td>@(p.PlannedEndDate?.ToString("dd MMM yyyy") ?? "—")</td><td><div class="progress" style="height:8px"><div class="progress-bar" style="width:@ProgressWidth(p.ProgressPercentage)"></div></div><small>@p.ProgressPercentage.ToString("0.#")%</small></td><td>@milestones.Count(m => m.ActualDate.HasValue) / @milestones.Count</td><td><span class="badge @(late > 0 ? "bg-danger" : "bg-success")">@late</span></td></tr> }</tbody></table></div> }
+    </div></div></div>;
+
+    private RenderFragment SiteOperationsReport() => @<div class="col-12 col-xl-6"><div class="card border h-100"><div class="card-body">
+        <h6><i class="bi bi-building me-2"></i>Site Operations Report</h6><p class="text-muted small">Recent logged workforce, equipment activity, materials and project progress.</p>
+        <div class="row g-2">
+            @if (CanProjectProgress) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Projects</small><div class="fs-5 fw-semibold">@_projects.Count</div></div></div><div class="col-6"><div class="border rounded p-2"><small class="text-muted">Latest logged labour</small><div class="fs-5 fw-semibold">@_latestProgress.Values.Sum(x => x.LabourCount)</div></div></div> }
+            @if (_permissions.Contains("Equipment_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Active equipment</small><div class="fs-5 fw-semibold">@_equipmentAssignments.Count(x => x.IsActive)</div></div></div> }
+            @if (_permissions.Contains("Procurement_Inventory_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Low stock items</small><div class="fs-5 fw-semibold">@_stockItems.Count(x => x.QuantityOnHand <= x.ReorderLevel)</div></div></div> }
+        </div>
+        @if (_latestProgress.Count > 0) { <div class="table-responsive mt-3"><table class="table table-sm"><thead><tr><th>Project</th><th>Latest log</th><th>Progress</th><th>Equipment hours</th></tr></thead><tbody>@foreach (var p in _projects.Where(x => _latestProgress.ContainsKey(x.Id))) { var log = _latestProgress[p.Id]; <tr><td>@p.Name</td><td>@log.LogDate.ToString("dd MMM yyyy")</td><td>@log.ProgressPercentage.ToString("0.#")%</td><td>@log.EquipmentHours.ToString("N1")</td></tr> }</tbody></table></div> }
+    </div></div></div>;
+
+    private RenderFragment HrReport() => @<div class="col-12 col-xl-6"><div class="card border h-100"><div class="card-body">
+        <h6><i class="bi bi-people me-2"></i>HR Report</h6><p class="text-muted small">Employee, attendance, timesheet, leave and payroll summaries for the current scope.</p>
+        <div class="row g-2">
+            @if (_permissions.Contains("HRM_Employee_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Employees</small><div class="fs-5 fw-semibold">@_employees.Count</div></div></div> }
+            @if (_permissions.Contains("HRM_Attendance_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Attendance records</small><div class="fs-5 fw-semibold">@_attendance.Count</div></div></div> }
+            @if (_permissions.Contains("HRM_Timesheet_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Timesheets</small><div class="fs-5 fw-semibold">@_timesheets.Count</div></div></div> }
+            @if (_permissions.Contains("HRM_Leave_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Leave days</small><div class="fs-5 fw-semibold">@_leave.Sum(x => x.NumberOfDays).ToString("N1")</div></div></div> }
+            @if (_permissions.Contains("HRM_Payroll_View")) { <div class="col-12"><div class="border rounded p-2"><small class="text-muted">Net payroll total</small><div class="fs-5 fw-semibold">@_payroll.Sum(x => x.NetPay).ToString("N2") @_payroll.FirstOrDefault()?.CurrencyCode</div></div></div> }
+        </div>
+    </div></div></div>;
+
+    private RenderFragment ProcurementReport() => @<div class="col-12 col-xl-6"><div class="card border h-100"><div class="card-body">
+        <h6><i class="bi bi-box-seam me-2"></i>Procurement &amp; Inventory</h6><p class="text-muted small">Requests, purchase orders, receipts and inventory below reorder level.</p>
+        <div class="row g-2">
+            @if (_permissions.Contains("Procurement_MaterialRequest_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Requests</small><div class="fs-5 fw-semibold">@_materialRequests.Count</div></div></div> }
+            @if (_permissions.Contains("Procurement_PurchaseOrder_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Purchase orders</small><div class="fs-5 fw-semibold">@_purchaseOrders.Count</div></div></div> }
+            @if (_permissions.Contains("Procurement_Inventory_View")) { <div class="col-6"><div class="border rounded p-2"><small class="text-muted">Goods receipts</small><div class="fs-5 fw-semibold">@_goodsReceipts.Count</div></div></div><div class="col-6"><div class="border rounded p-2"><small class="text-muted">Items at/below reorder</small><div class="fs-5 fw-semibold text-warning">@_stockItems.Count(x => x.QuantityOnHand <= x.ReorderLevel)</div></div></div> }
+        </div>
+        @if (_stockItems.Count > 0) { <div class="table-responsive mt-3"><table class="table table-sm"><thead><tr><th>Material</th><th>Site</th><th class="text-end">On hand</th><th class="text-end">Reorder at</th></tr></thead><tbody>@foreach (var s in _stockItems.Where(x => x.QuantityOnHand <= x.ReorderLevel).Take(5)) { <tr><td>@s.MaterialName</td><td>@s.SiteName</td><td class="text-end">@s.QuantityOnHand.ToString("N1")</td><td class="text-end">@s.ReorderLevel.ToString("N1")</td></tr> }</tbody></table></div> }
+    </div></div></div>;
+
+    private RenderFragment SafetyReport() => @<div class="col-12 col-xl-6"><div class="card border h-100"><div class="card-body">
+        <h6><i class="bi bi-shield-check me-2"></i>Safety &amp; Compliance</h6><p class="text-muted small">Incident status, severity and outstanding corrective actions.</p>
+        <div class="row g-2"><div class="col-6 col-lg-3"><div class="border rounded p-2"><small class="text-muted">Incidents</small><div class="fs-5 fw-semibold">@_incidents.Count</div></div></div><div class="col-6 col-lg-3"><div class="border rounded p-2"><small class="text-muted">Open incidents</small><div class="fs-5 fw-semibold text-warning">@_incidents.Count(x => !x.Status.Contains("clos", StringComparison.OrdinalIgnoreCase))</div></div></div><div class="col-6 col-lg-3"><div class="border rounded p-2"><small class="text-muted">Inspections</small><div class="fs-5 fw-semibold">@_inspections.Count</div></div></div><div class="col-6 col-lg-3"><div class="border rounded p-2"><small class="text-muted">Permits</small><div class="fs-5 fw-semibold">@_permits.Count</div></div></div><div class="col-12"><div class="border rounded p-2"><small class="text-muted">Open corrective actions</small><div class="fs-5 fw-semibold">@(_incidents.Count(x => !string.IsNullOrWhiteSpace(x.CorrectiveAction) && !x.ClosedAtUtc.HasValue) + _inspections.Count(x => !string.IsNullOrWhiteSpace(JsonText(x, "correctiveActionRequired"))))</div></div></div></div>
+        @if (_incidents.Count > 0) { <div class="table-responsive mt-3"><table class="table table-sm"><thead><tr><th>Incident</th><th>Site</th><th>Severity</th><th>Status</th><th>Date</th></tr></thead><tbody>@foreach (var i in _incidents.OrderByDescending(x => x.OccurredAtUtc).Take(5)) { <tr><td>@i.IncidentNumber</td><td>@i.ConstructionSiteName</td><td>@i.Severity</td><td>@i.Status</td><td>@i.OccurredAtUtc.ToString("dd MMM yyyy")</td></tr> }</tbody></table></div> }
+    </div></div></div>;
+
+    private static string ProgressWidth(decimal percentage) => $"{Math.Clamp(percentage, 0m, 100m):0.#}%";
+    private static Guid JsonGuid(JsonElement item, string property)
+        => item.TryGetProperty(property, out var value) && value.TryGetGuid(out var id) ? id : Guid.Empty;
+    private static string JsonText(JsonElement item, string property)
+        => item.TryGetProperty(property, out var value) ? value.ToString() : string.Empty;
 
     private static string FriendlyError(Exception ex)
     {
@@ -1027,7 +1239,7 @@
         </tr>;
     }
 
-    private RenderFragment Upcoming(string icon, string title, string text) =>
+    private RenderFragment ReportLink(string icon, string title, string text, string href) =>
         @<div class="col-md-6 col-lg-4">
             <div class="card h-100 border">
                 <div class="card-body">
@@ -1036,9 +1248,7 @@
                         @title
                     </h6>
                     <p class="text-muted small">@text</p>
-                    <button class="btn btn-outline-primary" disabled>
-                        Coming Next
-                    </button>
+                    <a class="btn btn-outline-primary" href="@href">Open report data</a>
                 </div>
             </div>
         </div>;

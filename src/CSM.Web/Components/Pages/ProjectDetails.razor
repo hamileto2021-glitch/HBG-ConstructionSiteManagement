@@ -48,10 +48,12 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick="EditProject">
-                Edit Project
-            </button>
+            <PermissionView AnyOf="@ProjectManagePermission">
+                <button class="btn btn-primary"
+                        @onclick="EditProject">
+                    Edit Project
+                </button>
+            </PermissionView>
 
         </div>
 
@@ -200,12 +202,14 @@ else
                                 </button>
                             </div>
 
-                            <div class="col-md-3">
-                                <button class="btn btn-primary w-100 action-btn"
-                                        @onclick="NewTask">
-                                    New Task
-                                </button>
-                            </div>
+                            <PermissionView AnyOf="@ProjectManagePermission">
+                                <div class="col-md-3">
+                                    <button class="btn btn-primary w-100 action-btn"
+                                            @onclick="NewTask">
+                                        New Task
+                                    </button>
+                                </div>
+                            </PermissionView>
 
                         </div>
 
@@ -218,6 +222,7 @@ else
             <!-- Right -->
             <div class="col-lg-4">
 
+                <PermissionView AnyOf="@ProjectManagePermission">
                 <div class="card shadow-sm border-0 mb-4">
 
                     <div class="card-header bg-white">
@@ -255,6 +260,7 @@ else
                     </div>
 
                 </div>
+                </PermissionView>
 
                 <div class="card shadow-sm border-0">
 
@@ -285,6 +291,8 @@ else
 }
 
 @code {
+    private static readonly string[] ProjectManagePermission = ["Projects_Manage"];
+
 
     [Parameter]
     public Guid Id { get; set; }

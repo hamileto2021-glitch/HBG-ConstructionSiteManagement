@@ -25,10 +25,14 @@
                 Back
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="CreateIncident">
-                Add Safety Incident
-            </button>
+            <PermissionView AnyOf="@ComplianceManagePermission">
+                <PermissionView AnyOf="@ComplianceManagePermission">
+                    <button class="btn btn-primary"
+                            @onclick="CreateIncident">
+                        Add Safety Incident
+                    </button>
+                </PermissionView>
+            </PermissionView>
         </div>
     </div>
 
@@ -158,10 +162,12 @@
                                             View
                                         </button>
 
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => EditIncident(incident.Id)">
-                                            Edit
-                                        </button>
+                                        <PermissionView AnyOf="@ComplianceManagePermission">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => EditIncident(incident.Id)">
+                                                Edit
+                                            </button>
+                                        </PermissionView>
                                     </td>
                                 </tr>
                             }
@@ -176,6 +182,7 @@
 </div>
 
 @code {
+    private static readonly string[] ComplianceManagePermission = ["Compliance_Manage"];
     private IReadOnlyList<SafetyIncidentResponse> _incidents = [];
 
     private bool _loading;

@@ -5,6 +5,7 @@
 @using CSM.Web.Services
 
 @inject IComplianceService ComplianceService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Document Categories</PageTitle>
@@ -26,10 +27,13 @@
                 Back
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick='() => Navigation.NavigateTo("/compliance/document-categories/create")'>
-                Add Category
-            </button>
+            @if (_canManageCatalog)
+            {
+                <button class="btn btn-primary"
+                        @onclick='() => Navigation.NavigateTo("/compliance/document-categories/create")'>
+                    Add Category
+                </button>
+            }
         </div>
     </div>
 
@@ -58,11 +62,14 @@
                     Create the first document category.
                 </p>
 
-                <button class="btn btn-primary"
-                        @onclick="CreateCategory">
-                    <i class="bi bi-plus-lg me-1"></i>
-                    Add Category
-                </button>
+                @if (_canManageCatalog)
+                {
+                    <button class="btn btn-primary"
+                            @onclick="CreateCategory">
+                        <i class="bi bi-plus-lg me-1"></i>
+                        Add Category
+                    </button>
+                }
             </div>
         </div>
     }
@@ -123,11 +130,14 @@
                                     </td>
 
                                     <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => EditCategory(category.Id)">
-                                            <i class="bi bi-pencil me-1"></i>
-                                            Edit
-                                        </button>
+                                        @if (_canManageCatalog)
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => EditCategory(category.Id)">
+                                                <i class="bi bi-pencil me-1"></i>
+                                                Edit
+                                            </button>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -146,6 +156,7 @@
     private List<DocumentCategoryResponse> _categories = [];
 
     private bool _loading = true;
+    private bool _canManageCatalog;
     private string? _error;
 
     protected override async Task OnInitializedAsync()
@@ -160,6 +171,12 @@
 
         try
         {
+            var permissions = await AuthService.GetPermissionsAsync();
+            var scope = await AuthService.GetCurrentUserScopeAsync();
+            _canManageCatalog = permissions.Contains("Compliance_Manage") &&
+                                (!scope.HasActiveSiteAccess ||
+                                 scope.Roles.Contains("SuperAdmin", StringComparer.OrdinalIgnoreCase));
+
             var categories =
                 await ComplianceService.GetDocumentCategoriesAsync();
 

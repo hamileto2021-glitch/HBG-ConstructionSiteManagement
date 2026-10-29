@@ -21,10 +21,12 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="mb-0">Equipment</h3>
 
-        <button class="btn btn-primary"
-                @onclick="CreateEquipment">
-            + New Equipment
-        </button>
+        <PermissionView AnyOf="@EquipmentManagePermission">
+            <button class="btn btn-primary"
+                    @onclick="CreateEquipment">
+                + New Equipment
+            </button>
+        </PermissionView>
     </div>
 
     @if (loading)
@@ -87,6 +89,8 @@
 </div>
 
 @code {
+    private static readonly string[] EquipmentManagePermission = ["Equipment_Manage"];
+
     private List<EquipmentResponse> equipment = [];
     private bool loading = true;
 

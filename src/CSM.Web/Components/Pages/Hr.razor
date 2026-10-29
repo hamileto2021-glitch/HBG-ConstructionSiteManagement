@@ -277,16 +277,7 @@
 
         _canViewTimesheets = permissions.Contains("HRM_Timesheet_View");
 
-        var isHrOfficer = userScope.Roles.Contains(
-                              "HROfficer",
-                              StringComparer.OrdinalIgnoreCase) ||
-                          userScope.Roles.Contains(
-                              "HrOfficer",
-                              StringComparer.OrdinalIgnoreCase);
-
-        _showCompanyEmployeesButton =
-            !(isSupervisor && userScope.HasActiveSiteAccess) &&
-            !(isHrOfficer && userScope.HasActiveSiteAccess);
+        _showCompanyEmployeesButton = !userScope.HasActiveSiteAccess;
 
         _canViewContractors = permissions.Contains("HRM_Contractor_View");
         _canViewAttendance = permissions.Contains("HRM_Attendance_View");
@@ -295,7 +286,12 @@
         _canViewPayroll = permissions.Contains("HRM_Payroll_View");
 
         var accessibleRoutes = new List<string>();
-        if (_canViewEmployees) accessibleRoutes.Add("/hr/employees/company");
+        if (_canViewEmployees)
+        {
+            accessibleRoutes.Add(userScope.HasActiveSiteAccess
+                ? "/hr/employees/site"
+                : "/hr/employees/company");
+        }
         if (_canViewContractors) accessibleRoutes.Add("/hr/contractors");
         if (_canViewAttendance) accessibleRoutes.Add("/hr/attendance");
         if (_canViewShifts) accessibleRoutes.Add("/hr/shifts");

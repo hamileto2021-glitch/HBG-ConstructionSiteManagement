@@ -92,7 +92,7 @@ class AdminNavItem {
   bool isAllowedBy(Set<String> roles) {
     switch (policy) {
       case AdminNavPolicy.dashboard:
-        return true;
+        return roles.any(AppPolicies.reportManagementRoles.contains);
 
       case AdminNavPolicy.projectManagement:
         return roles.any(
@@ -145,7 +145,9 @@ class AdminNavItem {
         );
 
       case AdminNavPolicy.reportManagement:
-        return true;
+        return roles.any(
+          AppPolicies.reportManagementRoles.contains,
+        );
     }
   }
 

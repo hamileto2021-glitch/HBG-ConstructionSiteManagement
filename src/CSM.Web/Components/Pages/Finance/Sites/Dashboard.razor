@@ -20,7 +20,7 @@
                 Financial workspace
             </div>
             <h1>Finance</h1>
-            <p>Manage company finances or open financial records for a construction site.</p>
+            <p>@(_hasActiveSiteAssignment ? "Open financial records for your assigned construction sites." : "Manage company finances or open financial records for a construction site.")</p>
         </div>
 
         <button type="button" class="finance-back-button" @onclick="Back">
@@ -64,6 +64,8 @@
             </section>
         }
 
+        @if (!_hasActiveSiteAssignment)
+        {
         <section class="company-finance-panel" aria-labelledby="company-finance-title">
             <div class="company-finance-heading">
                 <span class="company-finance-icon" aria-hidden="true">
@@ -140,6 +142,7 @@
                     }
             </div>
         </section>
+        }
 
         <section class="site-finance-section" aria-labelledby="site-finance-title">
             <div class="site-section-heading">
@@ -162,7 +165,7 @@
             {
                 <div class="site-list-unavailable">
                     <i class="bi bi-info-circle" aria-hidden="true"></i>
-                    <span>The site list could not be loaded. Company finance options remain available above.</span>
+                    <span>The site list could not be loaded. @(_hasActiveSiteAssignment ? "Assigned site finance is unavailable until the site list can be loaded." : "Company finance options remain available above.")</span>
                 </div>
             }
             else if (_sites.Count == 0)
@@ -301,6 +304,7 @@
 @code {
     private List<SiteResponse> _sites = [];
     private HashSet<string> _permissions = [];
+    private bool _hasActiveSiteAssignment;
     private bool _loading = true;
     private bool _loaded;
     private string? _error;
@@ -354,6 +358,8 @@
         try
         {
             _permissions = (await AuthService.GetPermissionsAsync()).ToHashSet();
+            var scope = await AuthService.GetCurrentUserScopeAsync();
+            _hasActiveSiteAssignment = scope.HasActiveSiteAccess;
             _sites = await ProjectService.GetSitesAsync();
         }
         catch (HttpRequestException exception)

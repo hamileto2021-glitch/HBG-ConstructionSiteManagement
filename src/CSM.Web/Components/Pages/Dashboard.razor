@@ -7,6 +7,7 @@
 @inject IExecutiveDashboardService DashboardService
 @inject ProtectedSessionStorage SessionStorage
 @inject NavigationManager Navigation
+@inject ILogger<Dashboard> Logger
 
 <PageTitle>Executive Dashboard</PageTitle>
 
@@ -27,7 +28,7 @@
             <span class="dashboard-state-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>
             <div>
                 <h1>Dashboard unavailable</h1>
-                <p>We couldn't load the dashboard data. Please try again.</p>
+                <p>@(_loadError ?? "We couldn't load the dashboard data. Please try again.")</p>
                 <button class="btn btn-primary" @onclick="LoadDashboardAsync" disabled="@_loading">
                     <i class="bi bi-arrow-clockwise me-2" aria-hidden="true"></i>Try again
                 </button>
@@ -36,6 +37,17 @@
     }
     else
     {
+        @if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <div class="dashboard-refresh-error" role="alert">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <span>@_loadError The figures below are the last successfully loaded data.</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="LoadDashboardAsync" disabled="@_loading">
+                    Try again
+                </button>
+            </div>
+        }
+
         <header class="dashboard-header">
             <div>
                 <div class="dashboard-eyebrow"><span></span> HAMILTON BUSINESS GROUP</div>
@@ -45,9 +57,9 @@
             <div class="dashboard-header-actions">
                 <div class="dashboard-updated">
                     <span class="dashboard-live-dot" aria-hidden="true"></span>
-                    <span>Updated @_dashboard.GeneratedAtUtc.ToLocalTime().ToString("dd MMM, HH:mm")</span>
+                    <span>Updated @_dashboard.GeneratedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
                 </div>
-                <button class="btn dashboard-refresh" @onclick="LoadDashboardAsync" disabled="@_loading">
+                <button type="button" class="btn dashboard-refresh" @onclick="LoadDashboardAsync" disabled="@_loading" aria-label="Refresh dashboard data">
                     <i class="bi bi-arrow-clockwise @(_loading ? "dashboard-spinning" : "")" aria-hidden="true"></i>
                     <span>@(_loading ? "Refreshing" : "Refresh")</span>
                 </button>
@@ -189,6 +201,7 @@
     private ExecutiveDashboard? _dashboard;
     private bool _loading = true;
     private string _userName = "";
+    private string? _loadError;
 
     private double ProgressValue => Math.Clamp((double)_dashboard!.BudgetUtilization, 0d, 100d);
 
@@ -227,8 +240,30 @@
     private async Task LoadDashboardAsync()
     {
         _loading = true;
-        _dashboard = await DashboardService.GetDashboardAsync();
-        _loading = false;
+        _loadError = null;
+
+        try
+        {
+            var dashboard = await DashboardService.GetDashboardAsync();
+
+            if (dashboard is null)
+            {
+                _loadError = "Dashboard data is unavailable. Your session may have expired.";
+            }
+            else
+            {
+                _dashboard = dashboard;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load the executive dashboard.");
+            _loadError = "We couldn't refresh the dashboard.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private static string Money(decimal value) => $"ETB {value:N0}";

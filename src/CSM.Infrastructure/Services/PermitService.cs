@@ -4,6 +4,7 @@ using CSM.Application.Compliance.Permits.Dtos;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Compliance;
 using CSM.Domain.Entities.Identity;
+using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +28,7 @@ public sealed class PermitService : IPermitService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.Permits
             .AsNoTracking()
@@ -36,8 +37,11 @@ public sealed class PermitService : IPermitService
 
         if (!IsSuperAdmin(actor))
         {
-            query = query.Where(
-                x => x.CompanyId == GetActorCompanyId(actor));
+            var companyId = GetActorCompanyId(actor);
+            query = query.Where(x => x.CompanyId == companyId);
+            var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+            if (siteIds.Count > 0)
+                query = query.Where(x => siteIds.Contains(x.ConstructionSiteId));
         }
 
         return await query
@@ -75,7 +79,7 @@ public sealed class PermitService : IPermitService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var permit = await _dbContext.Permits
             .AsNoTracking()
@@ -90,6 +94,7 @@ public sealed class PermitService : IPermitService
         EnsureCompanyAccess(
             actor,
             permit.CompanyId);
+        await EnsureSiteScopeAsync(actor, permit.ConstructionSiteId, cancellationToken);
 
         return Map(permit);
     }
@@ -117,6 +122,7 @@ public sealed class PermitService : IPermitService
             request.ExpiryDate);
 
         await EnsureConstructionSiteAccess(
+            actor,
             companyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -193,6 +199,7 @@ public sealed class PermitService : IPermitService
         EnsureCompanyAccess(
             actor,
             permit.CompanyId);
+        await EnsureSiteScopeAsync(actor, permit.ConstructionSiteId, cancellationToken);
 
         Validate(
             request.PermitNumber,
@@ -204,6 +211,7 @@ public sealed class PermitService : IPermitService
             request.ExpiryDate);
 
         await EnsureConstructionSiteAccess(
+            actor,
             permit.CompanyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -283,6 +291,7 @@ public sealed class PermitService : IPermitService
         return await _dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
+                    .ThenInclude(role => role.GranularPermissions)
             .SingleOrDefaultAsync(
                 x => x.Id == currentUserId,
                 cancellationToken)
@@ -290,18 +299,22 @@ public sealed class PermitService : IPermitService
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanView(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_View) ||
+            HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
         {
             return;
         }
 
         throw new PermitManagementException(
-            "You are not authorized to manage permits.");
+            "You are not authorized to view permits.");
+    }
+
+    private static void EnsureCanManage(User actor)
+    {
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_Manage)) return;
+        throw new PermitManagementException("You are not authorized to manage permits.");
     }
 
     private static void EnsureCompanyAccess(
@@ -322,6 +335,7 @@ public sealed class PermitService : IPermitService
     }
 
     private async Task EnsureConstructionSiteAccess(
+        User actor,
         Guid companyId,
         Guid constructionSiteId,
         CancellationToken cancellationToken)
@@ -339,7 +353,27 @@ public sealed class PermitService : IPermitService
             throw new PermitManagementException(
                 "The specified construction site was not found in the company.");
         }
+
+        await EnsureSiteScopeAsync(actor, constructionSiteId, cancellationToken);
     }
+
+    private async Task EnsureSiteScopeAsync(User actor, Guid siteId, CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor)) return;
+        var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+        if (siteIds.Count > 0 && !siteIds.Contains(siteId))
+            throw new PermitManagementException("This permit is outside your assigned site scope.");
+    }
+
+    private Task<List<Guid>> GetAuthorizedSiteIdsAsync(User actor, CancellationToken cancellationToken) =>
+        _dbContext.UserSiteAccesses.AsNoTracking()
+            .Where(access => access.UserId == actor.Id && access.CompanyId == actor.CompanyId &&
+                             access.IsActive && !access.IsDeleted)
+            .Select(access => access.SiteId).Distinct().ToListAsync(cancellationToken);
+
+    private static bool HasCompliancePermission(User actor, GranularPermission permission) =>
+        actor.UserRoles.Any(userRole => !userRole.IsDeleted && !userRole.Role.IsDeleted &&
+            userRole.Role.GranularPermissions.Any(rolePermission => rolePermission.Permission == permission));
 
     private async Task EnsureProjectAccess(
         Guid companyId,

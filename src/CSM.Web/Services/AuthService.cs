@@ -114,6 +114,9 @@ private sealed class CurrentUserScopeResponse
         if (_permissions is not null)
             return _permissions;
 
+        if (string.IsNullOrWhiteSpace(await GetTokenAsync()))
+            return Array.Empty<string>();
+
         var client = _factory.CreateClient("CSM.Api");
 
         await ApplyAuthenticationAsync(client);
@@ -123,8 +126,7 @@ private sealed class CurrentUserScopeResponse
 
         if (!response.IsSuccessStatusCode)
         {
-            _permissions = Array.Empty<string>();
-            return _permissions;
+            return Array.Empty<string>();
         }
 
         var permissions =
@@ -151,6 +153,9 @@ private sealed class CurrentUserScopeResponse
 
     public async Task<string?> GetCurrentUserIdAsync()
     {
+        if (string.IsNullOrWhiteSpace(await GetTokenAsync()))
+            return null;
+
         var client = _factory.CreateClient("CSM.Api");
 
         await ApplyAuthenticationAsync(client);
@@ -168,6 +173,9 @@ private sealed class CurrentUserScopeResponse
 
     public async Task<Guid?> GetCurrentCompanyIdAsync()
     {
+        if (string.IsNullOrWhiteSpace(await GetTokenAsync()))
+            return null;
+
         var client = _factory.CreateClient("CSM.Api");
 
         await ApplyAuthenticationAsync(client);
@@ -193,6 +201,9 @@ private sealed class CurrentUserScopeResponse
 public async Task<(string[] Roles, bool HasActiveSiteAccess)>
     GetCurrentUserScopeAsync()
 {
+    if (string.IsNullOrWhiteSpace(await GetTokenAsync()))
+        throw new HttpRequestException("No authenticated session is available.");
+
     var client = _factory.CreateClient("CSM.Api");
     await ApplyAuthenticationAsync(client);
 

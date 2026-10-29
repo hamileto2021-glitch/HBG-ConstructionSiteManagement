@@ -57,38 +57,23 @@ if (!IsSuperAdmin(actor))
 
     query = query.Where(x => x.CompanyId == companyId);
 
-    if (HasRole(actor, AppRoles.HROfficer) ||
-        HasRole(actor, AppRoles.HrOfficer) ||
-        HasRole(actor, AppRoles.Supervisor))
+    var authorizedSiteIds = await GetAuthorizedSiteIdsAsync(
+        actor,
+        cancellationToken);
+
+    if (authorizedSiteIds.Count > 0)
     {
-        var hasSiteAccess = await _dbContext.UserSiteAccesses
-            .AnyAsync(
-                x => x.UserId == actor.Id &&
-                     x.CompanyId == companyId &&
-                     x.IsActive &&
-                     !x.IsDeleted,
-                cancellationToken);
-
-        if (hasSiteAccess)
-        {
-            var authorizedSiteIds = _dbContext.UserSiteAccesses
-                .Where(
-                    x => x.UserId == actor.Id &&
-                         x.CompanyId == companyId &&
-                         x.IsActive &&
-                         !x.IsDeleted)
-                .Select(x => x.SiteId);
-
-
-query = query.Where(
-    employee =>
-        _dbContext.SiteAssignments.Any(
-            assignment =>
+        query = query.Where(employee =>
+            employee.EmployeeScope == EmployeeScope.Site &&
+            _dbContext.SiteAssignments.Any(assignment =>
                 assignment.EmployeeId == employee.Id &&
-                authorizedSiteIds.Contains(
-                    assignment.ConstructionSiteId) &&
-                assignment.EndDate == null));
+                assignment.EndDate == null &&
+                authorizedSiteIds.Contains(assignment.ConstructionSiteId)));
 
+        if (siteId.HasValue && !authorizedSiteIds.Contains(siteId.Value))
+        {
+            throw new EmployeeManagementException(
+                "You are not assigned to this site's employee scope.");
         }
     }
 }
@@ -143,6 +128,8 @@ if (siteId.HasValue)
             actor,
             employee.CompanyId);
 
+        await EnsureEmployeeScopeAccessAsync(actor, employee, cancellationToken);
+
         return Map(employee);
     }
 
@@ -175,6 +162,12 @@ if (siteId.HasValue)
         }
         else if (request.EmployeeScope == EmployeeScope.Company)
         {
+            if ((await GetAuthorizedSiteIdsAsync(actor, cancellationToken)).Count > 0)
+            {
+                throw new EmployeeManagementException(
+                    "Users with active site assignments cannot create company-scope employees.");
+            }
+
             if (request.SiteId.HasValue)
             {
                 throw new EmployeeManagementException(
@@ -305,6 +298,8 @@ if (siteId.HasValue)
             actor,
             employee.CompanyId);
 
+        await EnsureEmployeeScopeAccessAsync(actor, employee, cancellationToken);
+
         if (employee.Status == EmployeeStatus.Terminated)
         {
             throw new EmployeeManagementException(
@@ -352,6 +347,13 @@ if (siteId.HasValue)
             request.EmployeeType;
         employee.EmployeeScope =
             request.EmployeeScope;
+
+        if (request.EmployeeScope == EmployeeScope.Company &&
+            (await GetAuthorizedSiteIdsAsync(actor, cancellationToken)).Count > 0)
+        {
+            throw new EmployeeManagementException(
+                "Users with active site assignments cannot move an employee to company scope.");
+        }
         employee.WageType =
             request.WageType;
         employee.BaseWage =
@@ -392,6 +394,8 @@ if (siteId.HasValue)
         EnsureCompanyAccess(
             actor,
             employee.CompanyId);
+
+        await EnsureEmployeeScopeAccessAsync(actor, employee, cancellationToken);
 
         ValidateStatusTransition(
             employee.Status,
@@ -475,6 +479,39 @@ if (siteId.HasValue)
             .Select(x => x.SiteId)
             .Distinct()
             .ToListAsync(cancellationToken);
+    }
+
+    private async Task EnsureEmployeeScopeAccessAsync(
+        User actor,
+        Employee employee,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor))
+        {
+            return;
+        }
+
+        var authorizedSiteIds = await GetAuthorizedSiteIdsAsync(
+            actor,
+            cancellationToken);
+
+        if (authorizedSiteIds.Count == 0)
+        {
+            return;
+        }
+
+        var isAssignedSiteEmployee = employee.EmployeeScope == EmployeeScope.Site &&
+            await _dbContext.SiteAssignments.AnyAsync(assignment =>
+                assignment.EmployeeId == employee.Id &&
+                assignment.EndDate == null &&
+                authorizedSiteIds.Contains(assignment.ConstructionSiteId),
+                cancellationToken);
+
+        if (!isAssignedSiteEmployee)
+        {
+            throw new EmployeeManagementException(
+                "You are not authorized to access this employee outside your assigned sites.");
+        }
     }
 
     private async Task EnsureCanAccessSiteAsync(

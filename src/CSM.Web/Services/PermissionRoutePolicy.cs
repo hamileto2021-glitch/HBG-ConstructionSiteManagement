@@ -2,6 +2,30 @@ namespace CSM.Web.Services;
 
 public static class PermissionRoutePolicy
 {
+    public static bool IsCompanyFinanceRoute(string relativePath)
+    {
+        var path = relativePath
+            .Split('?', '#')[0]
+            .Trim('/')
+            .ToLowerInvariant();
+
+        return path.StartsWith("finance/company/", StringComparison.Ordinal) ||
+               path == "finance/petty-cash" ||
+               path == "finance/summary";
+    }
+
+    public static bool IsCompanyComplianceMutationRoute(string relativePath)
+    {
+        var path = relativePath
+            .Split('?', '#')[0]
+            .Trim('/')
+            .ToLowerInvariant();
+
+        return path == "compliance/document-categories/create" ||
+               (path.StartsWith("compliance/document-categories/", StringComparison.Ordinal) &&
+                path.EndsWith("/edit", StringComparison.Ordinal));
+    }
+
     private static readonly string[] FinanceViewPermissions =
     [
         "Finance_Budget_View",
@@ -40,11 +64,80 @@ public static class PermissionRoutePolicy
             .Trim('/')
             .ToLowerInvariant();
 
-        if (path.Length == 0 ||
-            path is "login" or "logout" or "settings" or
-                "change-password-required" or "counter" or "not-found")
+        if (path == "login" || path == "logout")
         {
             return [];
+        }
+
+        if (path is "settings" or "change-password-required" or
+            "not-found" or "error")
+        {
+            // These pages are user-specific or application-level, but still
+            // require an authenticated session (enforced by PermissionRouteView).
+            return [];
+        }
+
+        if (path.Length == 0)
+        {
+            return ["__AnyPermission"];
+        }
+
+        if (path == "dashboard" || path == "weather")
+        {
+            return ["Reports_View"];
+        }
+
+        if (path == "counter")
+        {
+            return ["__AnyPermission"];
+        }
+
+        if (path == "finance/summary" ||
+            path.StartsWith("finance/summary/site/", StringComparison.Ordinal))
+        {
+            return ["Reports_FinancialSummary_View"];
+        }
+
+        if (path == "compliance/documents")
+        {
+            return ["Compliance_View"];
+        }
+
+        if (path.StartsWith("compliance/documents/", StringComparison.Ordinal))
+        {
+            return ["Compliance_Manage"];
+        }
+
+        if (path == "compliance/document-categories")
+        {
+            return ["Compliance_View"];
+        }
+
+        if (path.StartsWith("compliance/document-categories/", StringComparison.Ordinal))
+        {
+            return ["Compliance_Manage"];
+        }
+
+        if (path == "compliance/safety-incidents" ||
+            (path.StartsWith("compliance/safety-incidents/", StringComparison.Ordinal) &&
+             !IsMutationRoute(path)))
+        {
+            return ["Compliance_View"];
+        }
+
+        if (path == "sites-management" || path == "sites" ||
+            path.StartsWith("sites/", StringComparison.Ordinal))
+        {
+            if (path.Contains("/projects", StringComparison.Ordinal))
+            {
+                return IsMutationRoute(path)
+                    ? ["Projects_Manage"]
+                    : ["Projects_View"];
+            }
+
+            return IsMutationRoute(path)
+                ? ["Sites_Manage"]
+                : ["Sites_View", "Sites_Manage"];
         }
 
         if (path is "users/audit" or "audit" ||
@@ -100,7 +193,7 @@ public static class PermissionRoutePolicy
 
             if (path.Contains("expense", StringComparison.Ordinal))
             {
-                return path.Contains("/create", StringComparison.Ordinal)
+                return IsMutationRoute(path)
                     ? ["Finance_Expense_Submit"]
                     : ["Finance_Expense_View", "Finance_Expense_Submit", "Finance_Expense_Approve"];
             }
@@ -118,6 +211,11 @@ public static class PermissionRoutePolicy
                 return IsMutationRoute(path)
                     ? ["Finance_PettyCash_Manage"]
                     : ["Finance_PettyCash_View"];
+            }
+
+            if (path.Contains("vendor", StringComparison.Ordinal))
+            {
+                return ["Procurement_Vendor_View"];
             }
 
             return FinanceViewPermissions;
@@ -138,7 +236,9 @@ public static class PermissionRoutePolicy
 
             if (path.Contains("payroll", StringComparison.Ordinal))
             {
-                return ["HRM_Payroll_View", "HRM_Payroll_Approve"];
+                return IsMutationRoute(path)
+                    ? ["HRM_Payroll_Approve"]
+                    : ["HRM_Payroll_View", "HRM_Payroll_Approve"];
             }
 
             if (path.Contains("employee", StringComparison.Ordinal))
@@ -263,7 +363,7 @@ public static class PermissionRoutePolicy
         if (path == "material-requests" ||
             path.StartsWith("material-requests/", StringComparison.Ordinal))
         {
-            return path.Contains("/create", StringComparison.Ordinal)
+            return IsMutationRoute(path)
                 ? ["Procurement_MaterialRequest_Submit"]
                 : ["Procurement_MaterialRequest_View", "Procurement_MaterialRequest_Submit", "Procurement_MaterialRequest_Approve"];
         }
@@ -271,9 +371,14 @@ public static class PermissionRoutePolicy
         if (path == "purchase-orders" ||
             path.StartsWith("purchase-orders/", StringComparison.Ordinal))
         {
-            return IsMutationRoute(path)
-                ? ["Procurement_PurchaseOrder_Manage", "Procurement_PurchaseOrder_Approve"]
-                : ["Procurement_PurchaseOrder_View"];
+            if (!IsMutationRoute(path))
+            {
+                return ["Procurement_PurchaseOrder_View"];
+            }
+
+            return path.Contains("/approve", StringComparison.Ordinal)
+                ? ["Procurement_PurchaseOrder_Approve"]
+                : ["Procurement_PurchaseOrder_Manage"];
         }
 
         if (path == "goods-receipts" ||
@@ -312,16 +417,8 @@ public static class PermissionRoutePolicy
                 : ["Notifications_View"];
         }
 
-        if (path == "sites-management" ||
-            path == "sites" ||
-            path.StartsWith("sites/", StringComparison.Ordinal))
-        {
-            return IsMutationRoute(path)
-                ? ["Sites_Manage"]
-                : ["Sites_View", "Sites_Manage"];
-        }
-
-        return [];
+        // Unknown routes stay blocked until an explicit permission mapping is added.
+        return ["__UnmappedRoute"];
     }
 
     private static bool IsMutationRoute(string path)

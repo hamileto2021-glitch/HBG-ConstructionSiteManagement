@@ -6,6 +6,7 @@
 @using CSM.Web.Services
 
 @inject IProjectService ProjectService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Site Dashboard</PageTitle>
@@ -50,14 +51,17 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick='() => Navigation.NavigateTo($"/sites/edit/{SiteId}")'>
-                Edit Site
-            </button>
+            <PermissionView AnyOf="@SiteManagePermission">
+                <button class="btn btn-primary"
+                        @onclick='() => Navigation.NavigateTo($"/sites/edit/{SiteId}")'>
+                    Edit Site
+                </button>
+            </PermissionView>
 
         </div>
 
         <!-- KPI -->
+        <PermissionView AnyOf="@ProjectViewPermission">
         <div class="row g-3 mb-4">
 
             <div class="col-md-3">
@@ -97,6 +101,7 @@ else
             </div>
 
         </div>
+        </PermissionView>
 
         <!-- Site Information -->
         <div class="card shadow-sm mb-4">
@@ -165,6 +170,7 @@ else
 
         </div>
 
+        <PermissionView AnyOf="@SiteManagePermission">
         <div class="card shadow-sm mb-4">
             <div class="card-header">
                 <strong>Site Status</strong>
@@ -203,10 +209,12 @@ else
 
             </div>
         </div>
+        </PermissionView>
 
         <!-- Quick Modules -->
         <div class="row g-4 mb-4">
 
+            <PermissionView AnyOf="@ProjectViewPermission">
             <div class="col-lg-3 col-md-6">
 
                 <div class="card shadow-sm h-100 module-card"
@@ -228,6 +236,7 @@ else
                 </div>
 
             </div>
+            </PermissionView>
 
             <div class="col-lg-3 col-md-6">
 
@@ -292,6 +301,7 @@ else
         </div>
 
         <!-- Projects -->
+        <PermissionView AnyOf="@ProjectViewPermission">
         <div class="card shadow-sm">
 
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -384,11 +394,15 @@ else
             </div>
 
         </div>
+        </PermissionView>
 
     </div>
 }
 
 @code {
+    private static readonly string[] SiteManagePermission = ["Sites_Manage"];
+    private static readonly string[] ProjectViewPermission = ["Projects_View"];
+
 
     [Parameter]
     public Guid SiteId { get; set; }
@@ -428,20 +442,24 @@ else
                 ? status
                 : SiteStatus.Planning;
 
-        var projects = await ProjectService.GetProjectsAsync();
+        var permissions = await AuthService.GetPermissionsAsync();
+        if (permissions.Contains("Projects_View"))
+        {
+            var projects = await ProjectService.GetProjectsAsync();
 
-        _siteProjects = projects
-            .Where(x => x.ConstructionSiteId == SiteId)
-            .OrderBy(x => x.Name)
-            .ToList();
+            _siteProjects = projects
+                .Where(x => x.ConstructionSiteId == SiteId)
+                .OrderBy(x => x.Name)
+                .ToList();
 
-        _projectCount = _siteProjects.Count;
-        _activeProjects = _siteProjects.Count(x => x.Status == "Active");
-        _contractValue = _siteProjects.Sum(x => x.ContractValue);
+            _projectCount = _siteProjects.Count;
+            _activeProjects = _siteProjects.Count(x => x.Status == "Active");
+            _contractValue = _siteProjects.Sum(x => x.ContractValue);
 
-        _averageProgress = _siteProjects.Count == 0
-            ? 0
-            : (int)Math.Round(_siteProjects.Average(x => x.ProgressPercentage));
+            _averageProgress = _siteProjects.Count == 0
+                ? 0
+                : (int)Math.Round(_siteProjects.Average(x => x.ProgressPercentage));
+        }
 
         _loading = false;
 

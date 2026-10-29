@@ -405,6 +405,23 @@
     font-size: .85rem;
 }
 
+.dashboard-refresh-error {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 1.25rem;
+    padding: .85rem 1rem;
+    border: 1px solid rgba(209, 67, 67, .24);
+    border-radius: .8rem;
+    background: rgba(209, 67, 67, .07);
+    color: var(--dashboard-danger);
+    font-size: .84rem;
+}
+
+.dashboard-refresh-error > span {
+    flex: 1;
+}
+
 .dashboard-state {
     display: flex;
     align-items: center;
@@ -476,6 +493,15 @@
 
     .dashboard-panels {
         grid-template-columns: 1fr;
+    }
+
+    .dashboard-refresh-error {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .dashboard-refresh-error > span {
+        flex-basis: calc(100% - 2rem);
     }
 }
 

@@ -46,6 +46,10 @@ public sealed class NotificationApiService : INotificationApiService
     public async Task<int> GetUnreadCountAsync(
         CancellationToken cancellationToken = default)
     {
+        var token = await _storage.GetAsync<string>("jwt");
+        if (!token.Success || string.IsNullOrWhiteSpace(token.Value))
+            return 0;
+
         var client = await ClientAsync();
 
         return await client.GetFromJsonAsync<int>(

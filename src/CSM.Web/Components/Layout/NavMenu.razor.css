@@ -259,12 +259,15 @@
         height:100dvh;
         min-height:100dvh;
         transform:translateX(-102%);
-        transition:transform .25s ease;
+        visibility:hidden;
+        transition:transform .25s ease, visibility 0s linear .25s;
         box-shadow:0 0 40px rgba(0,0,0,.35);
     }
 
     .sidebar.nav-open{
         transform:translateX(0);
+        visibility:visible;
+        transition:transform .25s ease;
     }
 
     .nav-backdrop.show{

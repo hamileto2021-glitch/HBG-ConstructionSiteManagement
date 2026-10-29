@@ -189,8 +189,9 @@ public sealed class DocumentVersionService : IDocumentVersionService
                 "Current user not found.");
 
         var document = await _dbContext.Documents
+            .AsNoTracking()
             .SingleOrDefaultAsync(
-                x => x.Id == documentId,
+                x => x.Id == documentId && !x.IsDeleted,
                 cancellationToken)
             ?? throw new DocumentManagementException(
                 "Document not found.");
@@ -200,6 +201,34 @@ public sealed class DocumentVersionService : IDocumentVersionService
         {
             throw new DocumentManagementException(
                 "You can only access documents in your own company.");
+        }
+
+        var assignedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(access => access.UserId == currentUserId &&
+                             access.CompanyId == currentUser.CompanyId &&
+                             access.IsActive && !access.IsDeleted)
+            .Select(access => access.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (assignedSiteIds.Count > 0)
+        {
+            var effectiveSiteId = document.ConstructionSiteId;
+            if (!effectiveSiteId.HasValue && document.ProjectId.HasValue)
+            {
+                effectiveSiteId = await _dbContext.Projects
+                    .Where(project => project.Id == document.ProjectId.Value &&
+                                      project.CompanyId == document.CompanyId)
+                    .Select(project => (Guid?)project.ConstructionSiteId)
+                    .SingleOrDefaultAsync(cancellationToken);
+            }
+
+            if (!effectiveSiteId.HasValue || !assignedSiteIds.Contains(effectiveSiteId.Value))
+            {
+                throw new DocumentManagementException(
+                    "This document is outside your assigned site scope.");
+            }
         }
 
         return document;

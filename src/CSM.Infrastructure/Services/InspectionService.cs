@@ -4,6 +4,7 @@ using CSM.Application.Compliance.Inspections.Dtos;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Compliance;
 using CSM.Domain.Entities.Identity;
+using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +28,7 @@ public sealed class InspectionService : IInspectionService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.Inspections
             .AsNoTracking()
@@ -37,8 +38,11 @@ public sealed class InspectionService : IInspectionService
 
         if (!IsSuperAdmin(actor))
         {
-            query = query.Where(
-                x => x.CompanyId == GetActorCompanyId(actor));
+            var companyId = GetActorCompanyId(actor);
+            query = query.Where(x => x.CompanyId == companyId);
+            var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+            if (siteIds.Count > 0)
+                query = query.Where(x => siteIds.Contains(x.ConstructionSiteId));
         }
 
         var inspections = await query
@@ -59,7 +63,7 @@ public sealed class InspectionService : IInspectionService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var inspection = await _dbContext.Inspections
             .AsNoTracking()
@@ -76,6 +80,7 @@ public sealed class InspectionService : IInspectionService
         EnsureCompanyAccess(
             actor,
             inspection.CompanyId);
+        await EnsureSiteScopeAsync(actor, inspection.ConstructionSiteId, cancellationToken);
 
         return Map(inspection);
     }
@@ -109,6 +114,7 @@ public sealed class InspectionService : IInspectionService
             request.ChecklistItems);
 
         await EnsureConstructionSiteAccess(
+            actor,
             companyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -216,6 +222,7 @@ public sealed class InspectionService : IInspectionService
         EnsureCompanyAccess(
             actor,
             inspection.CompanyId);
+        await EnsureSiteScopeAsync(actor, inspection.ConstructionSiteId, cancellationToken);
 
         ValidateInspection(
             request.InspectionNumber,
@@ -233,6 +240,7 @@ public sealed class InspectionService : IInspectionService
             request.ChecklistItems);
 
         await EnsureConstructionSiteAccess(
+            actor,
             inspection.CompanyId,
             request.ConstructionSiteId,
             cancellationToken);
@@ -403,6 +411,7 @@ public sealed class InspectionService : IInspectionService
         return await _dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
+                    .ThenInclude(role => role.GranularPermissions)
             .SingleOrDefaultAsync(
                 x => x.Id == currentUserId,
                 cancellationToken)
@@ -410,18 +419,22 @@ public sealed class InspectionService : IInspectionService
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureCanView(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_View) ||
+            HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
         {
             return;
         }
 
         throw new InspectionManagementException(
-            "You are not authorized to manage inspections.");
+            "You are not authorized to view inspections.");
+    }
+
+    private static void EnsureCanManage(User actor)
+    {
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_Manage)) return;
+        throw new InspectionManagementException("You are not authorized to manage inspections.");
     }
 
     private static void EnsureCompanyAccess(
@@ -442,6 +455,7 @@ public sealed class InspectionService : IInspectionService
     }
 
     private async Task EnsureConstructionSiteAccess(
+        User actor,
         Guid companyId,
         Guid constructionSiteId,
         CancellationToken cancellationToken)
@@ -459,7 +473,27 @@ public sealed class InspectionService : IInspectionService
             throw new InspectionManagementException(
                 "The specified construction site was not found in the company.");
         }
+
+        await EnsureSiteScopeAsync(actor, constructionSiteId, cancellationToken);
     }
+
+    private async Task EnsureSiteScopeAsync(User actor, Guid siteId, CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor)) return;
+        var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+        if (siteIds.Count > 0 && !siteIds.Contains(siteId))
+            throw new InspectionManagementException("This inspection is outside your assigned site scope.");
+    }
+
+    private Task<List<Guid>> GetAuthorizedSiteIdsAsync(User actor, CancellationToken cancellationToken) =>
+        _dbContext.UserSiteAccesses.AsNoTracking()
+            .Where(access => access.UserId == actor.Id && access.CompanyId == actor.CompanyId &&
+                             access.IsActive && !access.IsDeleted)
+            .Select(access => access.SiteId).Distinct().ToListAsync(cancellationToken);
+
+    private static bool HasCompliancePermission(User actor, GranularPermission permission) =>
+        actor.UserRoles.Any(userRole => !userRole.IsDeleted && !userRole.Role.IsDeleted &&
+            userRole.Role.GranularPermissions.Any(rolePermission => rolePermission.Permission == permission));
 
     private async Task EnsureProjectAccess(
         Guid companyId,

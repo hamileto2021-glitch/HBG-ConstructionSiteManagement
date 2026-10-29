@@ -32,7 +32,19 @@ internal static class ProjectDataAccess
                 "The authenticated user is not assigned to a company.");
         }
 
-        var canAccessAllSites = user.UserRoles.Any(role =>
+        var accessibleSiteIds = context.UserSiteAccesses
+            .AsNoTracking()
+            .Where(access =>
+                access.UserId == userId &&
+                access.CompanyId == user.CompanyId.Value &&
+                access.IsActive &&
+                !access.IsDeleted)
+            .Select(access => access.SiteId);
+
+        var hasActiveSiteAssignments = await accessibleSiteIds
+            .AnyAsync(cancellationToken);
+
+        var canAccessAllSites = !hasActiveSiteAssignments && user.UserRoles.Any(role =>
             !role.IsDeleted &&
             !role.Role.IsDeleted &&
             (string.Equals(
@@ -47,15 +59,6 @@ internal static class ProjectDataAccess
                  role.Role.Name,
                  AppRoles.Administrator,
                  StringComparison.OrdinalIgnoreCase)));
-
-        var accessibleSiteIds = context.UserSiteAccesses
-            .AsNoTracking()
-            .Where(access =>
-                access.UserId == userId &&
-                access.CompanyId == user.CompanyId.Value &&
-                access.IsActive &&
-                !access.IsDeleted)
-            .Select(access => access.SiteId);
 
         return new ProjectDataScope(
             user.CompanyId.Value,

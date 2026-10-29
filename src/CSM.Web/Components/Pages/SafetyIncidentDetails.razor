@@ -29,10 +29,12 @@
         <div class="d-flex gap-2">
             @if (_incident is not null)
             {
-                <button class="btn btn-outline-primary"
-                        @onclick="EditIncident">
-                    Edit
-                </button>
+                <PermissionView AnyOf="@ComplianceManagePermission">
+                    <button class="btn btn-outline-primary"
+                            @onclick="EditIncident">
+                        Edit
+                    </button>
+                </PermissionView>
             }
 
             <button class="btn btn-outline-secondary"
@@ -228,6 +230,8 @@
 </div>
 
 @code {
+    private static readonly string[] ComplianceManagePermission = ["Compliance_Manage"];
+
     [Parameter]
     public Guid Id { get; set; }
 

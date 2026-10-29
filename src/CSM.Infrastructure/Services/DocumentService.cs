@@ -5,6 +5,7 @@ using CSM.Application.Compliance.Documents.Dtos;
 using CSM.Domain.Constants;
 using CSM.Domain.Entities.Compliance;
 using CSM.Domain.Entities.Identity;
+using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +27,7 @@ public sealed class DocumentService : IDocumentService
     {
         var actor = await GetActorAsync(currentUserId, cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var query = _dbContext.Documents
             .AsNoTracking()
@@ -36,6 +37,17 @@ public sealed class DocumentService : IDocumentService
         if (!IsSuperAdmin(actor))
         {
             query = query.Where(x => x.CompanyId == GetActorCompanyId(actor));
+            var siteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+            if (siteIds.Count > 0)
+            {
+                query = query.Where(document =>
+                    (document.ConstructionSiteId.HasValue &&
+                     siteIds.Contains(document.ConstructionSiteId.Value)) ||
+                    (document.ProjectId.HasValue &&
+                     _dbContext.Projects.Any(project =>
+                         project.Id == document.ProjectId.Value &&
+                         siteIds.Contains(project.ConstructionSiteId))));
+            }
         }
 
         return await (
@@ -89,7 +101,7 @@ public sealed class DocumentService : IDocumentService
     {
         var actor = await GetActorAsync(currentUserId, cancellationToken);
 
-        EnsureCanManage(actor);
+        EnsureCanView(actor);
 
         var document = await _dbContext.Documents
 
@@ -100,6 +112,8 @@ public sealed class DocumentService : IDocumentService
             ?? throw new DocumentManagementException("Document was not found.");
 
         EnsureCompanyAccess(actor, document.CompanyId);
+        await EnsureDocumentSiteScopeAsync(
+            actor, document.ConstructionSiteId, document.ProjectId, cancellationToken);
 
         return Map(document);
     }
@@ -123,6 +137,9 @@ public sealed class DocumentService : IDocumentService
             request.FileSizeBytes,
             request.IssueDate,
             request.ExpiryDate);
+
+        await EnsureDocumentSiteScopeAsync(
+            actor, request.ConstructionSiteId, request.ProjectId, cancellationToken);
 
         var normalizedNumber = request.DocumentNumber.Trim();
 
@@ -201,6 +218,10 @@ public sealed class DocumentService : IDocumentService
             ?? throw new DocumentManagementException("Document was not found.");
 
         EnsureCompanyAccess(actor, document.CompanyId);
+        await EnsureDocumentSiteScopeAsync(
+            actor, document.ConstructionSiteId, document.ProjectId, cancellationToken);
+        await EnsureDocumentSiteScopeAsync(
+            actor, request.ConstructionSiteId, request.ProjectId, cancellationToken);
 
         Validate(
             request.DocumentNumber,
@@ -290,6 +311,8 @@ public async Task<DocumentVersionResponse> UploadVersionAsync(
         ?? throw new DocumentManagementException("Document not found.");
 
     EnsureCompanyAccess(actor, document.CompanyId);
+    await EnsureDocumentSiteScopeAsync(
+        actor, document.ConstructionSiteId, document.ProjectId, cancellationToken);
 
     var uploads = Path.Combine(
         Directory.GetCurrentDirectory(),
@@ -359,6 +382,7 @@ public async Task<DocumentVersionResponse> UploadVersionAsync(
         return await _dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
+                    .ThenInclude(role => role.GranularPermissions)
             .SingleOrDefaultAsync(
                 x => x.Id == currentUserId,
                 cancellationToken)
@@ -366,11 +390,21 @@ public async Task<DocumentVersionResponse> UploadVersionAsync(
                 "Authenticated user was not found.");
     }
 
+    private static void EnsureCanView(User actor)
+    {
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_View) ||
+            HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
+        {
+            return;
+        }
+
+        throw new DocumentManagementException(
+            "You are not authorized to view documents.");
+    }
+
     private static void EnsureCanManage(User actor)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (HasCompliancePermission(actor, GranularPermission.Compliance_Manage))
         {
             return;
         }
@@ -402,6 +436,55 @@ public async Task<DocumentVersionResponse> UploadVersionAsync(
 
         return actor.CompanyId.Value;
     }
+
+    private async Task EnsureDocumentSiteScopeAsync(
+        User actor,
+        Guid? siteId,
+        Guid? projectId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor)) return;
+        var assignedSiteIds = await GetAuthorizedSiteIdsAsync(actor, cancellationToken);
+        if (assignedSiteIds.Count == 0) return;
+
+        var effectiveSiteId = siteId;
+        if (!effectiveSiteId.HasValue && projectId.HasValue)
+        {
+            effectiveSiteId = await _dbContext.Projects
+                .Where(project => project.Id == projectId.Value &&
+                                  project.CompanyId == actor.CompanyId)
+                .Select(project => (Guid?)project.ConstructionSiteId)
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+
+        if (!effectiveSiteId.HasValue || !assignedSiteIds.Contains(effectiveSiteId.Value))
+        {
+            throw new DocumentManagementException(
+                "Company-level documents and documents outside your assigned sites are not accessible.");
+        }
+    }
+
+    private Task<List<Guid>> GetAuthorizedSiteIdsAsync(
+        User actor,
+        CancellationToken cancellationToken)
+    {
+        if (!actor.CompanyId.HasValue)
+            return Task.FromResult(new List<Guid>());
+
+        return _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(access => access.UserId == actor.Id &&
+                             access.CompanyId == actor.CompanyId.Value &&
+                             access.IsActive && !access.IsDeleted)
+            .Select(access => access.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
+    private static bool HasCompliancePermission(User actor, GranularPermission permission) =>
+        actor.UserRoles.Any(userRole => !userRole.IsDeleted && !userRole.Role.IsDeleted &&
+            userRole.Role.GranularPermissions.Any(rolePermission =>
+                rolePermission.Permission == permission));
 
     private static bool IsSuperAdmin(User actor)
         => HasRole(actor, AppRoles.SuperAdmin);

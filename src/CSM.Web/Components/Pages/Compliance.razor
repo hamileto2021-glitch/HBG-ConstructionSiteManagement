@@ -5,111 +5,192 @@
 @using CSM.Web.Services
 
 @inject IComplianceService ComplianceService
-
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
+@inject ILogger<Compliance> Logger
 
-<PageTitle>Compliance</PageTitle>
+<PageTitle>Compliance | CSM</PageTitle>
 
-<div class="container-fluid py-3">
-
-    <h2>Compliance & Safety</h2>
-
-    <div class="row g-3 mt-3">
-
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h6>Open Incidents</h6>
-                    <h2>@_openIncidentCount</h2>
-
-                    <button class="btn btn-outline-primary mt-2"
-                            @onclick='() => Navigation.NavigateTo("/compliance/safety-incidents")'>
-                        View Safety Incidents
-                    </button>
-                </div>
+<main class="compliance-dashboard">
+    <header class="compliance-header">
+        <div>
+            <div class="compliance-eyebrow">
+                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                Assurance &amp; safety
             </div>
+            <h1>Compliance</h1>
+            <p>Track incidents and keep controlled project documents organized.</p>
         </div>
+        @if (_hasActiveSiteAssignment)
+        {
+            <span class="compliance-scope-badge"><i class="bi bi-geo-alt" aria-hidden="true"></i> Assigned sites</span>
+        }
+        else
+        {
+            <span class="compliance-scope-badge"><i class="bi bi-buildings" aria-hidden="true"></i> Company scope</span>
+        }
+        <div class="compliance-header-actions">
+            <button type="button" class="btn btn-outline-secondary" @onclick="BackToDashboard">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Dashboard
+            </button>
+            @if (_canManage)
+            {
+                <button type="button" class="btn btn-primary" @onclick="CreateIncident">
+                    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Report incident
+                </button>
+            }
+        </div>
+    </header>
 
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h6>Inspections</h6>
-                    <h2>0</h2>
-                </div>
+    @if (_loading)
+    {
+        <section class="compliance-loading" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            Loading compliance workspace…
+        </section>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <section class="compliance-error" role="alert">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <div><strong>Compliance data is unavailable</strong><p>@_error</p></div>
+            <button class="btn btn-outline-danger" type="button" @onclick="LoadAsync">Try again</button>
+        </section>
+    }
+    else
+    {
+        <section class="compliance-summary" aria-label="Compliance summary">
+            <article class="compliance-metric compliance-metric-alert">
+                <span class="compliance-metric-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>
+                <div><span>Open incidents</span><strong>@_openIncidentCount</strong></div>
+                <small>@_incidentCount total</small>
+            </article>
+            <article class="compliance-metric">
+                <span class="compliance-metric-icon"><i class="bi bi-file-earmark-text" aria-hidden="true"></i></span>
+                <div><span>Controlled documents</span><strong>@_documentCount</strong></div>
+                <small>Project records</small>
+            </article>
+            <article class="compliance-metric">
+                <span class="compliance-metric-icon"><i class="bi bi-folder2-open" aria-hidden="true"></i></span>
+                <div><span>Active categories</span><strong>@_categoryCount</strong></div>
+                <small>Document classification</small>
+            </article>
+        </section>
+
+        <section class="compliance-section" aria-labelledby="compliance-areas-title">
+            <div class="compliance-section-heading">
+                <div><h2 id="compliance-areas-title">Compliance areas</h2><p>Open a workspace to review its current records.</p></div>
+                <span class="compliance-updated">Updated @DateTime.Now.ToString("HH:mm")</span>
             </div>
-        </div>
 
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h6>Permits</h6>
-                    <h2>0</h2>
-                </div>
+            <div class="compliance-area-grid">
+                <article class="compliance-area-card">
+                    <div class="compliance-area-icon compliance-tone-red"><i class="bi bi-shield-exclamation" aria-hidden="true"></i></div>
+                    <div class="compliance-area-copy">
+                        <span class="compliance-area-kicker">Health &amp; safety</span>
+                        <h3>Safety incidents</h3>
+                        <p>Review investigations, corrective actions, and reported site incidents.</p>
+                        <div class="compliance-area-meta"><strong>@_openIncidentCount</strong> open <span>·</span> @_incidentCount total</div>
+                    </div>
+                    <div class="compliance-area-actions">
+                        <button type="button" class="btn btn-primary" @onclick="OpenIncidents">View incidents</button>
+                        @if (_canManage)
+                        {
+                            <button type="button" class="btn btn-link" @onclick="CreateIncident">Report incident</button>
+                        }
+                    </div>
+                </article>
+
+                <article class="compliance-area-card">
+                    <div class="compliance-area-icon compliance-tone-blue"><i class="bi bi-files" aria-hidden="true"></i></div>
+                    <div class="compliance-area-copy">
+                        <span class="compliance-area-kicker">Document control</span>
+                        <h3>Controlled documents</h3>
+                        <p>Manage compliance, project, drawing, and revision-controlled files.</p>
+                        <div class="compliance-area-meta"><strong>@_documentCount</strong> documents</div>
+                    </div>
+                    <div class="compliance-area-actions">
+                        <button type="button" class="btn btn-primary" @onclick="OpenDocuments">Browse documents</button>
+                        @if (_canManage)
+                        {
+                            <button type="button" class="btn btn-link" @onclick="CreateDocument">Add document</button>
+                        }
+                    </div>
+                </article>
+
+                <article class="compliance-area-card">
+                    <div class="compliance-area-icon compliance-tone-violet"><i class="bi bi-collection" aria-hidden="true"></i></div>
+                    <div class="compliance-area-copy">
+                        <span class="compliance-area-kicker">Document control</span>
+                        <h3>Document categories</h3>
+                        <p>Keep file types consistent with reusable category codes and descriptions.</p>
+                        <div class="compliance-area-meta"><strong>@_categoryCount</strong> active categories</div>
+                    </div>
+                    <div class="compliance-area-actions">
+                        <button type="button" class="btn btn-primary" @onclick="OpenCategories">View categories</button>
+                        @if (_canManageCompanyCatalog)
+                        {
+                            <button type="button" class="btn btn-link" @onclick="CreateCategory">Add category</button>
+                        }
+                    </div>
+                </article>
             </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h6>Document Categories</h6>
-
-                    <p class="text-muted small">
-                        Manage document categories used by the document management system.
-                    </p>
-
-                    <button class="btn btn-primary"
-                            @onclick='() => Navigation.NavigateTo("/compliance/document-categories")'>
-                        Manage Categories
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h6>Documents</h6>
-
-                    <p class="text-muted small">
-                        Manage compliance, project, drawing, and other controlled documents.
-                    </p>
-
-                    <button class="btn btn-primary"
-                            @onclick='() => Navigation.NavigateTo("/compliance/documents")'>
-                        Manage Documents
-                    </button>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-</div>
+        </section>
+    }
+</main>
 
 @code {
+    private bool _loading = true;
+    private bool _canManage;
+    private bool _canManageCompanyCatalog;
+    private bool _hasActiveSiteAssignment;
     private int _openIncidentCount;
+    private int _incidentCount;
+    private int _documentCount;
+    private int _categoryCount;
+    private string? _error;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadOpenIncidentCountAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    private async Task LoadOpenIncidentCountAsync()
+    private async Task LoadAsync()
     {
+        _loading = true;
+        _error = null;
         try
         {
-            var incidents =
-                await ComplianceService.GetSafetyIncidentsAsync();
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canManage = permissions.Contains("Compliance_Manage");
+            var scope = await AuthService.GetCurrentUserScopeAsync();
+            _hasActiveSiteAssignment = scope.HasActiveSiteAccess &&
+                !scope.Roles.Contains("SuperAdmin", StringComparer.OrdinalIgnoreCase);
+            _canManageCompanyCatalog = _canManage && !_hasActiveSiteAssignment;
 
-            _openIncidentCount = incidents.Count(
-                x => x.Status is
-                    "Reported" or
-                    "UnderInvestigation" or
-                    "CorrectiveActionRequired");
+            var incidents = await ComplianceService.GetSafetyIncidentsAsync();
+            var documents = await ComplianceService.GetDocumentsAsync();
+            var categories = await ComplianceService.GetDocumentCategoriesAsync(isActive: true);
+
+            _incidentCount = incidents.Count;
+            _openIncidentCount = incidents.Count(incident => incident.Status is
+                "Reported" or "UnderInvestigation" or "CorrectiveActionRequired");
+            _documentCount = documents.Count;
+            _categoryCount = categories.Count;
         }
-        catch
+        catch (Exception exception)
         {
-            _openIncidentCount = 0;
+            Logger.LogError(exception, "Failed to load the compliance dashboard.");
+            _error = "Please retry in a moment. If this keeps happening, contact your administrator.";
+        }
+        finally
+        {
+            _loading = false;
         }
     }
+
+    private void BackToDashboard() => Navigation.NavigateTo("/dashboard");
+    private void OpenIncidents() => Navigation.NavigateTo("/compliance/safety-incidents");
+    private void CreateIncident() => Navigation.NavigateTo("/compliance/safety-incidents/create");
+    private void OpenDocuments() => Navigation.NavigateTo("/compliance/documents");
+    private void CreateDocument() => Navigation.NavigateTo("/compliance/documents/create");
+    private void OpenCategories() => Navigation.NavigateTo("/compliance/document-categories");
+    private void CreateCategory() => Navigation.NavigateTo("/compliance/document-categories/create");
 }

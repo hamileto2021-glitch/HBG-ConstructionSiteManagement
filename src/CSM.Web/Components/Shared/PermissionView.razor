@@ -1,6 +1,7 @@
 @using CSM.Web.Services
 
 @inject IAuthService AuthService
+@inject ILogger<PermissionView> Logger
 
 @if (_hasPermission)
 {
@@ -18,7 +19,16 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        var permissions = await AuthService.GetPermissionsAsync();
-        _hasPermission = AnyOf.Any(permissions.Contains);
+        _hasPermission = false;
+
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+            _hasPermission = AnyOf.Any(permissions.Contains);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not verify permissions for a protected UI action.");
+        }
     }
 }
