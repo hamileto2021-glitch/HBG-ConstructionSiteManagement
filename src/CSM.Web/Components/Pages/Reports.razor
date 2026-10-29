@@ -9,6 +9,7 @@
 
 @inject IReportingService ReportingService
 @inject IProjectService ProjectService
+@inject IAuthService AuthService
 
 <PageTitle>Reports & Analytics</PageTitle>
 
@@ -41,8 +42,15 @@
                     <select class="form-select"
                             @bind="_scope"
                             @bind:after="ScopeChangedAsync">
-                        <option value="All">Company + all sites</option>
-                        <option value="Company">Company level (not tied to a site)</option>
+                        <option value="All">
+                            @(_canViewCompanyWideFinancials
+                                ? "Company + all sites"
+                                : "Assigned sites only")
+                        </option>
+                        @if (_canViewCompanyWideFinancials)
+                        {
+                            <option value="Company">Company level (not tied to a site)</option>
+                        }
                         <option value="Site">Site</option>
                     </select>
                 </div>
@@ -78,25 +86,31 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_sitesError))
+    @if (!string.IsNullOrWhiteSpace(_scopeError))
+    {
+        <div class="alert alert-danger" role="alert">@_scopeError</div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_sitesError))
     {
         <div class="alert alert-warning">@_sitesError</div>
     }
 
-    @if (_busy)
+    @if (string.IsNullOrWhiteSpace(_scopeError) && _busy)
     {
         <div class="text-center py-5">
             <div class="spinner-border" role="status"></div>
             <div class="mt-2">Loading reports...</div>
         </div>
     }
-    else if (_scope == "Site" && !HasSelectedSite)
+    else if (string.IsNullOrWhiteSpace(_scopeError) &&
+             _scope == "Site" &&
+             !HasSelectedSite)
     {
         <div class="alert alert-info">
             Select a construction site to see its reports.
         </div>
     }
-    else
+    else if (string.IsNullOrWhiteSpace(_scopeError))
     {
         <!-- Executive report (sites and projects only exist per site, so it is not shown for company level) -->
         @if (_scope != "Company")
@@ -396,7 +410,7 @@
             </div>
         </div>
 
-        <!-- Company breakdown: head office + every site, with a total that adds up -->
+        <!-- Breakdown is limited to the company-wide or assigned-site scope. -->
         @if (_scope == "All" && _all is not null)
         {
             <div class="card shadow-sm mb-4">
@@ -408,8 +422,14 @@
                                 Breakdown by Site
                             </h5>
                             <small>
-                                Head office and each construction site. The
-                                total row is the company-wide figure above.
+                                @if (_canViewCompanyWideFinancials)
+                                {
+                                    <text>Head office and each construction site. The total row is the company-wide figure above.</text>
+                                }
+                                else
+                                {
+                                    <text>Only sites assigned to you. The total row includes those sites only.</text>
+                                }
                             </small>
                         </div>
                     </div>
@@ -504,9 +524,12 @@
     private string _selectedSiteId = string.Empty;
 
     private bool _busy = true;
+    private bool _userScopeLoaded;
+    private bool _canViewCompanyWideFinancials;
 
     // Each section reports its own problem, so one failure never blanks
     // the page or hides the selectors.
+    private string? _scopeError;
     private string? _sitesError;
     private string? _executiveError;
     private string? _financialError;
@@ -551,28 +574,67 @@
     }
 
     private string CurrentScopeLabel
-        => _scope == "All" ? "Company + all sites"
+        => _scope == "All"
+            ? _canViewCompanyWideFinancials
+                ? "Company + all sites"
+                : "Assigned sites"
          : _scope == "Company" ? "Company level"
          : _sites.FirstOrDefault(x => x.Id.ToString() == _selectedSiteId)?.Name
            ?? "Select a construction site";
 
     private string ScopeIntro
-        => _scope == "All" ? "Company-wide management reports and financial analytics."
+        => _scope == "All"
+            ? _canViewCompanyWideFinancials
+                ? "Company-wide management reports and financial analytics."
+                : "Management reports and financial analytics for sites assigned to you."
          : _scope == "Company" ? "Company-level financial records that are not tied to a construction site."
          : $"{CurrentScopeLabel} management reports and financial analytics.";
 
     private string ExecutiveSubtitle
         => _scope == "All"
-            ? "Company-wide management overview"
+            ? _canViewCompanyWideFinancials
+                ? "Company-wide management overview"
+                : "Management overview for your assigned sites"
             : $"{CurrentScopeLabel} management overview";
 
     private string FinancialSubtitle
-        => _scope == "All" ? "Company-wide financial position (company level and all sites)"
+        => _scope == "All"
+            ? _canViewCompanyWideFinancials
+                ? "Company-wide financial position (company level and all sites)"
+                : "Financial position for your assigned sites"
          : _scope == "Company" ? "Budgets, expenses and payments not tied to a construction site"
          : $"{CurrentScopeLabel} financial position";
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
+        => LoadInitialDataAsync();
+
+    private async Task LoadInitialDataAsync()
     {
+        _busy = true;
+        _scopeError = null;
+
+        try
+        {
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+            var isSuperAdmin = userScope.Roles.Contains(
+                "SuperAdmin",
+                StringComparer.OrdinalIgnoreCase);
+            var isAccountant = userScope.Roles.Contains(
+                "Accountant",
+                StringComparer.OrdinalIgnoreCase);
+
+            _canViewCompanyWideFinancials =
+                isSuperAdmin ||
+                (isAccountant && !userScope.HasActiveSiteAccess);
+            _userScopeLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _scopeError = $"Failed to verify report access. {FriendlyError(ex)}";
+            _busy = false;
+            return;
+        }
+
         try
         {
             _sites = await ProjectService.GetSitesAsync();
@@ -588,6 +650,12 @@
     private async Task ScopeChangedAsync()
     {
         ClearErrors();
+
+        if (_scope == "Company" && !_canViewCompanyWideFinancials)
+        {
+            _scope = "All";
+            return;
+        }
 
         if (_scope == "Site")
         {
@@ -627,6 +695,12 @@
 
     private async Task RefreshAsync()
     {
+        if (!_userScopeLoaded)
+        {
+            await LoadInitialDataAsync();
+            return;
+        }
+
         if (_scope == "Site" && Guid.TryParse(_selectedSiteId, out var siteId))
         {
             await LoadSiteAsync(siteId);
@@ -778,12 +852,19 @@
     {
         get
         {
-            var rows = new List<Row>
-            {
-                ToRow("Head office (company level)", string.Empty, _all!.Company)
-            };
+            var all = _all!;
+            var rows = new List<Row>();
 
-            rows.AddRange(_all.Sites.Select(
+            if (_canViewCompanyWideFinancials)
+            {
+                rows.Add(
+                    ToRow(
+                        "Head office (company level)",
+                        string.Empty,
+                        all.Company));
+            }
+
+            rows.AddRange(all.Sites.Select(
                 s => ToRow(s.SiteName, s.SiteCode, s.Financial)));
 
             if (OtherRow is { } other)
@@ -806,7 +887,12 @@
                 return null;
             }
 
-            var listed = new List<Row> { ToRow("", "", _all.Company) };
+            var listed = new List<Row>();
+            if (_canViewCompanyWideFinancials)
+            {
+                listed.Add(ToRow("", "", _all.Company));
+            }
+
             listed.AddRange(_all.Sites.Select(s => ToRow("", "", s.Financial)));
 
             var total = TotalRow;

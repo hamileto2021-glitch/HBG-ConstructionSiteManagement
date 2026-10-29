@@ -619,17 +619,14 @@ public sealed class ReportingService : IReportingService
             All || (siteId.HasValue && SiteIds.Contains(siteId.Value));
     }
 
-    // Same rule as the budget and expense services: company admins and
-    // accountants see everything; a Site Manager with no site assignments
-    // sees everything; everyone else only their assigned sites.
+    // Only Super Admins and Accountants with no active site assignments see
+    // company-wide reporting. Everyone else is limited to assigned sites.
     private async Task<Scope> GetScopeAsync(
         User actor,
         Guid companyId,
         CancellationToken cancellationToken)
     {
-        if (HasRole(actor, AppRoles.SuperAdmin) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.Accountant))
+        if (HasRole(actor, AppRoles.SuperAdmin))
         {
             return new Scope { All = true };
         }
@@ -639,11 +636,12 @@ public sealed class ReportingService : IReportingService
             .Where(x =>
                 x.UserId == actor.Id &&
                 x.CompanyId == companyId &&
-                x.IsActive)
+                x.IsActive &&
+                !x.IsDeleted)
             .Select(x => x.SiteId)
             .ToListAsync(cancellationToken);
 
-        if (siteIds.Count == 0 && HasRole(actor, AppRoles.SiteManager))
+        if (siteIds.Count == 0 && HasRole(actor, AppRoles.Accountant))
         {
             return new Scope { All = true };
         }
