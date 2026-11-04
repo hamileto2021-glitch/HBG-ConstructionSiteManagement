@@ -6,6 +6,7 @@
 @using CSM.Web.Services
 
 @inject IEquipmentService EquipmentService
+@inject IAuthService AuthService
 @inject IProjectService ProjectService
 @inject NavigationManager Navigation
 
@@ -41,10 +42,13 @@
                 Daily Report
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="NewTimesheet">
-                + New Timesheet
-            </button>
+            @if (_canManageEquipment)
+            {
+                <button class="btn btn-primary"
+                        @onclick="NewTimesheet">
+                    + New Timesheet
+                </button>
+            }
 
         </div>
 
@@ -96,10 +100,13 @@
                                 @item.Shift Shift
                             </small>
 
-                            <button class="btn btn-sm btn-outline-primary mt-2"
-                                    @onclick="() => EditTimesheet(item.Id)">
-                                <i class="bi bi-pencil"></i> Update
-                            </button>
+                            @if (_canManageEquipment)
+                            {
+                                <button class="btn btn-sm btn-outline-primary mt-2"
+                                        @onclick="() => EditTimesheet(item.Id)">
+                                    <i class="bi bi-pencil"></i> Update
+                                </button>
+                            }
 
                         </div>
 
@@ -160,6 +167,8 @@
 
     private List<EquipmentTimesheetResponse> timesheets = [];
 
+    private bool _canManageEquipment;
+
     private bool loading = true;
 
     private string? errorMessage;
@@ -171,6 +180,11 @@
 
         try
         {
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canManageEquipment = permissions.Contains(
+                "Equipment_Manage",
+                StringComparer.Ordinal);
+
             var sites = await ProjectService.GetSitesAsync();
 
             var site = sites.FirstOrDefault(x => x.Id == SiteId);

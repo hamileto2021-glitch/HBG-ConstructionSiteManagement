@@ -24,10 +24,12 @@
             <div class="text-muted">Stock Adjustments</div>
         </div>
 
-        <button class="btn btn-primary"
-                @onclick="NewAdjustment">
-            New Adjustment
-        </button>
+        <PermissionView AnyOf="@InventoryAdjustPermission">
+            <button class="btn btn-primary"
+                    @onclick="NewAdjustment">
+                New Adjustment
+            </button>
+        </PermissionView>
     </div>
 
     @if (loading)
@@ -91,6 +93,9 @@
 </div>
 
 @code{
+    private static readonly string[] InventoryAdjustPermission =
+        ["Procurement_Inventory_Adjust"];
+
     [Parameter]
     public Guid SiteId { get; set; }
 

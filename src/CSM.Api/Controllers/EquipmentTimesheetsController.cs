@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CSM.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "Equipment.View")]
 [Route("api/[controller]")]
 public sealed class EquipmentTimesheetsController : ControllerBase
 {
@@ -34,6 +34,7 @@ public sealed class EquipmentTimesheetsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Equipment.Manage")]
     public async Task<ActionResult<EquipmentTimesheetResponse>> Create(
         CreateEquipmentTimesheetRequest request,
         CancellationToken cancellationToken)
@@ -69,6 +70,7 @@ public sealed class EquipmentTimesheetsController : ControllerBase
         return Ok(result);
     }
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "Equipment.Manage")]
     public async Task<ActionResult<EquipmentTimesheetResponse>> Update(
         Guid id,
         CreateEquipmentTimesheetRequest request,

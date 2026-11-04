@@ -33,11 +33,13 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick="NewUsage">
-                <i class="bi bi-plus-lg"></i>
-                New Usage
-            </button>
+            <PermissionView AnyOf="@InventoryAdjustPermission">
+                <button class="btn btn-primary"
+                        @onclick="NewUsage">
+                    <i class="bi bi-plus-lg"></i>
+                    New Usage
+                </button>
+            </PermissionView>
 
         </div>
 
@@ -122,6 +124,9 @@ else
 }
 
 @code{
+    private static readonly string[] InventoryAdjustPermission =
+        ["Procurement_Inventory_Adjust"];
+
     [Parameter]
     public Guid SiteId { get; set; }
 

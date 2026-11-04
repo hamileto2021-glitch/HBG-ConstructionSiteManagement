@@ -44,10 +44,12 @@ else
                 </div>
             </div>
 
-            <button class="btn btn-success"
-                    @onclick="AddEntry">
-                + Daily Progress
-            </button>
+            <PermissionView AnyOf="@DailyProgressCreatePermission">
+                <button class="btn btn-success"
+                        @onclick="AddEntry">
+                    + Daily Progress
+                </button>
+            </PermissionView>
 
         </div>
 
@@ -195,10 +197,12 @@ else
 
                 <strong>Daily Progress Log</strong>
 
-                <button class="btn btn-sm btn-primary"
-                        @onclick="OpenDailyProgress">
-                    Add Entry
-                </button>
+                <PermissionView AnyOf="@DailyProgressCreatePermission">
+                    <button class="btn btn-sm btn-primary"
+                            @onclick="OpenDailyProgress">
+                        Add Entry
+                    </button>
+                </PermissionView>
 
             </div>
 
@@ -222,6 +226,9 @@ else
     [Parameter] public Guid ProjectId { get; set; }
 
     [Parameter] public Guid TaskId { get; set; }
+
+    private static readonly string[] DailyProgressCreatePermission =
+        ["Projects_DailyProgress_Create"];
 
     private WorkTask? _task;
 

@@ -345,6 +345,18 @@ public static class PermissionRoutePolicy
             path.StartsWith("equipment/", StringComparison.Ordinal) ||
             path.StartsWith("equipment-", StringComparison.Ordinal))
         {
+            if (path.StartsWith("equipment/fuel", StringComparison.Ordinal) ||
+                path.StartsWith("equipment/downtime", StringComparison.Ordinal) ||
+                path.StartsWith("equipment/maintenance", StringComparison.Ordinal) ||
+                path.StartsWith("equipment/utilization", StringComparison.Ordinal) ||
+                path.StartsWith("equipment/hourmeter", StringComparison.Ordinal) ||
+                path.StartsWith("equipment/timesheet", StringComparison.Ordinal))
+            {
+                return IsMutationRoute(path)
+                    ? ["Equipment_Manage"]
+                    : ["Equipment_View"];
+            }
+
             if (IsMutationRoute(path))
             {
                 return ["Equipment_Manage"];

@@ -30,11 +30,13 @@ else
                 <div class="text-muted">Stock Returns</div>
             </div>
 
-            <button class="btn btn-primary"
-                    @onclick="NewReturn">
-                <i class="bi bi-plus-lg"></i>
-                New Return
-            </button>
+            <PermissionView AnyOf="@InventoryAdjustPermission">
+                <button class="btn btn-primary"
+                        @onclick="NewReturn">
+                    <i class="bi bi-plus-lg"></i>
+                    New Return
+                </button>
+            </PermissionView>
         </div>
 
         @if (returns.Count == 0)
@@ -100,6 +102,9 @@ else
 }
 
 @code {
+    private static readonly string[] InventoryAdjustPermission =
+        ["Procurement_Inventory_Adjust"];
+
     [Parameter]
     public Guid SiteId { get; set; }
 

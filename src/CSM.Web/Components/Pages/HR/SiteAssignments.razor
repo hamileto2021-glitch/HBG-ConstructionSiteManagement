@@ -2,8 +2,10 @@
 @rendermode InteractiveServer
 
 @using CSM.Web.Models.HRM
+@using CSM.Web.Services
 @using CSM.Web.Services.HRM
 @inject ISiteAssignmentService SiteAssignmentService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Site Assignments</PageTitle>
@@ -13,7 +15,7 @@
         <div>
             <h3>Site Assignments</h3>
             <p class="text-muted mb-0">
-                Manage employee assignments to construction sites.
+                Review employee assignments to construction sites.
             </p>
         </div>
 
@@ -23,10 +25,13 @@
                 Back to HR
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="CreateAssignment">
-                Add Assignment
-            </button>
+            @if (_canManageAssignments)
+            {
+                <button class="btn btn-primary"
+                        @onclick="CreateAssignment">
+                    Add Assignment
+                </button>
+            }
         </div>
     </div>
 
@@ -64,7 +69,10 @@
                                 <th>Role</th>
                                 <th>Primary</th>
                                 <th>Status</th>
-                                <th></th>
+                                @if (_canManageAssignments)
+                                {
+                                    <th></th>
+                                }
                             </tr>
                         </thead>
 
@@ -100,12 +108,15 @@
                                             <span class="badge bg-secondary">Inactive</span>
                                         }
                                     </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                @onclick="() => EditAssignment(assignment.Id)">
-                                            Edit
-                                        </button>
-                                    </td>
+                                    @if (_canManageAssignments)
+                                    {
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => EditAssignment(assignment.Id)">
+                                                Edit
+                                            </button>
+                                        </td>
+                                    }
                                 </tr>
                             }
                         </tbody>
@@ -119,10 +130,16 @@
 @code {
     private List<SiteAssignmentResponse> assignments = [];
     private bool isLoading = true;
+    private bool _canManageAssignments;
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
+        var permissions = await AuthService.GetPermissionsAsync();
+        _canManageAssignments = permissions.Contains(
+            "HRM_SiteAssignment_Manage",
+            StringComparer.Ordinal);
+
         await LoadAssignmentsAsync();
     }
 

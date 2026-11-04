@@ -385,6 +385,7 @@ public static class DatabaseInitializer
             GranularPermission.Sites_View,
             GranularPermission.Projects_View,
             GranularPermission.HRM_Payroll_View,
+            GranularPermission.Finance_CostCode_View,
             GranularPermission.Finance_Budget_View,
             GranularPermission.Finance_Budget_Manage,
             GranularPermission.Finance_Expense_View,
@@ -400,8 +401,7 @@ public static class DatabaseInitializer
             GranularPermission.Compliance_View,
             GranularPermission.Notifications_View,
             GranularPermission.Reports_View,
-            GranularPermission.Reports_FinancialSummary_View,
-            GranularPermission.Reports_Export);
+            GranularPermission.Reports_FinancialSummary_View);
 
         Grant(
             AppRoles.FinanceOfficer,

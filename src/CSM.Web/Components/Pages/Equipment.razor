@@ -58,13 +58,16 @@
     else
     {
         <section class="equipment-grid" aria-label="Equipment management options">
-            <NavigationCard Href="/equipment/list"
-                            Title="Equipment"
-                            Description="Register and manage equipment assets."
-                            IconClass="bi bi-truck-front"
-                            Tone="NavigationCardTone.Blue" />
+            @if (_canViewEquipment || _canViewInventory)
+            {
+                <NavigationCard Href="/equipment/list"
+                                Title="Equipment"
+                                Description="View equipment assets."
+                                IconClass="bi bi-truck-front"
+                                Tone="NavigationCardTone.Blue" />
+            }
 
-            @if (!_isAccountant)
+            @if (_canManageEquipment)
             {
                 <NavigationCard Href="/equipment/sites"
                                 Title="Assignments"
@@ -72,51 +75,61 @@
                                 IconClass="bi bi-pin-map-fill"
                                 Tone="NavigationCardTone.Indigo" />
 
+            }
+
+            @if (_canViewEquipment)
+            {
                 <NavigationCard Href="/equipment/downtime-sites"
                                 Title="Downtime"
-                                Description="Track equipment downtime and resolutions."
+                                Description="View equipment downtime and resolutions."
                                 IconClass="bi bi-exclamation-octagon"
                                 Tone="NavigationCardTone.Red" />
-
                 <NavigationCard Href="/equipment/maintenance-sites"
                                 Title="Maintenance"
-                                Description="Manage preventive and corrective maintenance."
+                                Description="View preventive and corrective maintenance."
                                 IconClass="bi bi-tools"
                                 Tone="NavigationCardTone.Teal" />
-            }
 
-            <NavigationCard Href="/equipment/fuel-sites"
-                            Title="Fuel Consumption"
-                            Description="Record fuel usage by construction site."
-                            IconClass="bi bi-fuel-pump"
-                            Tone="NavigationCardTone.Orange" />
-
-            @if (!_isAccountant)
-            {
+                <NavigationCard Href="/equipment/fuel-sites"
+                                Title="Fuel Consumption"
+                                Description="View fuel usage by construction site."
+                                IconClass="bi bi-fuel-pump"
+                                Tone="NavigationCardTone.Orange" />
                 <NavigationCard Href="/equipment/hourmeter-sites"
                                 Title="Hour Meter"
-                                Description="Record equipment operating hours by construction site."
+                                Description="View equipment operating hours by construction site."
                                 IconClass="bi bi-stopwatch"
                                 Tone="NavigationCardTone.Violet" />
+
+                <NavigationCard Href="/equipment/utilization-sites"
+                                Title="Utilization"
+                                Description="View equipment hours, fuel usage, downtime, and maintenance cost."
+                                IconClass="bi bi-graph-up-arrow"
+                                Tone="NavigationCardTone.Green" />
+
+                <NavigationCard Href="/equipment/timesheet-sites"
+                                Title="Daily Timesheets"
+                                Description="@(_canManageEquipment
+                                    ? "Record and review daily equipment shifts by construction site."
+                                    : "Review daily equipment shifts by construction site.")"
+                                IconClass="bi bi-calendar-check"
+                                Tone="NavigationCardTone.Cyan" />
             }
 
-            <NavigationCard Href="/equipment/utilization-sites"
-                            Title="Utilization"
-                            Description="View equipment hours, fuel usage, downtime, and maintenance cost."
-                            IconClass="bi bi-graph-up-arrow"
-                            Tone="NavigationCardTone.Green" />
-
-            <NavigationCard Href="/equipment/timesheet-sites"
-                            Title="Daily Timesheets"
-                            Description="Record daily equipment shifts by construction site."
-                            IconClass="bi bi-calendar-check"
-                            Tone="NavigationCardTone.Cyan" />
+            @if (!_canViewEquipment && !_canViewInventory)
+            {
+                <div class="alert alert-info" role="status">
+                    Your account does not have permission to view equipment records.
+                </div>
+            }
         </section>
     }
 </div>
 
 @code {
-    private bool _isAccountant;
+    private bool _canViewEquipment;
+    private bool _canManageEquipment;
+    private bool _canViewInventory;
     private bool _isLoading = true;
     private string? _loadError;
 
@@ -129,10 +142,12 @@
 
         try
         {
-            var userScope = await AuthService.GetCurrentUserScopeAsync();
-
-            _isAccountant = userScope.Roles.Any(role =>
-                string.Equals(role, "Accountant", StringComparison.OrdinalIgnoreCase));
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canViewEquipment = permissions.Contains("Equipment_View", StringComparer.Ordinal);
+            _canManageEquipment = permissions.Contains("Equipment_Manage", StringComparer.Ordinal);
+            _canViewInventory = permissions.Contains(
+                "Procurement_Inventory_View",
+                StringComparer.Ordinal);
         }
         catch (Exception exception)
         {
