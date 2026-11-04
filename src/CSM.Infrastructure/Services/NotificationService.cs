@@ -30,8 +30,8 @@ public sealed class NotificationService : INotificationService
             .AsNoTracking()
             .Where(
                 x =>
-                    x.CompanyId == actor.CompanyId &&
-                    x.RecipientUserId == currentUserId);
+                    x.RecipientUserId == currentUserId &&
+                    (actor.CompanyId == null || x.CompanyId == actor.CompanyId));
 
         if (isRead.HasValue)
         {
@@ -70,8 +70,8 @@ public sealed class NotificationService : INotificationService
             .AsNoTracking()
             .CountAsync(
                 x =>
-                    x.CompanyId == actor.CompanyId &&
                     x.RecipientUserId == currentUserId &&
+                    (actor.CompanyId == null || x.CompanyId == actor.CompanyId) &&
                     !x.IsRead,
                 cancellationToken);
     }
@@ -158,8 +158,8 @@ public sealed class NotificationService : INotificationService
             .SingleOrDefaultAsync(
                 x =>
                     x.Id == notificationId &&
-                    x.CompanyId == actor.CompanyId &&
-                    x.RecipientUserId == currentUserId,
+                    x.RecipientUserId == currentUserId &&
+                    (actor.CompanyId == null || x.CompanyId == actor.CompanyId),
                 cancellationToken);
 
         if (notification is null)
@@ -178,6 +178,39 @@ public sealed class NotificationService : INotificationService
             cancellationToken);
 
         return ToResponse(notification);
+    }
+
+    public async Task<int> MarkAllAsReadAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(
+            currentUserId,
+            cancellationToken);
+
+        var unreadNotifications = await _dbContext.Notifications
+            .Where(
+                x =>
+                    x.RecipientUserId == currentUserId &&
+                    (actor.CompanyId == null || x.CompanyId == actor.CompanyId) &&
+                    !x.IsRead)
+            .ToListAsync(cancellationToken);
+
+        if (unreadNotifications.Count == 0)
+        {
+            return 0;
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var notification in unreadNotifications)
+        {
+            notification.IsRead = true;
+            notification.ReadAtUtc = now;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return unreadNotifications.Count;
     }
 
     private async Task<User> GetActorAsync(

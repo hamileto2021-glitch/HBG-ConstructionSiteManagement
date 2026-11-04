@@ -78,15 +78,17 @@ public sealed class PayrollService : IPayrollService
 
         if (authorizedSiteIds.Count > 0)
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
+            // A payroll record belongs to the sites its employee was assigned
+            // to DURING the pay period, not the sites they are assigned to
+            // today. (The old check used today, so an employee who moved site
+            // showed old payroll under the wrong site.)
             query = query.Where(x =>
                 _dbContext.SiteAssignments.Any(a =>
                     a.EmployeeId == x.EmployeeId &&
                     authorizedSiteIds.Contains(a.ConstructionSiteId) &&
-                    a.StartDate <= today &&
+                    a.StartDate <= x.PeriodEnd &&
                     (!a.EndDate.HasValue ||
-                     a.EndDate.Value >= today)));
+                     a.EndDate.Value >= x.PeriodStart)));
         }
 
         if (employeeId.HasValue)

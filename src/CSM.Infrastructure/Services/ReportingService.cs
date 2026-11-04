@@ -20,7 +20,15 @@ namespace CSM.Infrastructure.Services;
 ///
 ///  2. Expenses  = expense records + paid payroll + petty cash out
 ///       expense records  Approved and Paid expenses, including tax.
-///       paid payroll     COMPLETED payments linked to a payroll record.
+///       paid payroll     Payroll that has been paid, by either route:
+///                          - completed payments linked to the payroll record
+///                          - or, when the payroll was only marked as paid and
+///                            has no completed payment, its net pay.
+///                        Never both for the same record. A payment that has
+///                        its own site keeps it; otherwise the amount is split
+///                        across the sites the employee was assigned to during
+///                        the pay period, by days. Days with no assignment go
+///                        to company level.
 ///       petty cash out   Petty cash CashOut transactions.
 ///     Payments on vendor bills and other payments are NOT expenses.
 ///     Remaining = Budget - Expenses.      Used % = Expenses / Budget.
@@ -381,6 +389,84 @@ public sealed class ReportingService : IReportingService
         }
     }
 
+    private sealed record PayrollRow(
+        Guid Id,
+        Guid EmployeeId,
+        DateOnly PeriodStart,
+        DateOnly PeriodEnd,
+        PayrollStatus Status,
+        decimal NetPay);
+
+    private sealed record AssignmentRow(
+        Guid EmployeeId,
+        Guid SiteId,
+        DateOnly Start,
+        DateOnly? End);
+
+    // Splits an amount across the sites an employee was assigned to during the
+    // pay period, by days. A day with two sites is shared equally; a day with
+    // none goes to company level (a null site). The parts always add up to the
+    // amount: the last part takes any rounding difference.
+    private static List<(Guid? Site, decimal Amount)> AllocateByAssignment(
+        decimal amount,
+        PayrollRow record,
+        List<AssignmentRow> assignments)
+    {
+        var totalDays = record.PeriodEnd.DayNumber - record.PeriodStart.DayNumber + 1;
+
+        if (totalDays <= 0)
+        {
+            return new List<(Guid? Site, decimal Amount)> { (null, amount) };
+        }
+
+        var weights = new Dictionary<Guid, decimal>();
+        var unassigned = 0m;
+
+        for (var day = record.PeriodStart; day <= record.PeriodEnd; day = day.AddDays(1))
+        {
+            var sites = assignments
+                .Where(a => a.Start <= day && (!a.End.HasValue || a.End.Value >= day))
+                .Select(a => a.SiteId)
+                .Distinct()
+                .ToList();
+
+            if (sites.Count == 0)
+            {
+                unassigned += 1m;
+                continue;
+            }
+
+            foreach (var site in sites)
+            {
+                weights[site] = weights.GetValueOrDefault(site) + 1m / sites.Count;
+            }
+        }
+
+        var parts = weights
+            .Select(w => ((Guid?)w.Key, w.Value))
+            .ToList();
+
+        if (unassigned > 0m)
+        {
+            parts.Add(((Guid?)null, unassigned));
+        }
+
+        var result = new List<(Guid? Site, decimal Amount)>();
+        var allocated = 0m;
+
+        for (var i = 0; i < parts.Count; i++)
+        {
+            var share = i == parts.Count - 1
+                ? amount - allocated
+                : Math.Round(amount * parts[i].Item2 / totalDays, 2);
+
+            allocated += share;
+            result.Add((parts[i].Item1, share));
+        }
+
+        return result;
+    }
+
     // Key: "" for company-level records, otherwise the site id as text.
     private async Task<Dictionary<string, Raw>> LoadRawBySiteAsync(
         Guid companyId,
@@ -514,10 +600,9 @@ public sealed class ReportingService : IReportingService
         {
             var raw = For(payment.Site);
 
-            // Payroll is money out and counts as an expense.
+            // Payroll payments are handled below, with the payroll records.
             if (payment.PayrollRecordId.HasValue)
             {
-                raw.PayrollPaid += payment.Amount;
                 continue;
             }
 
@@ -532,6 +617,94 @@ public sealed class ReportingService : IReportingService
             if (isIncoming)
             {
                 raw.PaymentsIn += payment.Amount;
+            }
+        }
+
+        // Paid payroll. Two routes make payroll "paid": a completed payment
+        // linked to the record, or the record being marked as paid with no
+        // payment. Each record is counted once.
+        var payrollPayments = payments
+            .Where(p => p.PayrollRecordId.HasValue)
+            .ToList();
+
+        var recordsWithPayment = payrollPayments
+            .Select(p => p.PayrollRecordId!.Value)
+            .ToHashSet();
+
+        var payrollRecords = (await _dbContext.PayrollRecords
+                .AsNoTracking()
+                .Where(r =>
+                    r.CompanyId == companyId &&
+                    !r.IsDeleted &&
+                    (r.Status == PayrollStatus.Paid ||
+                     recordsWithPayment.Contains(r.Id)))
+                .Select(r => new PayrollRow(
+                    r.Id,
+                    r.EmployeeId,
+                    r.PeriodStart,
+                    r.PeriodEnd,
+                    r.Status,
+                    r.NetPay))
+                .ToListAsync(cancellationToken))
+            .ToDictionary(r => r.Id);
+
+        var payrollEmployeeIds = payrollRecords.Values
+            .Select(r => r.EmployeeId)
+            .Distinct()
+            .ToList();
+
+        var assignmentsByEmployee = (await _dbContext.SiteAssignments
+                .AsNoTracking()
+                .Where(a =>
+                    a.CompanyId == companyId &&
+                    payrollEmployeeIds.Contains(a.EmployeeId))
+                .Select(a => new AssignmentRow(
+                    a.EmployeeId,
+                    a.ConstructionSiteId,
+                    a.StartDate,
+                    a.EndDate))
+                .ToListAsync(cancellationToken))
+            .GroupBy(a => a.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        List<AssignmentRow> AssignmentsOf(Guid employeeId) =>
+            assignmentsByEmployee.TryGetValue(employeeId, out var list)
+                ? list
+                : new List<AssignmentRow>();
+
+        // Route 1: completed payments linked to a payroll record.
+        foreach (var payment in payrollPayments)
+        {
+            // A payment that has its own site keeps it.
+            if (payment.Site.HasValue ||
+                !payrollRecords.TryGetValue(
+                    payment.PayrollRecordId!.Value,
+                    out var record))
+            {
+                For(payment.Site).PayrollPaid += payment.Amount;
+                continue;
+            }
+
+            foreach (var (site, amount) in AllocateByAssignment(
+                         payment.Amount,
+                         record,
+                         AssignmentsOf(record.EmployeeId)))
+            {
+                For(site).PayrollPaid += amount;
+            }
+        }
+
+        // Route 2: marked as paid, with no completed payment.
+        foreach (var record in payrollRecords.Values.Where(r =>
+                     r.Status == PayrollStatus.Paid &&
+                     !recordsWithPayment.Contains(r.Id)))
+        {
+            foreach (var (site, amount) in AllocateByAssignment(
+                         record.NetPay,
+                         record,
+                         AssignmentsOf(record.EmployeeId)))
+            {
+                For(site).PayrollPaid += amount;
             }
         }
 
@@ -619,14 +792,17 @@ public sealed class ReportingService : IReportingService
             All || (siteId.HasValue && SiteIds.Contains(siteId.Value));
     }
 
-    // Only Super Admins and Accountants with no active site assignments see
-    // company-wide reporting. Everyone else is limited to assigned sites.
+    // Same rule as the budget and expense services: company admins and
+    // accountants see everything; a Site Manager with no site assignments
+    // sees everything; everyone else only their assigned sites.
     private async Task<Scope> GetScopeAsync(
         User actor,
         Guid companyId,
         CancellationToken cancellationToken)
     {
-        if (HasRole(actor, AppRoles.SuperAdmin))
+        if (HasRole(actor, AppRoles.SuperAdmin) ||
+            HasRole(actor, AppRoles.CompanyAdmin) ||
+            HasRole(actor, AppRoles.Accountant))
         {
             return new Scope { All = true };
         }
@@ -636,12 +812,11 @@ public sealed class ReportingService : IReportingService
             .Where(x =>
                 x.UserId == actor.Id &&
                 x.CompanyId == companyId &&
-                x.IsActive &&
-                !x.IsDeleted)
+                x.IsActive)
             .Select(x => x.SiteId)
             .ToListAsync(cancellationToken);
 
-        if (siteIds.Count == 0 && HasRole(actor, AppRoles.Accountant))
+        if (siteIds.Count == 0 && HasRole(actor, AppRoles.SiteManager))
         {
             return new Scope { All = true };
         }

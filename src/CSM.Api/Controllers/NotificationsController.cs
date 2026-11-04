@@ -104,6 +104,25 @@ public sealed class NotificationsController : ControllerBase
         }
     }
 
+    [HttpPost("mark-all-read")]
+    public async Task<ActionResult<int>> MarkAllRead(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var count =
+                await _notificationService.MarkAllAsReadAsync(
+                    GetCurrentUserId(),
+                    cancellationToken);
+
+            return Ok(count);
+        }
+        catch (NotificationManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private Guid GetCurrentUserId()
     {
         var value =

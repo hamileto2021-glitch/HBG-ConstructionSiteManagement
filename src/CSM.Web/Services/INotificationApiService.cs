@@ -4,6 +4,8 @@ namespace CSM.Web.Services;
 
 public interface INotificationApiService
 {
+    event Action? OnNotificationsChanged;
+
     Task<IReadOnlyList<NotificationResponse>> GetAsync(
         CancellationToken cancellationToken = default);
 
@@ -13,5 +15,8 @@ public interface INotificationApiService
     Task<NotificationResponse?> MarkReadAsync(
         Guid notificationId,
         bool isRead = true,
+        CancellationToken cancellationToken = default);
+
+    Task MarkAllReadAsync(
         CancellationToken cancellationToken = default);
 }

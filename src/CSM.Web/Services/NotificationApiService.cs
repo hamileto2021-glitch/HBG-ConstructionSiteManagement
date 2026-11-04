@@ -7,6 +7,8 @@ namespace CSM.Web.Services;
 
 public sealed class NotificationApiService : INotificationApiService
 {
+    public event Action? OnNotificationsChanged;
+
     private readonly IHttpClientFactory _factory;
     private readonly ProtectedSessionStorage _storage;
 
@@ -80,8 +82,32 @@ public sealed class NotificationApiService : INotificationApiService
             throw new Exception(error);
         }
 
-        return await response.Content
+        var result = await response.Content
             .ReadFromJsonAsync<NotificationResponse>(
                 cancellationToken: cancellationToken);
+
+        OnNotificationsChanged?.Invoke();
+        return result;
+    }
+
+    public async Task MarkAllReadAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var client = await ClientAsync();
+
+        var response = await client.PostAsync(
+            "Notifications/mark-all-read",
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(
+                cancellationToken);
+
+            throw new Exception(error);
+        }
+
+        OnNotificationsChanged?.Invoke();
     }
 }

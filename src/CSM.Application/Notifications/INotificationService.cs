@@ -23,4 +23,8 @@ public interface INotificationService
         Guid notificationId,
         MarkNotificationReadRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<int> MarkAllAsReadAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default);
 }

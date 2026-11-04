@@ -1,4 +1,5 @@
 @page "/notifications"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using CSM.Web.Models.Notifications
 @inject CSM.Web.Services.INotificationApiService NotificationService
 @inject NavigationManager Navigation
@@ -16,15 +17,29 @@
             <p>Stay up to date with activity across your workspace.</p>
         </div>
 
-        <button class="notifications-refresh"
-                type="button"
-                @onclick="LoadAsync"
-                disabled="@_loading"
-                aria-label="Refresh notifications">
-            <i class="bi bi-arrow-clockwise @(_loading ? "notifications-spin" : string.Empty)"
-               aria-hidden="true"></i>
-            <span>Refresh</span>
-        </button>
+        <div class="notifications-header-actions">
+            @if (UnreadCount > 0)
+            {
+                <button class="notifications-refresh"
+                        type="button"
+                        @onclick="MarkAllAsReadAsync"
+                        disabled="@(_loading || _markingAllRead)"
+                        aria-label="Mark all notifications as read">
+                    <i class="bi bi-check2-all" aria-hidden="true"></i>
+                    <span>@(_markingAllRead ? "Marking all…" : "Mark all as read")</span>
+                </button>
+            }
+
+            <button class="notifications-refresh"
+                    type="button"
+                    @onclick="LoadAsync"
+                    disabled="@_loading"
+                    aria-label="Refresh notifications">
+                <i class="bi bi-arrow-clockwise @(_loading ? "notifications-spin" : string.Empty)"
+                   aria-hidden="true"></i>
+                <span>Refresh</span>
+            </button>
+        </div>
     </header>
 
     @if (!string.IsNullOrWhiteSpace(_actionError))
@@ -221,6 +236,7 @@
     private List<NotificationResponse> _notifications = [];
     private readonly HashSet<Guid> _markingRead = [];
     private bool _loading = true;
+    private bool _markingAllRead;
     private string? _error;
     private string? _actionError;
     private string _activeFilter = "inbox";
@@ -290,6 +306,41 @@
         finally
         {
             _markingRead.Remove(notificationId);
+        }
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        if (UnreadCount == 0 || _markingAllRead)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _markingAllRead = true;
+
+        try
+        {
+            await NotificationService.MarkAllReadAsync();
+            var now = DateTime.UtcNow;
+
+            foreach (var notification in _notifications.ToList())
+            {
+                if (!notification.IsRead)
+                {
+                    notification.IsRead = true;
+                    notification.ReadAtUtc = now;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+        finally
+        {
+            _markingAllRead = false;
+            StateHasChanged();
         }
     }
 

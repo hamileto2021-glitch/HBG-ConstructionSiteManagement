@@ -284,7 +284,13 @@
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
+        NotificationService.OnNotificationsChanged += OnNotificationsChanged;
         _ = RefreshLoopAsync();
+    }
+
+    private void OnNotificationsChanged()
+    {
+        _ = RefreshUnreadCountAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -485,6 +491,7 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        NotificationService.OnNotificationsChanged -= OnNotificationsChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

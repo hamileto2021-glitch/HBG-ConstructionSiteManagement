@@ -18,6 +18,13 @@
     margin-bottom: 1.75rem;
 }
 
+.notifications-header-actions {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    flex-wrap: wrap;
+}
+
 .notifications-eyebrow {
     display: flex;
     align-items: center;
