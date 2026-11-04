@@ -9,10 +9,35 @@
 
 @inject IReportingService ReportingService
 @inject IProjectService ProjectService
+@inject IAuthService AuthService
+@inject ILogger<Reports> Logger
 
 <PageTitle>Reports & Analytics</PageTitle>
 
 <div class="container-fluid py-4">
+    @if (!_permissionsLoaded)
+    {
+        <section class="text-center py-5" role="status" aria-live="polite">
+            <span class="spinner-border" aria-hidden="true"></span>
+            <p class="mt-2 mb-0">Checking report access...</p>
+        </section>
+    }
+    else if (_permissionLoadFailed)
+    {
+        <section class="alert alert-danger" role="alert">
+            <h2 class="h5">Report access could not be verified</h2>
+            <p class="mb-0">Refresh the page and try again. If the problem continues, contact your administrator.</p>
+        </section>
+    }
+    else if (!_hasReportAccess)
+    {
+        <section class="alert alert-warning" role="alert">
+            <h2 class="h5">Reports are not available</h2>
+            <p class="mb-0">Your account does not have permission to view reports.</p>
+        </section>
+    }
+    else
+    {
 
     <div class="d-flex justify-content-between align-items-start mb-4">
         <div>
@@ -30,7 +55,8 @@
         </button>
     </div>
 
-    <!-- Scope. Always visible, so an error never leaves the user stuck. -->
+    @if (_canViewFinancialReports || _canSelectSites)
+    {
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <div class="row g-3 align-items-end">
@@ -41,9 +67,15 @@
                     <select class="form-select"
                             @bind="_scope"
                             @bind:after="ScopeChangedAsync">
-                        <option value="All">Company + all sites</option>
-                        <option value="Company">Company level (not tied to a site)</option>
-                        <option value="Site">Site</option>
+                        <option value="All">@AllScopeOption</option>
+                        @if (_canViewFinancialReports)
+                        {
+                            <option value="Company">Company level (not tied to a site)</option>
+                        }
+                        @if (_canSelectSites)
+                        {
+                            <option value="Site">Site</option>
+                        }
                     </select>
                 </div>
 
@@ -77,8 +109,9 @@
             </div>
         </div>
     </div>
+    }
 
-    @if (!string.IsNullOrWhiteSpace(_sitesError))
+    @if (_canSelectSites && !string.IsNullOrWhiteSpace(_sitesError))
     {
         <div class="alert alert-warning">@_sitesError</div>
     }
@@ -98,8 +131,15 @@
     }
     else
     {
-        <!-- Executive report (sites and projects only exist per site, so it is not shown for company level) -->
-        @if (_scope != "Company")
+        @if (!_hasVisibleReportContent)
+        {
+            <section class="alert alert-info" role="status">
+                <h2 class="h5">No report sections are available</h2>
+                <p class="mb-0">Your account can open Reports, but does not have access to any report data sections.</p>
+            </section>
+        }
+
+        @if (_showExecutiveReport)
         {
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-primary text-white">
@@ -130,43 +170,55 @@
                 {
                     <div class="row g-3">
 
-                        @Tile("Construction Sites",
-                            SitesText(Executive),
-                            col: "col-md-6 col-xl-3")
+                        @if (_canViewSites && Executive.TotalSites.HasValue && Executive.ActiveSites.HasValue)
+                        {
+                            @Tile("Construction Sites",
+                                SitesText(Executive),
+                                col: "col-md-6 col-xl-3")
+                        }
 
-                        @Tile("Projects",
-                            Executive.TotalProjects.ToString("N0"),
-                            col: "col-md-6 col-xl-3")
+                        @if (_canViewProjects && Executive.TotalProjects.HasValue)
+                        {
+                            @Tile("Projects",
+                                Executive.TotalProjects.Value.ToString("N0"),
+                                col: "col-md-6 col-xl-3")
+                        }
 
-                        @Tile("Contract Value",
-                            Money(Executive.TotalContractValue),
-                            hint: "All projects",
-                            col: "col-md-6 col-xl-3")
+                        @if (_canViewFinancialReports)
+                        {
+                            @Tile("Contract Value",
+                                Money(Executive.TotalContractValue),
+                                hint: "All projects",
+                                col: "col-md-6 col-xl-3")
 
-                        @Tile("Budget",
-                            Money(Executive.TotalBudget),
-                            hint: "Approved, active and closed budgets",
-                            col: "col-md-6 col-xl-3")
+                            @Tile("Budget",
+                                Money(Executive.TotalBudget),
+                                hint: "Approved, active and closed budgets",
+                                col: "col-md-6 col-xl-3")
 
-                        @UsedTile(Executive.TotalBudget,
-                            Executive.TotalExpenses,
-                            "col-md-6 col-xl-3")
+                            @if (Executive.TotalBudget.HasValue && Executive.TotalExpenses.HasValue)
+                            {
+                                @UsedTile(Executive.TotalBudget.Value,
+                                    Executive.TotalExpenses.Value,
+                                    "col-md-6 col-xl-3")
+                            }
 
-                        @Tile("Invoiced to Clients",
-                            Money(Executive.TotalInvoices),
-                            col: "col-md-6 col-xl-3")
+                            @Tile("Invoiced to Clients",
+                                Money(Executive.TotalInvoices),
+                                col: "col-md-6 col-xl-3")
 
-                        @Tile("Collected",
-                            Money(Executive.TotalCompletedPayments),
-                            css: "text-success",
-                            hint: "Completed incoming payments",
-                            col: "col-md-6 col-xl-3")
+                            @Tile("Collected",
+                                Money(Executive.TotalCompletedPayments),
+                                css: "text-success",
+                                hint: "Completed incoming payments",
+                                col: "col-md-6 col-xl-3")
 
-                        @Tile("Outstanding Invoices",
-                            Money(Executive.OutstandingInvoices),
-                            css: "text-warning",
-                            hint: "Unpaid balance of client invoices",
-                            col: "col-md-6 col-xl-3")
+                            @Tile("Outstanding Invoices",
+                                Money(Executive.OutstandingInvoices),
+                                css: "text-warning",
+                                hint: "Unpaid balance of client invoices",
+                                col: "col-md-6 col-xl-3")
+                        }
 
                     </div>
 
@@ -174,10 +226,12 @@
 
                     <div class="row g-4">
 
+                        @if (_canViewSites)
+                        {
                         <div class="col-lg-6">
                             <h6 class="fw-bold mb-3">Sites by Status</h6>
 
-                            @if (Executive.SitesByStatus.Count > 0)
+                            @if (Executive.SitesByStatus is { Count: > 0 } sitesByStatus)
                             {
                                 <div class="table-responsive">
                                     <table class="table table-sm table-bordered">
@@ -188,7 +242,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach (var item in Executive.SitesByStatus)
+                                            @foreach (var item in sitesByStatus)
                                             {
                                                 <tr>
                                                     <td>@item.Key</td>
@@ -206,11 +260,14 @@
                                 </div>
                             }
                         </div>
+                        }
 
+                        @if (_canViewProjects)
+                        {
                         <div class="col-lg-6">
                             <h6 class="fw-bold mb-3">Projects by Status</h6>
 
-                            @if (Executive.ProjectsByStatus.Count > 0)
+                            @if (Executive.ProjectsByStatus is { Count: > 0 } projectsByStatus)
                             {
                                 <div class="table-responsive">
                                     <table class="table table-sm table-bordered">
@@ -221,7 +278,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach (var item in Executive.ProjectsByStatus)
+                                            @foreach (var item in projectsByStatus)
                                             {
                                                 <tr>
                                                     <td>@item.Key</td>
@@ -239,6 +296,7 @@
                                 </div>
                             }
                         </div>
+                        }
 
                     </div>
                 }
@@ -249,6 +307,8 @@
         }
 
         <!-- Financial report -->
+        @if (_canViewFinancialReports)
+        {
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-success text-white">
                 <div class="d-flex justify-content-between align-items-center">
@@ -396,9 +456,10 @@
 
             </div>
         </div>
+        }
 
         <!-- Company breakdown: head office + every site, with a total that adds up -->
-        @if (_scope == "All" && _all is not null)
+        @if (_canViewFinancialReports && _scope == "All" && _all is not null)
         {
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-dark text-white">
@@ -458,6 +519,8 @@
         }
 
         <!-- Future report modules -->
+        @if (_hasUpcomingReports)
+        {
         <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">Additional Management Reports</h5>
@@ -466,26 +529,43 @@
             <div class="card-body">
                 <div class="row g-3">
 
-                    @Upcoming("bi-kanban", "Project Progress Report",
-                        "Planned versus actual progress, milestones and delays.")
+                    @if (_canViewProjects)
+                    {
+                        @Upcoming("bi-kanban", "Project Progress Report",
+                            "Planned versus actual progress, milestones and delays.")
+                    }
 
-                    @Upcoming("bi-building", "Site Operations Report",
-                        "Site activity, materials, equipment and progress.")
+                    @if (_canViewSiteOperations)
+                    {
+                        @Upcoming("bi-building", "Site Operations Report",
+                            "Site activity, materials, equipment and progress.")
+                    }
 
-                    @Upcoming("bi-people", "HR Report",
-                        "Employees, attendance, timesheets, leave and payroll.")
+                    @if (_canViewHrReports)
+                    {
+                        @Upcoming("bi-people", "HR Report",
+                            "Employees, attendance, timesheets, leave and payroll.")
+                    }
 
-                    @Upcoming("bi-box-seam", "Procurement & Inventory",
-                        "Requests, purchase orders, receipts and stock.")
+                    @if (_canViewProcurementReports)
+                    {
+                        @Upcoming("bi-box-seam", "Procurement & Inventory",
+                            "Requests, purchase orders, receipts and stock.")
+                    }
 
-                    @Upcoming("bi-shield-check", "Safety & Compliance",
-                        "Incidents, inspections, permits and corrective actions.")
+                    @if (_canViewComplianceReports)
+                    {
+                        @Upcoming("bi-shield-check", "Safety & Compliance",
+                            "Incidents, inspections, permits and corrective actions.")
+                    }
 
                 </div>
             </div>
         </div>
+        }
     }
 
+}
 </div>
 
 @code {
@@ -505,6 +585,62 @@
     private string _selectedSiteId = string.Empty;
 
     private bool _busy = true;
+    private bool _permissionsLoaded;
+    private bool _permissionLoadFailed;
+    private IReadOnlyCollection<string> _permissions = [];
+    private bool _hasReportAccess;
+    private bool _canViewExecutiveReports =>
+        HasPermission("Reports_View");
+    private bool _canViewFinancialReports =>
+        HasPermission("Reports_FinancialSummary_View");
+    private bool _canViewSites => HasPermission("Sites_View");
+    private bool _canSelectSites => _canViewSites;
+    private bool _canViewProjects => HasPermission("Projects_View");
+    private bool _canViewHrReports =>
+        HasAnyPermission(
+            "HRM_Employee_View",
+            "HRM_Contractor_View",
+            "HRM_Shift_View",
+            "HRM_Payroll_View",
+            "HRM_SiteAssignment_View",
+            "HRM_Attendance_View",
+            "HRM_Leave_View",
+            "HRM_Timesheet_View");
+    private bool _canViewSiteOperations =>
+        _canViewSites ||
+        _canViewProjects ||
+        HasPermission("Equipment_View") ||
+        HasPermission("Procurement_Inventory_View");
+    private bool _canViewProcurementReports =>
+        HasAnyPermission(
+            "Procurement_MaterialRequest_View",
+            "Procurement_PurchaseOrder_View",
+            "Procurement_Inventory_View",
+            "Procurement_Vendor_View");
+    private bool _canViewComplianceReports =>
+        HasPermission("Compliance_View");
+    private bool _showExecutiveReport =>
+        _canViewExecutiveReports &&
+        _scope != "Company" &&
+        (_canViewSites || _canViewProjects || _canViewFinancialReports);
+    private bool _hasUpcomingReports =>
+        _canViewProjects ||
+        _canViewSiteOperations ||
+        _canViewHrReports ||
+        _canViewProcurementReports ||
+        _canViewComplianceReports;
+    private bool _hasVisibleReportContent =>
+        _canViewSites ||
+        _canViewProjects ||
+        _canViewFinancialReports ||
+        _canViewHrReports ||
+        _canViewSiteOperations ||
+        _canViewProcurementReports ||
+        _canViewComplianceReports;
+    private string AllScopeOption =>
+        _canViewFinancialReports
+            ? "Company + all sites"
+            : "All accessible sites";
 
     // Each section reports its own problem, so one failure never blanks
     // the page or hides the selectors.
@@ -552,15 +688,24 @@
     }
 
     private string CurrentScopeLabel
-        => _scope == "All" ? "Company + all sites"
+        => _scope == "All" ? AllScopeOption
          : _scope == "Company" ? "Company level"
          : _sites.FirstOrDefault(x => x.Id.ToString() == _selectedSiteId)?.Name
            ?? "Select a construction site";
 
     private string ScopeIntro
-        => _scope == "All" ? "Company-wide management reports and financial analytics."
+        => _scope == "All" && _canViewExecutiveReports && _canViewFinancialReports
+            ? "Company-wide management reports and financial analytics."
+         : _scope == "All" && _canViewFinancialReports
+            ? "Company-wide financial analytics."
+         : _scope == "All"
+            ? "Management reports for your accessible scope."
          : _scope == "Company" ? "Company-level financial records that are not tied to a construction site."
-         : $"{CurrentScopeLabel} management reports and financial analytics.";
+         : _canViewExecutiveReports && _canViewFinancialReports
+            ? $"{CurrentScopeLabel} management reports and financial analytics."
+         : _canViewFinancialReports
+            ? $"{CurrentScopeLabel} financial analytics."
+         : $"{CurrentScopeLabel} management reports.";
 
     private string ExecutiveSubtitle
         => _scope == "All"
@@ -576,19 +721,52 @@
     {
         try
         {
-            _sites = await ProjectService.GetSitesAsync();
+            _permissions = await AuthService.GetPermissionsAsync();
+            _hasReportAccess =
+                _canViewExecutiveReports || _canViewFinancialReports;
+
+            if (!_hasReportAccess)
+            {
+                return;
+            }
+
+            if (_canSelectSites)
+            {
+                try
+                {
+                    _sites = await ProjectService.GetSitesAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load sites for reports.");
+                    _sitesError =
+                        $"Failed to load construction sites. {FriendlyError(ex)}";
+                }
+            }
+
+            await LoadAllAsync();
         }
         catch (Exception ex)
         {
-            _sitesError = $"Failed to load construction sites. {FriendlyError(ex)}";
+            Logger.LogError(ex, "Failed to initialize reports permissions.");
+            _permissionLoadFailed = true;
         }
-
-        await LoadAllAsync();
+        finally
+        {
+            _permissionsLoaded = true;
+            _busy = false;
+        }
     }
 
     private async Task ScopeChangedAsync()
     {
         ClearErrors();
+
+        if (_scope == "Company" && !_canViewFinancialReports ||
+            _scope == "Site" && !_canSelectSites)
+        {
+            _scope = "All";
+        }
 
         if (_scope == "Site")
         {
@@ -606,7 +784,8 @@
                 await LoadAllAsync();
             }
         }
-        else if (_companyLevelSummary is null)
+        else if (_canViewFinancialReports &&
+                 _companyLevelSummary is null)
         {
             await LoadCompanyLevelAsync();
         }
@@ -616,7 +795,8 @@
     {
         ClearErrors();
 
-        if (!Guid.TryParse(_selectedSiteId, out var siteId))
+        if (!_canSelectSites ||
+            !Guid.TryParse(_selectedSiteId, out var siteId))
         {
             _siteExecutive = null;
             _siteSummary = null;
@@ -628,6 +808,11 @@
 
     private async Task RefreshAsync()
     {
+        if (!_hasReportAccess)
+        {
+            return;
+        }
+
         if (_scope == "Site" && Guid.TryParse(_selectedSiteId, out var siteId))
         {
             await LoadSiteAsync(siteId);
@@ -644,6 +829,11 @@
 
     private async Task LoadCompanyLevelAsync()
     {
+        if (!_canViewFinancialReports)
+        {
+            return;
+        }
+
         _busy = true;
         ClearErrors();
 
@@ -661,6 +851,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to load the company-level financial report.");
             _financialError = FriendlyError(ex);
         }
 
@@ -675,23 +866,31 @@
         _allExecutive = null;
         _all = null;
 
-        try
+        if (_canViewExecutiveReports)
         {
-            _allExecutive = await ReportingService.GetExecutiveDashboardAsync();
-        }
-        catch (Exception ex)
-        {
-            _executiveError = FriendlyError(ex);
+            try
+            {
+                _allExecutive = await ReportingService.GetExecutiveDashboardAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load the executive report.");
+                _executiveError = FriendlyError(ex);
+            }
         }
 
-        // One call gives head office, every site and the company total.
-        try
+        if (_canViewFinancialReports)
         {
-            _all = await ReportingService.GetAllFinancialSummariesAsync();
-        }
-        catch (Exception ex)
-        {
-            _financialError = FriendlyError(ex);
+            // One call gives head office, every site and the company total.
+            try
+            {
+                _all = await ReportingService.GetAllFinancialSummariesAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load financial reports.");
+                _financialError = FriendlyError(ex);
+            }
         }
 
         _busy = false;
@@ -699,28 +898,42 @@
 
     private async Task LoadSiteAsync(Guid siteId)
     {
+        if (!_canSelectSites ||
+            (!_canViewExecutiveReports && !_canViewFinancialReports))
+        {
+            return;
+        }
+
         _busy = true;
         ClearErrors();
 
         _siteExecutive = null;
         _siteSummary = null;
 
-        try
+        if (_canViewExecutiveReports)
         {
-            _siteExecutive = await ReportingService.GetSiteExecutiveDashboardAsync(siteId);
-        }
-        catch (Exception ex)
-        {
-            _executiveError = FriendlyError(ex);
+            try
+            {
+                _siteExecutive = await ReportingService.GetSiteExecutiveDashboardAsync(siteId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load the site executive report.");
+                _executiveError = FriendlyError(ex);
+            }
         }
 
-        try
+        if (_canViewFinancialReports)
         {
-            _siteSummary = await ReportingService.GetSiteFinancialSummaryAsync(siteId);
-        }
-        catch (Exception ex)
-        {
-            _financialError = FriendlyError(ex);
+            try
+            {
+                _siteSummary = await ReportingService.GetSiteFinancialSummaryAsync(siteId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to load the site financial report.");
+                _financialError = FriendlyError(ex);
+            }
         }
 
         _busy = false;
@@ -839,7 +1052,14 @@
     // Helpers
     // ------------------------------------------------------------------
 
-    private static string Money(decimal value) => value.ToString("N2");
+    private bool HasPermission(string permission) =>
+        _permissions.Contains(permission, StringComparer.Ordinal);
+
+    private bool HasAnyPermission(params string[] permissions) =>
+        permissions.Any(HasPermission);
+
+    private static string Money(decimal? value) =>
+        value?.ToString("N2") ?? "Not available";
 
 
     // What the accounts hold, minus what opening + cash in - cash out allow.
@@ -860,7 +1080,9 @@
             : fallback;
 
     private static string SitesText(ExecutiveDashboardResponse e)
-        => $"{e.ActiveSites:N0} active of {e.TotalSites:N0}";
+        => e.ActiveSites.HasValue && e.TotalSites.HasValue
+            ? $"{e.ActiveSites.Value:N0} active of {e.TotalSites.Value:N0}"
+            : "Not available";
 
     private static string BalanceClass(decimal value)
         => value < 0 ? "text-danger" : "text-success";

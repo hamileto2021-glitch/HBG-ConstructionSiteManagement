@@ -8,6 +8,10 @@ public interface ISiteService
         Guid currentUserId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<SiteResponse>> GetMyAssignedSitesAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken = default);
+
     Task<SiteResponse> GetByIdAsync(
         Guid currentUserId,
         Guid siteId,

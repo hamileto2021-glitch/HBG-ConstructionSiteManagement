@@ -9,5 +9,6 @@ public interface IExecutiveDashboardService
 {
     Task<ExecutiveDashboardResponse> GetAsync(
         Guid companyId,
+        Guid userId,
         CancellationToken cancellationToken = default);
 }

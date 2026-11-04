@@ -76,7 +76,8 @@ public sealed class PayrollService : IPayrollService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        if (authorizedSiteIds.Count > 0)
+        if (authorizedSiteIds.Count > 0 &&
+            !HasRole(actor, AppRoles.Employee))
         {
             // A payroll record belongs to the sites its employee was assigned
             // to DURING the pay period, not the sites they are assigned to
@@ -137,6 +138,13 @@ public sealed class PayrollService : IPayrollService
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        EnsureEmployeeAccess(
+            actor,
+            record.EmployeeId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         return Map(record);
     }
@@ -150,7 +158,7 @@ public sealed class PayrollService : IPayrollService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(currentUserId, cancellationToken);
 
         if (request.EmployeeId == Guid.Empty)
         {
@@ -185,6 +193,12 @@ public sealed class PayrollService : IPayrollService
         }
 
        EnsureCompanyAccess(actor, employee.CompanyId);
+       await EnsurePayrollSiteScopeAccessAsync(
+           actor,
+           employee.Id,
+           request.PeriodStart,
+           request.PeriodEnd,
+           cancellationToken);
 
        if (employee.Status != EmployeeStatus.Active)
        {
@@ -238,7 +252,7 @@ public sealed class PayrollService : IPayrollService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(currentUserId, cancellationToken);
 
         var record = await GetPayrollAsync(
             payrollRecordId,
@@ -247,6 +261,10 @@ public sealed class PayrollService : IPayrollService
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         if (record.Status is
             PayrollStatus.Approved or
@@ -450,6 +468,10 @@ case WageType.Daily:
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         if (record.Status != PayrollStatus.Calculated)
         {
@@ -500,6 +522,10 @@ case WageType.Daily:
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         if (record.Status != PayrollStatus.Approved)
         {
@@ -541,7 +567,7 @@ case WageType.Daily:
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(currentUserId, cancellationToken);
 
         var record = await GetPayrollAsync(
             payrollRecordId,
@@ -550,6 +576,10 @@ case WageType.Daily:
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         if (record.Status == PayrollStatus.Paid)
         {
@@ -582,7 +612,7 @@ case WageType.Daily:
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsureCanManageAsync(currentUserId, cancellationToken);
 
         var record = await GetPayrollAsync(
             payrollRecordId,
@@ -591,6 +621,10 @@ case WageType.Daily:
         EnsureCompanyAccess(
             actor,
             record.CompanyId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         if (record.Status is
             PayrollStatus.Approved or
@@ -659,6 +693,11 @@ case WageType.Daily:
 
         var record = await GetPayrollAsync(payrollRecordId, cancellationToken);
         EnsureCompanyAccess(actor, record.CompanyId);
+        EnsureEmployeeAccess(actor, record.EmployeeId);
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record,
+            cancellationToken);
 
         var employeeName = string.Join(" ",
             new[]
@@ -952,19 +991,101 @@ case WageType.Daily:
             "You are not authorized to access payroll.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private static void EnsureEmployeeAccess(
+        User actor,
+        Guid employeeId)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+        if (!HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        if (!actor.EmployeeId.HasValue)
+        {
+            throw new PayrollManagementException(
+                "No employee record is linked to this user.");
+        }
+
+        if (actor.EmployeeId.Value != employeeId)
+        {
+            throw new PayrollManagementException(
+                "You are only authorized to access your own payroll.");
+        }
+    }
+
+    private async Task EnsureCanManageAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        if (await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Payroll_Approve.ToString(),
+                cancellationToken))
         {
             return;
         }
 
         throw new PayrollManagementException(
             "You are not authorized to manage payroll.");
+    }
+
+    private async Task EnsurePayrollSiteScopeAccessAsync(
+        User actor,
+        PayrollRecord record,
+        CancellationToken cancellationToken)
+    {
+        await EnsurePayrollSiteScopeAccessAsync(
+            actor,
+            record.EmployeeId,
+            record.PeriodStart,
+            record.PeriodEnd,
+            cancellationToken);
+    }
+
+    private async Task EnsurePayrollSiteScopeAccessAsync(
+        User actor,
+        Guid employeeId,
+        DateOnly periodStart,
+        DateOnly periodEnd,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+        var authorizedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive &&
+                !x.IsDeleted)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (authorizedSiteIds.Count == 0)
+        {
+            return;
+        }
+
+        var hasPeriodSiteAssignment = await _dbContext.SiteAssignments
+            .AnyAsync(x =>
+                x.EmployeeId == employeeId &&
+                authorizedSiteIds.Contains(x.ConstructionSiteId) &&
+                x.StartDate <= periodEnd &&
+                (!x.EndDate.HasValue ||
+                 x.EndDate.Value >= periodStart),
+                cancellationToken);
+
+        if (!hasPeriodSiteAssignment)
+        {
+            throw new PayrollManagementException(
+                "You are not authorized to access payroll outside your assigned sites.");
+        }
     }
 
     private static void EnsureCanApprove(
@@ -1095,6 +1216,3 @@ case WageType.Daily:
     }
 
 }
-
-
-

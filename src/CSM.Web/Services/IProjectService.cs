@@ -26,6 +26,8 @@ public interface IProjectService
 
     Task<List<SiteResponse>> GetSitesAsync();
 
+    Task<List<SiteResponse>> GetMyAssignedSitesAsync();
+
     Task<List<SiteResponse>> GetSitesForAssignmentAsync();
 
 

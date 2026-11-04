@@ -8,6 +8,7 @@
 @inject IAttendanceService AttendanceService
 @inject IEmployeeService EmployeeService
 @inject IProjectService ProjectService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 
 <PageTitle>Attendance Check-In</PageTitle>
@@ -61,26 +62,34 @@
                             Employee
                         </label>
 
-                        <select class="form-select"
-                                @bind="_employeeId">
+                        @if (_isEmployee && _employees.Count == 1)
+                        {
+                            <input class="form-control"
+                                   value="@($"{_employees[0].EmployeeNumber} - {_employees[0].FirstName} {_employees[0].LastName}")"
+                                   disabled />
+                        }
+                        else
+                        {
+                            <select class="form-select"
+                                    @bind="_employeeId">
 
-                            <option value="">
-                                -- Select Employee --
-                            </option>
-
-                            @foreach (var employee in _employees)
-                            {
-                                <option value="@employee.Id">
-                                    @employee.EmployeeNumber -
-                                    @employee.FirstName
-                                    @if (!string.IsNullOrWhiteSpace(employee.LastName))
-                                    {
-                                        @($" {employee.LastName}")
-                                    }
+                                <option value="">
+                                    -- Select Employee --
                                 </option>
-                            }
 
-                        </select>
+                                @foreach (var employee in _employees)
+                                {
+                                    <option value="@employee.Id">
+                                        @employee.EmployeeNumber -
+                                        @employee.FirstName
+                                        @if (!string.IsNullOrWhiteSpace(employee.LastName))
+                                        {
+                                            @($" {employee.LastName}")
+                                        }
+                                    </option>
+                                }
+                            </select>
+                        }
                     </div>
 
                     <div class="col-md-6">
@@ -203,6 +212,7 @@
 
     private bool _loading = true;
     private bool _saving;
+    private bool _isEmployee;
 
     private string? _error;
     private string? _success;
@@ -211,11 +221,29 @@
     {
         try
         {
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+            _isEmployee = userScope.Roles.Any(role =>
+                string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
+
             _employees = (
                 await EmployeeService.GetEmployeesAsync("Active")
             ).ToList();
 
-            _sites = await ProjectService.GetSitesAsync();
+            if (_isEmployee)
+            {
+                if (_employees.Count != 1)
+                {
+                    throw new InvalidOperationException(
+                        "No active employee record is linked to this user.");
+                }
+
+                _employeeId = _employees[0].Id;
+                _sites = await ProjectService.GetMyAssignedSitesAsync();
+            }
+            else
+            {
+                _sites = await ProjectService.GetSitesAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -266,7 +294,9 @@
 
             _success = "Attendance check-in recorded successfully.";
 
-            _employeeId = null;
+            _employeeId = _isEmployee
+                ? _employees[0].Id
+                : null;
             _constructionSiteId = null;
             _remarks = null;
             _checkInLocal = DateTime.Now;

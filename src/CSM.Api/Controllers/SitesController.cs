@@ -39,6 +39,27 @@ public sealed class SitesController : ControllerBase
         }
     }
 
+    [HttpGet("my-assigned")]
+    [Authorize(Policy = "HRM.Attendance.Submit")]
+    public async Task<ActionResult<IReadOnlyCollection<SiteResponse>>> GetMyAssignedSites(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sites = await _siteService.GetMyAssignedSitesAsync(
+                GetCurrentUserId(),
+                cancellationToken);
+
+            return Ok(sites);
+        }
+        catch (SiteManagementException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ex.Message });
+        }
+    }
+
     [HttpGet("{siteId:guid}")]
     [Authorize(Policy = "Sites.View")]
     public async Task<ActionResult<SiteResponse>> GetById(

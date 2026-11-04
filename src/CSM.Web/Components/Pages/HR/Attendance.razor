@@ -25,11 +25,13 @@
                 Back
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick='() => Navigation.NavigateTo("/hr/attendance/check-in")'>
-                <span class="me-1">+</span>
-                Check In
-            </button>
+            <PermissionView AnyOf="@AttendanceSubmitPermission">
+                <button class="btn btn-primary"
+                        @onclick='() => Navigation.NavigateTo("/hr/attendance/check-in")'>
+                    <span class="me-1">+</span>
+                    Check In
+                </button>
+            </PermissionView>
         </div>
     </div>
 
@@ -163,27 +165,33 @@
                                             @if (item.CheckInAtUtc.HasValue &&
                                                  !item.CheckOutAtUtc.HasValue)
                                             {
-                                                <button class="btn btn-sm btn-outline-primary me-1"
-                                                        @onclick='() => Navigation.NavigateTo($"/hr/attendance/check-out/{item.Id}")'>
-                                                    Check Out
-                                                </button>
+                                                <PermissionView AnyOf="@AttendanceSubmitPermission">
+                                                    <button class="btn btn-sm btn-outline-primary me-1"
+                                                            @onclick='() => Navigation.NavigateTo($"/hr/attendance/check-out/{item.Id}")'>
+                                                        Check Out
+                                                    </button>
+                                                </PermissionView>
                                             }
 
                                             @if (!item.IsApproved)
                                             {
-                                                <button class="btn btn-sm btn-outline-warning me-1"
-                                                        @onclick='() => Navigation.NavigateTo($"/hr/attendance/override/{item.Id}")'>
-                                                    Override
-                                                </button>
+                                                <PermissionView AnyOf="@AttendanceOverridePermission">
+                                                    <button class="btn btn-sm btn-outline-warning me-1"
+                                                            @onclick='() => Navigation.NavigateTo($"/hr/attendance/override/{item.Id}")'>
+                                                        Override
+                                                    </button>
+                                                </PermissionView>
                                             }
 
                                             @if (item.RequiresApproval && !item.IsApproved &&
                                                  item.CheckOutAtUtc.HasValue)
                                             {
-                                                <button class="btn btn-sm btn-outline-success"
-                                                        @onclick='() => ApproveAttendance(item.Id)'>
-                                                    Approve
-                                                </button>
+                                                <PermissionView AnyOf="@AttendanceApprovePermission">
+                                                    <button class="btn btn-sm btn-outline-success"
+                                                            @onclick='() => ApproveAttendance(item.Id)'>
+                                                        Approve
+                                                    </button>
+                                                </PermissionView>
                                             }
                                             else if (item.IsApproved)
                                             {
@@ -212,6 +220,13 @@
 </div>
 
 @code {
+    private static readonly string[] AttendanceSubmitPermission =
+        ["HRM_Attendance_Submit"];
+    private static readonly string[] AttendanceApprovePermission =
+        ["HRM_Attendance_Approve"];
+    private static readonly string[] AttendanceOverridePermission =
+        ["HRM_Attendance_Override"];
+
     private List<AttendanceResponse> _attendance = [];
     private bool _loading = true;
     private string? _error;

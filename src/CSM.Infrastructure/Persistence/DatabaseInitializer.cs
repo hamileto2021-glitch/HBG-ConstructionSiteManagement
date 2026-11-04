@@ -421,8 +421,8 @@ public static class DatabaseInitializer
             GranularPermission.Reports_FinancialSummary_View,
             GranularPermission.Notifications_View);
 
-        Grant(
-            AppRoles.HROfficer,
+        var hrOfficerPermissions = new[]
+        {
             GranularPermission.HRM_Employee_View,
             GranularPermission.HRM_Employee_Manage,
             GranularPermission.HRM_Contractor_View,
@@ -446,7 +446,11 @@ public static class DatabaseInitializer
             GranularPermission.HRM_Timesheet_Approve,
             GranularPermission.Compliance_View,
             GranularPermission.Notifications_View,
-            GranularPermission.Reports_View);
+            GranularPermission.Reports_View
+        };
+
+        Grant(AppRoles.HrOfficer, hrOfficerPermissions);
+        Grant(AppRoles.HROfficer, hrOfficerPermissions);
 
         Grant(
             AppRoles.EquipmentManager,
@@ -507,6 +511,7 @@ public static class DatabaseInitializer
             AppRoles.ProcurementOfficer,
             AppRoles.FinanceOfficer,
             AppRoles.HrOfficer,
+            AppRoles.HROfficer,
             AppRoles.EquipmentManager,
             AppRoles.SafetyOfficer,
             AppRoles.Accountant

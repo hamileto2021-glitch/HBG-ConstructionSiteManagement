@@ -77,19 +77,31 @@
                                 <span class="hr-card-category">Workforce</span>
                             </div>
                             <h3>Employees</h3>
-                            <p>Browse employee records and manage workforce details.</p>
+                            <p>@(_isEmployee
+                                ? "View your employee record and employment details."
+                                : "Browse employee records and manage workforce details.")</p>
                             <div class="hr-card-actions">
-                                @if (_showCompanyEmployeesButton)
+                                @if (_isEmployee)
                                 {
-                                    <button class="hr-primary-button" type="button" @onclick="OpenCompanyEmployees">
-                                        <i class="bi bi-building" aria-hidden="true"></i>
-                                        Company
+                                    <button class="hr-primary-button" type="button" @onclick="OpenMyEmployeeRecord">
+                                        <i class="bi bi-person" aria-hidden="true"></i>
+                                        My record
                                     </button>
                                 }
-                                <button class="hr-secondary-button" type="button" @onclick="OpenSiteEmployees">
-                                    <i class="bi bi-geo-alt" aria-hidden="true"></i>
-                                    Site
-                                </button>
+                                else
+                                {
+                                    @if (_showCompanyEmployeesButton)
+                                    {
+                                        <button class="hr-primary-button" type="button" @onclick="OpenCompanyEmployees">
+                                            <i class="bi bi-building" aria-hidden="true"></i>
+                                            Company
+                                        </button>
+                                    }
+                                    <button class="hr-secondary-button" type="button" @onclick="OpenSiteEmployees">
+                                        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                                        Site
+                                    </button>
+                                }
                             </div>
                         </article>
 
@@ -252,6 +264,7 @@
     private bool _contractorLoading;
     private bool _contractorLoadFailed;
     private bool _canViewEmployees;
+    private bool _isEmployee;
     private bool _showCompanyEmployeesButton = true;
     private bool _canViewSiteAssignments;
     private bool _canViewTimesheets;
@@ -268,6 +281,9 @@
 
         var userScope = await AuthService.GetCurrentUserScopeAsync();
 
+        _isEmployee = userScope.Roles.Any(role =>
+            string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
+
         var isSupervisor = userScope.Roles.Any(role =>
             string.Equals(role, "Supervisor", StringComparison.OrdinalIgnoreCase));
 
@@ -277,7 +293,9 @@
 
         _canViewTimesheets = permissions.Contains("HRM_Timesheet_View");
 
-        _showCompanyEmployeesButton = !userScope.HasActiveSiteAccess;
+        _showCompanyEmployeesButton =
+            !_isEmployee &&
+            !userScope.HasActiveSiteAccess;
 
         _canViewContractors = permissions.Contains("HRM_Contractor_View");
         _canViewAttendance = permissions.Contains("HRM_Attendance_View");
@@ -288,9 +306,11 @@
         var accessibleRoutes = new List<string>();
         if (_canViewEmployees)
         {
-            accessibleRoutes.Add(userScope.HasActiveSiteAccess
-                ? "/hr/employees/site"
-                : "/hr/employees/company");
+            accessibleRoutes.Add(_isEmployee
+                ? "/hr/employees"
+                : userScope.HasActiveSiteAccess
+                    ? "/hr/employees/site"
+                    : "/hr/employees/company");
         }
         if (_canViewContractors) accessibleRoutes.Add("/hr/contractors");
         if (_canViewAttendance) accessibleRoutes.Add("/hr/attendance");
@@ -334,6 +354,7 @@
     }
 
     private void OpenCompanyEmployees() => Navigation.NavigateTo("/hr/employees/company");
+    private void OpenMyEmployeeRecord() => Navigation.NavigateTo("/hr/employees");
     private void OpenSiteEmployees() => Navigation.NavigateTo("/hr/employees/site");
     private void OpenContractors() => Navigation.NavigateTo("/hr/contractors");
     private void OpenAttendance() => Navigation.NavigateTo("/hr/attendance");

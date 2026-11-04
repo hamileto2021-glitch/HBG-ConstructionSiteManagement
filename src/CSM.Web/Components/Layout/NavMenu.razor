@@ -48,7 +48,13 @@
                 </div>
             }
 
-            @if (HasPermission("Reports_View"))
+            @if (HasAnyPermission(
+                "Reports_View",
+                "Reports_FinancialSummary_View",
+                "Projects_View",
+                "HRM_Employee_View",
+                "Compliance_View",
+                "Procurement_Inventory_View"))
             {
                 <div class="nav-item">
                     <NavLink class="nav-link"

@@ -25,10 +25,12 @@
                 Back
             </button>
 
-            <button class="btn btn-primary"
-                    @onclick="CreateLeave">
-                Add Leave
-            </button>
+            <PermissionView AnyOf="@LeaveSubmitPermission">
+                <button class="btn btn-primary"
+                        @onclick="CreateLeave">
+                    Add Leave
+                </button>
+            </PermissionView>
         </div>
     </div>
 
@@ -106,15 +108,17 @@
                                             "Pending",
                                             StringComparison.OrdinalIgnoreCase))
                                         {
-                                            <button class="btn btn-sm btn-success me-1"
-                                                    @onclick="() => ApproveLeave(leave.Id)">
-                                                Approve
-                                            </button>
+                                            <PermissionView AnyOf="@LeaveApprovePermission">
+                                                <button class="btn btn-sm btn-success me-1"
+                                                        @onclick="() => ApproveLeave(leave.Id)">
+                                                    Approve
+                                                </button>
 
-                                            <button class="btn btn-sm btn-danger me-1"
-                                                    @onclick="() => RejectLeave(leave.Id)">
-                                                Reject
-                                            </button>
+                                                <button class="btn btn-sm btn-danger me-1"
+                                                        @onclick="() => RejectLeave(leave.Id)">
+                                                    Reject
+                                                </button>
+                                            </PermissionView>
                                         }
 
                                         @if (!string.Equals(
@@ -126,10 +130,12 @@
                                             "Rejected",
                                             StringComparison.OrdinalIgnoreCase))
                                         {
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                    @onclick="() => CancelLeave(leave.Id)">
-                                                Cancel
-                                            </button>
+                                            <PermissionView AnyOf="@LeaveManagePermission">
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => CancelLeave(leave.Id)">
+                                                    Cancel
+                                                </button>
+                                            </PermissionView>
                                         }
                                     </td>
                                 </tr>
@@ -146,6 +152,13 @@
 </div>
 
 @code {
+    private static readonly string[] LeaveSubmitPermission =
+        ["HRM_Leave_Submit"];
+    private static readonly string[] LeaveApprovePermission =
+        ["HRM_Leave_Approve"];
+    private static readonly string[] LeaveManagePermission =
+        ["HRM_Leave_Submit", "HRM_Leave_Approve"];
+
     private List<LeaveResponse> _leaves = [];
     private bool _loading = true;
     private string? _error;

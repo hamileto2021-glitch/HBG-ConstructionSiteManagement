@@ -109,7 +109,7 @@
 
 .dashboard-metrics {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
     gap: 1rem;
 }
 
@@ -163,6 +163,11 @@
 .metric-safety .metric-icon {
     background: rgba(209, 67, 67, .1);
     color: var(--dashboard-danger);
+}
+
+.metric-stock .metric-icon {
+    background: rgba(194, 122, 18, .12);
+    color: var(--dashboard-warning);
 }
 
 .metric-value {
@@ -402,6 +407,35 @@
     gap: .6rem;
     padding: 1rem;
     color: var(--csm-muted);
+    font-size: .85rem;
+}
+
+.dashboard-no-widgets {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 1.25rem 1.4rem;
+    border: 1px dashed var(--csm-border);
+    border-radius: 1rem;
+    background: var(--csm-surface);
+    color: var(--csm-muted);
+}
+
+.dashboard-no-widgets > i {
+    color: var(--dashboard-accent);
+    font-size: 1.35rem;
+}
+
+.dashboard-no-widgets h2 {
+    margin: 0;
+    color: var(--csm-text);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.dashboard-no-widgets p {
+    margin: .35rem 0 0;
     font-size: .85rem;
 }
 

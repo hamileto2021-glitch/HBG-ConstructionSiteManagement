@@ -82,7 +82,20 @@ public static class PermissionRoutePolicy
             return ["__AnyPermission"];
         }
 
-        if (path == "dashboard" || path == "weather")
+        if (path == "dashboard")
+        {
+            return
+            [
+                "Reports_View",
+                "Reports_FinancialSummary_View",
+                "Projects_View",
+                "HRM_Employee_View",
+                "Compliance_View",
+                "Procurement_Inventory_View"
+            ];
+        }
+
+        if (path == "weather")
         {
             return ["Reports_View"];
         }
@@ -236,6 +249,11 @@ public static class PermissionRoutePolicy
 
             if (path.Contains("payroll", StringComparison.Ordinal))
             {
+                if (path.Contains("/edit/", StringComparison.Ordinal))
+                {
+                    return ["HRM_Payroll_View", "HRM_Payroll_Approve"];
+                }
+
                 return IsMutationRoute(path)
                     ? ["HRM_Payroll_Approve"]
                     : ["HRM_Payroll_View", "HRM_Payroll_Approve"];

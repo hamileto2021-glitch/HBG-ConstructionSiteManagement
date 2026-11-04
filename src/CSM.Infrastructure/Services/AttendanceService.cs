@@ -58,6 +58,18 @@ public sealed class AttendanceService : IAttendanceService
                 .Include(x => x.ConstructionSite)
                 .Include(x => x.Shift);
 
+        if (HasRole(actor, AppRoles.Employee))
+        {
+            if (!actor.EmployeeId.HasValue)
+            {
+                throw new AttendanceManagementException(
+                    "No employee record is linked to this user.");
+            }
+
+            query = query.Where(
+                x => x.EmployeeId == actor.EmployeeId.Value);
+        }
+
         if (!IsSuperAdmin(actor))
         {
             var companyId = GetActorCompanyId(actor);
@@ -66,34 +78,22 @@ public sealed class AttendanceService : IAttendanceService
                 x => x.CompanyId == companyId);
         }
 
-        // Restrict site-level HR officers to their authorized sites.
-        var isHrOfficer =
-            HasRole(actor, AppRoles.HROfficer) ||
-            HasRole(actor, AppRoles.HrOfficer);
-
-        if (isHrOfficer)
+        if (!IsSuperAdmin(actor) &&
+            !HasRole(actor, AppRoles.Employee))
         {
-            var hasActiveSiteAccess =
-                await _dbContext.UserSiteAccesses
-                    .AsNoTracking()
-                    .AnyAsync(
-                        x => x.UserId == currentUserId &&
-                             x.IsActive,
-                        cancellationToken);
+            var authorizedSiteIds = _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == currentUserId &&
+                    x.CompanyId == actor.CompanyId &&
+                    x.IsActive &&
+                    !x.IsDeleted)
+                .Select(x => x.SiteId);
 
-            if (hasActiveSiteAccess)
+            if (await authorizedSiteIds.AnyAsync(cancellationToken))
             {
-                var authorizedSiteIds =
-                    _dbContext.UserSiteAccesses
-                        .AsNoTracking()
-                        .Where(
-                            x => x.UserId == currentUserId &&
-                                 x.IsActive)
-                        .Select(x => x.SiteId);
-
                 query = query.Where(
-                    x => authorizedSiteIds.Contains(
-                        x.ConstructionSiteId));
+                    x => authorizedSiteIds.Contains(x.ConstructionSiteId));
             }
         }
 
@@ -150,6 +150,13 @@ public sealed class AttendanceService : IAttendanceService
         EnsureCompanyAccess(
             actor,
             attendance.CompanyId);
+        await EnsureSiteScopeAccessAsync(
+            actor,
+            attendance.ConstructionSiteId,
+            cancellationToken);
+        EnsureEmployeeAccess(
+            actor,
+            attendance.EmployeeId);
 
         return Map(attendance);
     }
@@ -164,6 +171,9 @@ public sealed class AttendanceService : IAttendanceService
             cancellationToken);
 
         EnsureCanModify(actor);
+        EnsureEmployeeAccess(
+            actor,
+            request.EmployeeId);
 
         var companyId = GetActorCompanyId(actor);
 
@@ -199,6 +209,11 @@ public sealed class AttendanceService : IAttendanceService
             throw new AttendanceManagementException(
                 "Construction site does not belong to your company.");
         }
+
+        await EnsureSiteScopeAccessAsync(
+            actor,
+            site.Id,
+            cancellationToken);
 
         if (!site.IsActive)
         {
@@ -352,6 +367,13 @@ public sealed class AttendanceService : IAttendanceService
         EnsureCompanyAccess(
             actor,
             attendance.CompanyId);
+        await EnsureSiteScopeAccessAsync(
+            actor,
+            attendance.ConstructionSiteId,
+            cancellationToken);
+        EnsureEmployeeAccess(
+            actor,
+            attendance.EmployeeId);
 
         if (!attendance.CheckInAtUtc.HasValue)
         {
@@ -528,6 +550,10 @@ public sealed class AttendanceService : IAttendanceService
         EnsureCompanyAccess(
             actor,
             attendance.CompanyId);
+        await EnsureSiteScopeAccessAsync(
+            actor,
+            attendance.ConstructionSiteId,
+            cancellationToken);
 
         if (!attendance.RequiresApproval)
         {
@@ -593,6 +619,10 @@ public sealed class AttendanceService : IAttendanceService
         EnsureCompanyAccess(
             actor,
             attendance.CompanyId);
+        await EnsureSiteScopeAccessAsync(
+            actor,
+            attendance.ConstructionSiteId,
+            cancellationToken);
 
         var reason = Clean(request.Reason);
 
@@ -933,7 +963,8 @@ public sealed class AttendanceService : IAttendanceService
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.Supervisor) ||
             HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
@@ -949,13 +980,79 @@ public sealed class AttendanceService : IAttendanceService
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.Supervisor) ||
             HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
 
         throw new AttendanceManagementException(
             "You are not authorized to record attendance.");
+    }
+
+    private static void EnsureEmployeeAccess(
+        User actor,
+        Guid employeeId)
+    {
+        if (!HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        if (!actor.EmployeeId.HasValue)
+        {
+            throw new AttendanceManagementException(
+                "No employee record is linked to this user.");
+        }
+
+        if (actor.EmployeeId.Value != employeeId)
+        {
+            throw new AttendanceManagementException(
+                "You are only authorized to access your own attendance.");
+        }
+    }
+
+    private async Task EnsureSiteScopeAccessAsync(
+        User actor,
+        Guid siteId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+        var hasActiveSiteAccess = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive &&
+                !x.IsDeleted,
+                cancellationToken);
+
+        if (!hasActiveSiteAccess)
+        {
+            return;
+        }
+
+        var hasAccess = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.SiteId == siteId &&
+                x.IsActive &&
+                !x.IsDeleted,
+                cancellationToken);
+
+        if (!hasAccess)
+        {
+            throw new AttendanceManagementException(
+                "You are not authorized to access attendance outside your assigned sites.");
+        }
     }
 
     private static Guid GetActorCompanyId(

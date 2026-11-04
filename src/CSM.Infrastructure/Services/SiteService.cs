@@ -95,6 +95,50 @@ public async Task<IReadOnlyCollection<SiteResponse>> GetAllAsync(
         .ToArray();
 }
 
+public async Task<IReadOnlyCollection<SiteResponse>> GetMyAssignedSitesAsync(
+    Guid currentUserId,
+    CancellationToken cancellationToken = default)
+{
+    var actor = await GetActorAsync(
+        currentUserId,
+        cancellationToken);
+
+    if (!HasRole(actor, AppRoles.Employee) ||
+        !actor.EmployeeId.HasValue)
+    {
+        throw new SiteManagementException(
+            "A linked employee account is required to view assigned sites.");
+    }
+
+    if (!actor.CompanyId.HasValue)
+    {
+        throw new SiteManagementException(
+            "Current user is not assigned to a company.");
+    }
+
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var employeeId = actor.EmployeeId.Value;
+    var companyId = actor.CompanyId.Value;
+
+    var sites = await _dbContext.ConstructionSites
+        .AsNoTracking()
+        .Where(site =>
+            site.CompanyId == companyId &&
+            site.IsActive &&
+            _dbContext.SiteAssignments.Any(assignment =>
+                assignment.EmployeeId == employeeId &&
+                assignment.ConstructionSiteId == site.Id &&
+                assignment.StartDate <= today &&
+                (!assignment.EndDate.HasValue ||
+                 assignment.EndDate.Value >= today)))
+        .OrderBy(site => site.Name)
+        .ToListAsync(cancellationToken);
+
+    return sites
+        .Select(Map)
+        .ToArray();
+}
+
 
     public async Task<SiteResponse> GetByIdAsync(
         Guid currentUserId,

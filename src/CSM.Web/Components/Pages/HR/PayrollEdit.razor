@@ -6,6 +6,7 @@
 @using Microsoft.JSInterop
 
 @inject IPayrollService PayrollService
+@inject IAuthService AuthService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -16,7 +17,9 @@
         <div>
             <h3 class="mb-1">Payroll Details</h3>
             <p class="text-muted mb-0">
-                Review and process the employee payroll record.
+                @(_isEmployee
+                    ? "Review your payroll record."
+                    : "Review and process the employee payroll record.")
             </p>
         </div>
 
@@ -255,7 +258,7 @@
             </div>
 
             <div class="card-body">
-                @if (_payroll.Status == "Draft")
+                @if (_canManagePayroll && _payroll.Status == "Draft")
                 {
                     <EditForm Model="_calculateModel"
                               OnValidSubmit="CalculatePayrollAsync">
@@ -328,7 +331,7 @@
                         Payroll calculation is not available for the current status.
                     </div>
                 }
-                @if (_payroll.Status == "Calculated")
+                @if (_canManagePayroll && _payroll.Status == "Calculated")
                 {
                     <EditForm Model="_approveModel"
                               OnValidSubmit="ApprovePayrollAsync">
@@ -358,7 +361,7 @@
 
                     </EditForm>
                 }
-                @if (_payroll.Status == "Approved")
+                @if (_canManagePayroll && _payroll.Status == "Approved")
                 {
                     <EditForm Model="_paidModel"
                               OnValidSubmit="MarkPaidAsync">
@@ -418,6 +421,8 @@
 
     private PayrollResponse? _payroll;
     private bool _loading;
+    private bool _isEmployee = true;
+    private bool _canManagePayroll;
     private string? _error;
 
     private CalculatePayrollRequest _calculateModel = new()
@@ -538,6 +543,23 @@
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+            _isEmployee = userScope.Roles.Any(role =>
+                string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canManagePayroll = permissions.Contains(
+                "HRM_Payroll_Approve",
+                StringComparer.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load your access scope: {ex.Message}";
+            _loading = false;
+            return;
+        }
+
         await LoadPayroll();
     }
 

@@ -58,26 +58,40 @@ public sealed class LeaveService : ILeaveService
                 x => x.CompanyId == companyId);
         }
 
-        var authorizedSiteIds = await _dbContext.UserSiteAccesses
-            .AsNoTracking()
-            .Where(x =>
-                x.UserId == currentUserId &&
-                x.IsActive)
-            .Select(x => x.SiteId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        if (authorizedSiteIds.Count > 0)
+        if (HasRole(actor, AppRoles.Employee))
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (!actor.EmployeeId.HasValue)
+            {
+                throw new LeaveManagementException(
+                    "No employee record is linked to this user.");
+            }
 
-            query = query.Where(x =>
-                _dbContext.SiteAssignments.Any(a =>
-                    a.EmployeeId == x.EmployeeId &&
-                    authorizedSiteIds.Contains(a.ConstructionSiteId) &&
-                    a.StartDate <= today &&
-                    (!a.EndDate.HasValue ||
-                     a.EndDate.Value >= today)));
+            query = query.Where(
+                x => x.EmployeeId == actor.EmployeeId.Value);
+        }
+        else
+        {
+            var authorizedSiteIds = await _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == currentUserId &&
+                    x.IsActive)
+                .Select(x => x.SiteId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (authorizedSiteIds.Count > 0)
+            {
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+                query = query.Where(x =>
+                    _dbContext.SiteAssignments.Any(a =>
+                        a.EmployeeId == x.EmployeeId &&
+                        authorizedSiteIds.Contains(a.ConstructionSiteId) &&
+                        a.StartDate <= today &&
+                        (!a.EndDate.HasValue ||
+                         a.EndDate.Value >= today)));
+            }
         }
 
         if (employeeId.HasValue)
@@ -126,6 +140,13 @@ public sealed class LeaveService : ILeaveService
         EnsureCompanyAccess(
             actor,
             leaveRequest.CompanyId);
+        EnsureEmployeeAccess(
+            actor,
+            leaveRequest.EmployeeId);
+        await EnsureEmployeeSiteScopeAccessAsync(
+            actor,
+            leaveRequest.EmployeeId,
+            cancellationToken);
 
         return Map(leaveRequest);
     }
@@ -161,6 +182,10 @@ public sealed class LeaveService : ILeaveService
                 "Leave type cannot exceed 50 characters.");
         }
 
+        EnsureEmployeeAccess(
+            actor,
+            request.EmployeeId);
+
         var employee = await _dbContext.Employees
             .SingleOrDefaultAsync(
                 x => x.Id == request.EmployeeId,
@@ -173,6 +198,11 @@ public sealed class LeaveService : ILeaveService
             throw new LeaveManagementException(
                 "Employee does not belong to your company.");
         }
+
+        await EnsureEmployeeSiteScopeAccessAsync(
+            actor,
+            employee.Id,
+            cancellationToken);
 
         EnsureEmployeeCanRequestLeave(employee);
 
@@ -259,6 +289,13 @@ public sealed class LeaveService : ILeaveService
         EnsureCompanyAccess(
             actor,
             leaveRequest.CompanyId);
+        EnsureEmployeeAccess(
+            actor,
+            leaveRequest.EmployeeId);
+        await EnsureEmployeeSiteScopeAccessAsync(
+            actor,
+            leaveRequest.EmployeeId,
+            cancellationToken);
 
         if (leaveRequest.Status != LeaveStatus.Pending)
         {
@@ -307,6 +344,13 @@ public sealed class LeaveService : ILeaveService
         EnsureCompanyAccess(
             actor,
             leaveRequest.CompanyId);
+        EnsureEmployeeAccess(
+            actor,
+            leaveRequest.EmployeeId);
+        await EnsureEmployeeSiteScopeAccessAsync(
+            actor,
+            leaveRequest.EmployeeId,
+            cancellationToken);
 
         if (leaveRequest.Status == LeaveStatus.Cancelled)
         {
@@ -412,7 +456,8 @@ public sealed class LeaveService : ILeaveService
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.Supervisor) ||
             HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
@@ -428,7 +473,8 @@ public sealed class LeaveService : ILeaveService
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.Supervisor) ||
             HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
@@ -459,13 +505,81 @@ public sealed class LeaveService : ILeaveService
             HasRole(actor, AppRoles.CompanyAdmin) ||
             HasRole(actor, AppRoles.SiteManager) ||
             HasRole(actor, AppRoles.HrOfficer) ||
-            HasRole(actor, AppRoles.HROfficer))
+            HasRole(actor, AppRoles.HROfficer) ||
+            HasRole(actor, AppRoles.Employee))
         {
             return;
         }
 
         throw new LeaveManagementException(
             "You are not authorized to cancel leave requests.");
+    }
+
+    private static void EnsureEmployeeAccess(
+        User actor,
+        Guid employeeId)
+    {
+        if (!HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        if (!actor.EmployeeId.HasValue)
+        {
+            throw new LeaveManagementException(
+                "No employee record is linked to this user.");
+        }
+
+        if (actor.EmployeeId.Value != employeeId)
+        {
+            throw new LeaveManagementException(
+                "You are only authorized to access your own leave requests.");
+        }
+    }
+
+    private async Task EnsureEmployeeSiteScopeAccessAsync(
+        User actor,
+        Guid employeeId,
+        CancellationToken cancellationToken)
+    {
+        if (IsSuperAdmin(actor) ||
+            HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        var companyId = GetActorCompanyId(actor);
+        var authorizedSiteIds = await _dbContext.UserSiteAccesses
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == actor.Id &&
+                x.CompanyId == companyId &&
+                x.IsActive &&
+                !x.IsDeleted)
+            .Select(x => x.SiteId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (authorizedSiteIds.Count == 0)
+        {
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var isAssignedToAuthorizedSite = await _dbContext.SiteAssignments
+            .AnyAsync(x =>
+                x.EmployeeId == employeeId &&
+                authorizedSiteIds.Contains(x.ConstructionSiteId) &&
+                x.StartDate <= today &&
+                (!x.EndDate.HasValue ||
+                 x.EndDate.Value >= today),
+                cancellationToken);
+
+        if (!isAssignedToAuthorizedSite)
+        {
+            throw new LeaveManagementException(
+                "You are not authorized to access leave requests outside your assigned sites.");
+        }
     }
 
     private static void EnsureCompanyAccess(

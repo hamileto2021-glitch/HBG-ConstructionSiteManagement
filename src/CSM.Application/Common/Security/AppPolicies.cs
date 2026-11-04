@@ -88,6 +88,7 @@ public static class AppPolicies
         AppRoles.ProcurementOfficer,
         AppRoles.FinanceOfficer,
         AppRoles.HrOfficer,
+        AppRoles.HROfficer,
         AppRoles.EquipmentManager,
         AppRoles.SafetyOfficer
     };

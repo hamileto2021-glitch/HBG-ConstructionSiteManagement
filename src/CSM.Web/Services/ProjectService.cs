@@ -267,6 +267,15 @@ public class ProjectService : IProjectService
                ?? [];
     }
 
+    public async Task<List<SiteResponse>> GetMyAssignedSitesAsync()
+    {
+        var client = await CreateAuthorizedClientAsync();
+        return await client.GetFromJsonAsync<List<SiteResponse>>(
+                   "sites/my-assigned")
+               ?? throw new InvalidOperationException(
+                   "The assigned sites response was empty.");
+    }
+
     public async Task<List<SiteResponse>> GetSitesForAssignmentAsync()
     {
         var client = _factory.CreateClient("CSM.Api");

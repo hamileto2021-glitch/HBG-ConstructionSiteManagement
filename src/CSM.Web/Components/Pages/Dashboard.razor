@@ -5,6 +5,7 @@
 @using CSM.Web.Services
 
 @inject IExecutiveDashboardService DashboardService
+@inject IAuthService AuthService
 @inject ProtectedSessionStorage SessionStorage
 @inject NavigationManager Navigation
 @inject ILogger<Dashboard> Logger
@@ -19,6 +20,16 @@
             <div>
                 <h1>Preparing your dashboard</h1>
                 <p>Loading the latest company overview...</p>
+            </div>
+        </section>
+    }
+    else if (_accessDenied)
+    {
+        <section class="dashboard-state dashboard-error" role="alert">
+            <span class="dashboard-state-icon"><i class="bi bi-lock" aria-hidden="true"></i></span>
+            <div>
+                <h1>Dashboard access required</h1>
+                <p>Your account does not have permission to view this dashboard.</p>
             </div>
         </section>
     }
@@ -66,52 +77,89 @@
             </div>
         </header>
 
-        <section class="dashboard-metrics" aria-label="Business performance indicators">
-            <article class="metric-card metric-projects">
-                <div class="metric-topline">
-                    <span class="metric-icon"><i class="bi bi-building" aria-hidden="true"></i></span>
-                    <span class="metric-caption">PROJECTS</span>
-                </div>
-                <div class="metric-value">@_dashboard.ActiveProjects</div>
-                <div class="metric-label">Active projects</div>
-                <div class="metric-footnote"><strong>@_dashboard.CompletedProjects</strong> completed</div>
-            </article>
+        @if (_canViewProjects || _canViewEmployees || _canViewSafety || _canViewInventory)
+        {
+            <section class="dashboard-metrics" aria-label="Business performance indicators">
+                @if (_canViewProjects)
+                {
+                    <article class="metric-card metric-projects">
+                        <div class="metric-topline">
+                            <span class="metric-icon"><i class="bi bi-building" aria-hidden="true"></i></span>
+                            <span class="metric-caption">PROJECTS</span>
+                        </div>
+                        <div class="metric-value">@(_dashboard.ActiveProjects ?? 0)</div>
+                        <div class="metric-label">Active projects</div>
+                        <div class="metric-footnote"><strong>@(_dashboard.CompletedProjects ?? 0)</strong> completed</div>
+                    </article>
 
-            <article class="metric-card metric-workforce">
-                <div class="metric-topline">
-                    <span class="metric-icon"><i class="bi bi-people" aria-hidden="true"></i></span>
-                    <span class="metric-caption">WORKFORCE</span>
-                </div>
-                <div class="metric-value">@_dashboard.TotalEmployees</div>
-                <div class="metric-label">Total employees</div>
-                <div class="metric-footnote">Across the organization</div>
-            </article>
+                    <article class="metric-card metric-delays">
+                        <div class="metric-topline">
+                            <span class="metric-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
+                            <span class="metric-caption">SCHEDULE</span>
+                        </div>
+                        <div class="metric-value">@(_dashboard.OpenDelays ?? 0)</div>
+                        <div class="metric-label">Open delays</div>
+                        <div class="metric-footnote">Items requiring attention</div>
+                    </article>
+                }
 
-            <article class="metric-card metric-delays">
-                <div class="metric-topline">
-                    <span class="metric-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                    <span class="metric-caption">SCHEDULE</span>
-                </div>
-                <div class="metric-value">@_dashboard.OpenDelays</div>
-                <div class="metric-label">Open delays</div>
-                <div class="metric-footnote">Items requiring attention</div>
-            </article>
+                @if (_canViewEmployees)
+                {
+                    <article class="metric-card metric-workforce">
+                        <div class="metric-topline">
+                            <span class="metric-icon"><i class="bi bi-people" aria-hidden="true"></i></span>
+                            <span class="metric-caption">WORKFORCE</span>
+                        </div>
+                        <div class="metric-value">@(_dashboard.TotalEmployees ?? 0)</div>
+                        <div class="metric-label">Total employees</div>
+                        <div class="metric-footnote">Across the organization</div>
+                    </article>
+                }
 
-            <article class="metric-card metric-safety">
-                <div class="metric-topline">
-                    <span class="metric-icon"><i class="bi bi-shield-exclamation" aria-hidden="true"></i></span>
-                    <span class="metric-caption">SITE OPERATIONS</span>
-                </div>
-                <div class="metric-value">@_dashboard.OpenSafetyIncidents</div>
-                <div class="metric-label">Open safety incidents</div>
-                <div class="metric-footnote">
-                    <strong>@_dashboard.LowStockItems</strong> low-stock items
-                </div>
-            </article>
-        </section>
+                @if (_canViewSafety)
+                {
+                    <article class="metric-card metric-safety">
+                        <div class="metric-topline">
+                            <span class="metric-icon"><i class="bi bi-shield-exclamation" aria-hidden="true"></i></span>
+                            <span class="metric-caption">SAFETY</span>
+                        </div>
+                        <div class="metric-value">@(_dashboard.OpenSafetyIncidents ?? 0)</div>
+                        <div class="metric-label">Open safety incidents</div>
+                        <div class="metric-footnote">Items requiring attention</div>
+                    </article>
+                }
 
-        <section class="dashboard-panels" aria-label="Financial and operational summaries">
-            <article class="dashboard-panel finance-panel">
+                @if (_canViewInventory)
+                {
+                    <article class="metric-card metric-stock">
+                        <div class="metric-topline">
+                            <span class="metric-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+                            <span class="metric-caption">INVENTORY</span>
+                        </div>
+                        <div class="metric-value">@(_dashboard.LowStockItems ?? 0)</div>
+                        <div class="metric-label">Low-stock items</div>
+                        <div class="metric-footnote">Items at or below reorder level</div>
+                    </article>
+                }
+            </section>
+        }
+        else if (!_canViewFinancialSummary)
+        {
+            <section class="dashboard-no-widgets" role="status">
+                <i class="bi bi-layout-text-window-reverse" aria-hidden="true"></i>
+                <div>
+                    <h2>No dashboard cards are available</h2>
+                    <p>Your account can open the dashboard, but does not have access to its project, workforce, finance, safety, or inventory summaries.</p>
+                </div>
+            </section>
+        }
+
+        @if (_canViewFinancialSummary || _canViewProjects || _canViewSafety || _canViewInventory)
+        {
+            <section class="dashboard-panels" aria-label="Financial and operational summaries">
+                @if (_canViewFinancialSummary)
+                {
+                <article class="dashboard-panel finance-panel">
                 <div class="panel-heading">
                     <div>
                         <span class="panel-eyebrow">FINANCIAL HEALTH</span>
@@ -133,7 +181,7 @@
 
                 <div class="utilization-heading">
                     <span>Budget utilization</span>
-                    <strong class="@UtilizationTextClass">@_dashboard.BudgetUtilization.ToString("0.0")%</strong>
+                    <strong class="@UtilizationTextClass">@(_dashboard.BudgetUtilization?.ToString("0.0") ?? "Not available")%</strong>
                 </div>
                 <div class="progress dashboard-progress"
                      role="progressbar"
@@ -147,9 +195,12 @@
                     <i class="bi bi-info-circle" aria-hidden="true"></i>
                     Utilization is capped visually at 100%.
                 </div>
-            </article>
+                    </article>
+                }
 
-            <article class="dashboard-panel operations-panel">
+                @if (_canViewProjects || _canViewSafety || _canViewInventory)
+                {
+                <article class="dashboard-panel operations-panel">
                 <div class="panel-heading">
                     <div>
                         <span class="panel-eyebrow">FIELD READINESS</span>
@@ -158,34 +209,45 @@
                     <span class="panel-heading-icon"><i class="bi bi-clipboard2-check" aria-hidden="true"></i></span>
                 </div>
 
-                <div class="operation-row">
-                    <span class="operation-icon operation-safety"><i class="bi bi-shield-exclamation" aria-hidden="true"></i></span>
-                    <span class="operation-name">Safety incidents</span>
-                    <span class="operation-count @(_dashboard.OpenSafetyIncidents > 0 ? "count-danger" : "count-good")">
-                        @_dashboard.OpenSafetyIncidents
-                    </span>
-                </div>
-                <div class="operation-row">
-                    <span class="operation-icon operation-stock"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
-                    <span class="operation-name">Low-stock items</span>
-                    <span class="operation-count @(_dashboard.LowStockItems > 0 ? "count-warning" : "count-good")">
-                        @_dashboard.LowStockItems
-                    </span>
-                </div>
-                <div class="operation-row">
-                    <span class="operation-icon operation-delays"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
-                    <span class="operation-name">Project delays</span>
-                    <span class="operation-count @(_dashboard.OpenDelays > 0 ? "count-warning" : "count-good")">
-                        @_dashboard.OpenDelays
-                    </span>
-                </div>
+                @if (_canViewSafety)
+                {
+                    <div class="operation-row">
+                        <span class="operation-icon operation-safety"><i class="bi bi-shield-exclamation" aria-hidden="true"></i></span>
+                        <span class="operation-name">Safety incidents</span>
+                        <span class="operation-count @((_dashboard.OpenSafetyIncidents ?? 0) > 0 ? "count-danger" : "count-good")">
+                            @(_dashboard.OpenSafetyIncidents ?? 0)
+                        </span>
+                    </div>
+                }
+                @if (_canViewInventory)
+                {
+                    <div class="operation-row">
+                        <span class="operation-icon operation-stock"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+                        <span class="operation-name">Low-stock items</span>
+                        <span class="operation-count @((_dashboard.LowStockItems ?? 0) > 0 ? "count-warning" : "count-good")">
+                            @(_dashboard.LowStockItems ?? 0)
+                        </span>
+                    </div>
+                }
+                @if (_canViewProjects)
+                {
+                    <div class="operation-row">
+                        <span class="operation-icon operation-delays"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
+                        <span class="operation-name">Project delays</span>
+                        <span class="operation-count @((_dashboard.OpenDelays ?? 0) > 0 ? "count-warning" : "count-good")">
+                            @(_dashboard.OpenDelays ?? 0)
+                        </span>
+                    </div>
+                }
 
                 <div class="operations-note">
                     <i class="bi bi-lightning-charge" aria-hidden="true"></i>
                     <span>Review open items to keep site work on track.</span>
                 </div>
-            </article>
-        </section>
+                    </article>
+                }
+            </section>
+        }
 
         @if (_loading)
         {
@@ -200,20 +262,27 @@
 @code {
     private ExecutiveDashboard? _dashboard;
     private bool _loading = true;
+    private bool _accessDenied;
+    private bool _canViewProjects;
+    private bool _canViewEmployees;
+    private bool _canViewFinancialSummary;
+    private bool _canViewSafety;
+    private bool _canViewInventory;
+    private bool _isEmployee;
     private string _userName = "";
     private string? _loadError;
 
-    private double ProgressValue => Math.Clamp((double)_dashboard!.BudgetUtilization, 0d, 100d);
+    private double ProgressValue => Math.Clamp((double)(_dashboard!.BudgetUtilization ?? 0), 0d, 100d);
 
-    private string UtilizationTextClass => _dashboard!.BudgetUtilization > 100
+    private string UtilizationTextClass => (_dashboard!.BudgetUtilization ?? 0) > 100
         ? "utilization-danger"
-        : _dashboard.BudgetUtilization >= 80
+        : (_dashboard.BudgetUtilization ?? 0) >= 80
             ? "utilization-warning"
             : "utilization-good";
 
-    private string UtilizationBarClass => _dashboard!.BudgetUtilization > 100
+    private string UtilizationBarClass => (_dashboard!.BudgetUtilization ?? 0) > 100
         ? "bar-danger"
-        : _dashboard.BudgetUtilization >= 80
+        : (_dashboard.BudgetUtilization ?? 0) >= 80
             ? "bar-warning"
             : "bar-good";
 
@@ -233,6 +302,25 @@
         var name = await SessionStorage.GetAsync<string>("userName");
         _userName = name.Success ? name.Value ?? "" : "";
 
+        var permissions = await AuthService.GetPermissionsAsync();
+        _accessDenied = !HasDashboardPermission(permissions);
+        if (_accessDenied)
+        {
+            _loading = false;
+            StateHasChanged();
+            return;
+        }
+
+        _canViewProjects = HasPermission(permissions, "Projects_View");
+        var userScope = await AuthService.GetCurrentUserScopeAsync();
+        _isEmployee = userScope.Roles.Any(role =>
+            string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
+        _canViewEmployees =
+            !_isEmployee &&
+            HasPermission(permissions, "HRM_Employee_View");
+        _canViewFinancialSummary = HasPermission(permissions, "Reports_FinancialSummary_View");
+        _canViewSafety = HasPermission(permissions, "Compliance_View");
+        _canViewInventory = HasPermission(permissions, "Procurement_Inventory_View");
         await LoadDashboardAsync();
         StateHasChanged();
     }
@@ -266,5 +354,20 @@
         }
     }
 
-    private static string Money(decimal value) => $"ETB {value:N0}";
+    private static bool HasPermission(
+        IReadOnlyCollection<string> permissions,
+        string permission) =>
+        permissions.Contains(permission, StringComparer.Ordinal);
+
+    private static bool HasDashboardPermission(
+        IReadOnlyCollection<string> permissions) =>
+        HasPermission(permissions, "Reports_View") ||
+        HasPermission(permissions, "Reports_FinancialSummary_View") ||
+        HasPermission(permissions, "Projects_View") ||
+        HasPermission(permissions, "HRM_Employee_View") ||
+        HasPermission(permissions, "Compliance_View") ||
+        HasPermission(permissions, "Procurement_Inventory_View");
+
+    private static string Money(decimal? value) =>
+        value.HasValue ? $"ETB {value.Value:N0}" : "Not available";
 }

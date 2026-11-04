@@ -50,9 +50,11 @@ public sealed class ReportingService : IReportingService
             var error =
                 await response.Content.ReadAsStringAsync();
 
-            throw new InvalidOperationException(
+            throw new HttpRequestException(
                 $"Failed to load executive dashboard. " +
-                $"Status: {(int)response.StatusCode}. {error}");
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
         }
 
         return await response.Content
@@ -75,9 +77,11 @@ public sealed class ReportingService : IReportingService
             var error =
                 await response.Content.ReadAsStringAsync();
 
-            throw new InvalidOperationException(
+            throw new HttpRequestException(
                 $"Failed to load financial summary. " +
-                $"Status: {(int)response.StatusCode}. {error}");
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
         }
 
         return await response.Content
@@ -100,9 +104,11 @@ public sealed class ReportingService : IReportingService
             var error =
                 await response.Content.ReadAsStringAsync();
 
-            throw new InvalidOperationException(
+            throw new HttpRequestException(
                 $"Failed to load all financial summaries. " +
-                $"Status: {(int)response.StatusCode}. {error}");
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
         }
 
         return await response.Content
@@ -126,9 +132,11 @@ public sealed class ReportingService : IReportingService
             var error =
                 await response.Content.ReadAsStringAsync();
 
-            throw new InvalidOperationException(
+            throw new HttpRequestException(
                 $"Failed to load site executive dashboard. " +
-                $"Status: {(int)response.StatusCode}. {error}");
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
         }
 
         return await response.Content
@@ -152,9 +160,11 @@ public sealed class ReportingService : IReportingService
             var error =
                 await response.Content.ReadAsStringAsync();
 
-            throw new InvalidOperationException(
+            throw new HttpRequestException(
                 $"Failed to load site financial summary. " +
-                $"Status: {(int)response.StatusCode}. {error}");
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
         }
 
         return await response.Content

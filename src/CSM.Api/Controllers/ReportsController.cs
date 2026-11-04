@@ -3,6 +3,7 @@ using CSM.Application.Common.Exceptions;
 using CSM.Application.Common.Security;
 using CSM.Application.Reporting;
 using CSM.Application.Reporting.Dtos;
+using CSM.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,11 +15,14 @@ namespace CSM.Api.Controllers;
 public sealed class ReportsController : ControllerBase
 {
     private readonly IReportingService _reportingService;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public ReportsController(
-        IReportingService reportingService)
+        IReportingService reportingService,
+        IPermissionEvaluator permissionEvaluator)
     {
         _reportingService = reportingService;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     [HttpGet("executive-dashboard")]
@@ -33,7 +37,9 @@ public sealed class ReportsController : ControllerBase
                     GetCurrentUserId(),
                     cancellationToken);
 
-            return Ok(result);
+            return Ok(await FilterExecutiveDashboardAsync(
+                result,
+                cancellationToken));
         }
         catch (ReportingManagementException ex)
         {
@@ -76,7 +82,9 @@ public sealed class ReportsController : ControllerBase
                     constructionSiteId,
                     cancellationToken);
 
-            return Ok(result);
+            return Ok(await FilterExecutiveDashboardAsync(
+                result,
+                cancellationToken));
         }
         catch (ReportingManagementException ex)
         {
@@ -144,5 +152,50 @@ public sealed class ReportsController : ControllerBase
         }
 
         return userId;
+    }
+
+    private async Task<ExecutiveDashboardResponse>
+        FilterExecutiveDashboardAsync(
+            ExecutiveDashboardResponse dashboard,
+            CancellationToken cancellationToken)
+    {
+        var permissions = (await _permissionEvaluator.GetPermissionsAsync(
+                GetCurrentUserId(),
+                cancellationToken))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var canViewSites = permissions.Contains("Sites_View");
+        var canViewProjects = permissions.Contains("Projects_View");
+        var canViewFinancialSummary =
+            permissions.Contains("Reports_FinancialSummary_View");
+
+        return dashboard with
+        {
+            TotalSites = canViewSites ? dashboard.TotalSites : null,
+            ActiveSites = canViewSites ? dashboard.ActiveSites : null,
+            SitesByStatus = canViewSites ? dashboard.SitesByStatus : null,
+            TotalProjects = canViewProjects ? dashboard.TotalProjects : null,
+            ProjectsByStatus = canViewProjects
+                ? dashboard.ProjectsByStatus
+                : null,
+            TotalContractValue = canViewFinancialSummary
+                ? dashboard.TotalContractValue
+                : null,
+            TotalBudget = canViewFinancialSummary
+                ? dashboard.TotalBudget
+                : null,
+            TotalExpenses = canViewFinancialSummary
+                ? dashboard.TotalExpenses
+                : null,
+            TotalInvoices = canViewFinancialSummary
+                ? dashboard.TotalInvoices
+                : null,
+            TotalCompletedPayments = canViewFinancialSummary
+                ? dashboard.TotalCompletedPayments
+                : null,
+            OutstandingInvoices = canViewFinancialSummary
+                ? dashboard.OutstandingInvoices
+                : null
+        };
     }
 }

@@ -61,7 +61,8 @@ if (!IsSuperAdmin(actor))
         actor,
         cancellationToken);
 
-    if (authorizedSiteIds.Count > 0)
+    if (authorizedSiteIds.Count > 0 &&
+        !HasRole(actor, AppRoles.Employee))
     {
         query = query.Where(employee =>
             employee.EmployeeScope == EmployeeScope.Site &&
@@ -128,7 +129,17 @@ if (siteId.HasValue)
             actor,
             employee.CompanyId);
 
-        await EnsureEmployeeScopeAccessAsync(actor, employee, cancellationToken);
+        EnsureEmployeeAccess(
+            actor,
+            employee.Id);
+
+        if (!HasRole(actor, AppRoles.Employee))
+        {
+            await EnsureEmployeeScopeAccessAsync(
+                actor,
+                employee,
+                cancellationToken);
+        }
 
         return Map(employee);
     }
@@ -573,6 +584,28 @@ if (siteId.HasValue)
 
         throw new EmployeeManagementException(
             "You are not authorized to access employees.");
+    }
+
+    private static void EnsureEmployeeAccess(
+        User actor,
+        Guid employeeId)
+    {
+        if (!HasRole(actor, AppRoles.Employee))
+        {
+            return;
+        }
+
+        if (!actor.EmployeeId.HasValue)
+        {
+            throw new EmployeeManagementException(
+                "No employee record is linked to this user.");
+        }
+
+        if (actor.EmployeeId.Value != employeeId)
+        {
+            throw new EmployeeManagementException(
+                "You are only authorized to access your own employee record.");
+        }
     }
 
     private static void EnsureCanModify(User actor)
