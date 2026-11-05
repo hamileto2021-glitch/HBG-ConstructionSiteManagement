@@ -16,22 +16,28 @@
 
     <div class="row g-4">
 
-        <div class="col-lg-4">
-            <div class="card shadow-sm h-100 border-0">
-                <div class="card-body">
-                    <h5>Construction Sites</h5>
-                    <p class="text-muted">
-                        Manage sites, GPS geofences and operational status.
-                    </p>
-                </div>
-                <div class="card-footer bg-white border-0">
-                    <button class="btn btn-primary w-100"
-                            @onclick='() => Navigation.NavigateTo("/sites-management")'>
-                        Open
-                    </button>
+        <PermissionView AnyOf="@SiteViewPermissions">
+            <div class="col-lg-4">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <h5>Construction Sites</h5>
+                        <p class="text-muted">
+                            Manage sites, GPS geofences and operational status.
+                        </p>
+                    </div>
+                    <div class="card-footer bg-white border-0">
+                        <button class="btn btn-primary w-100"
+                                @onclick='() => Navigation.NavigateTo("/sites-management")'>
+                            Open
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </PermissionView>
     </div>
-
 </div>
+
+@code {
+    private static readonly string[] SiteViewPermissions =
+        ["Sites_View", "Sites_Manage"];
+}

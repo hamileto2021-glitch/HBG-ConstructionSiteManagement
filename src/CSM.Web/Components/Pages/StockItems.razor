@@ -5,6 +5,8 @@
 
 @using CSM.Web.Services
 @inject NavigationManager Navigation
+@inject IAuthService AuthService
+@inject ILogger<StockItems> Logger
 
 <button class="btn btn-outline-secondary mb-3"
         @onclick="GoBack">
@@ -23,7 +25,19 @@
 
     @if (_ready)
     {
-        <div class="row g-4">
+        @if (!string.IsNullOrWhiteSpace(_accessError))
+        {
+            <div class="alert alert-danger" role="alert">@_accessError</div>
+        }
+        else if (!_canViewInventory)
+        {
+            <div class="alert alert-warning" role="status">
+                You do not have permission to view inventory.
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
 
             <div class="col-lg-6">
                 <div class="card shadow-sm h-100 inventory-card"
@@ -43,6 +57,8 @@
                 </div>
             </div>
 
+            @if (!_isAccountant)
+            {
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100 inventory-card"
                          @onclick='() => Go("/stock-movements")'>
@@ -60,6 +76,7 @@
                         </div>
                     </div>
                 </div>
+            }
 
             <div class="col-lg-6">
                 <div class="card shadow-sm h-100 inventory-card"
@@ -97,6 +114,8 @@
                 </div>
             </div>
 
+            @if (!_isAccountant)
+            {
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100 inventory-card"
                          @onclick='() => Go("/material-return-audit")'>
@@ -114,7 +133,10 @@
                         </div>
                     </div>
                 </div>
+            }
 
+            @if (!_isAccountant)
+            {
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100 inventory-card"
                          @onclick='() => Go("/stock-returns")'>
@@ -132,6 +154,7 @@
                         </div>
                     </div>
                 </div>
+            }
 
             <div class="col-lg-6">
                 <div class="card shadow-sm h-100 inventory-card"
@@ -151,6 +174,8 @@
                 </div>
             </div>
 
+            @if (!_isAccountant)
+            {
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100 inventory-card"
                          @onclick='() => Go("/stock-adjustments")'>
@@ -168,15 +193,43 @@
                         </div>
                     </div>
                 </div>
+            }
 
-        </div>
+            </div>
+        }
     }
 </div>
 
 @code {
     private bool _ready;
+    private bool _canViewInventory;
+    private bool _isAccountant;
+    private string? _accessError;
 
-    protected override void OnInitialized() => _ready = true;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var permissions = await AuthService.GetPermissionsAsync();
+            _canViewInventory = permissions.Contains(
+                "Procurement_Inventory_View",
+                StringComparer.Ordinal);
+
+            var scope = await AuthService.GetCurrentUserScopeAsync();
+            _isAccountant = scope.Roles.Contains(
+                "Accountant",
+                StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load the current user's inventory access.");
+            _accessError = "We couldn't verify your inventory access. Please try again.";
+        }
+        finally
+        {
+            _ready = true;
+        }
+    }
 
     private void Go(string url) => Navigation.NavigateTo(url);
 

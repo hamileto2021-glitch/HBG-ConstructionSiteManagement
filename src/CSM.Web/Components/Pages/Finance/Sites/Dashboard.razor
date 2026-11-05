@@ -100,7 +100,7 @@
                             <i class="bi bi-chevron-right company-link-arrow" aria-hidden="true"></i>
                         </button>
                     }
-                    @if (Can("Finance_Invoice_View"))
+                    @if (Can("Finance_Invoice_View") && !_isSiteManager)
                     {
                         <button class="company-finance-link" type="button" @onclick="OpenCompanyInvoices">
                             <span class="company-link-icon company-tone-violet"><i class="bi bi-receipt" aria-hidden="true"></i></span>
@@ -263,7 +263,7 @@
                                             <i class="bi bi-cash-stack" aria-hidden="true"></i><span>Budgets</span>
                                         </button>
                                     }
-                                    @if (Can("Finance_Invoice_View"))
+                                    @if (Can("Finance_Invoice_View") && !_isSiteManager)
                                     {
                                         <button type="button" @onclick="() => OpenInvoices(site.Id)">
                                             <i class="bi bi-receipt" aria-hidden="true"></i><span>Invoices</span>
@@ -305,6 +305,7 @@
     private List<SiteResponse> _sites = [];
     private HashSet<string> _permissions = [];
     private bool _hasActiveSiteAssignment;
+    private bool _isSiteManager;
     private bool _loading = true;
     private bool _loaded;
     private string? _error;
@@ -360,6 +361,9 @@
             _permissions = (await AuthService.GetPermissionsAsync()).ToHashSet();
             var scope = await AuthService.GetCurrentUserScopeAsync();
             _hasActiveSiteAssignment = scope.HasActiveSiteAccess;
+            _isSiteManager = scope.Roles.Contains(
+                "SiteManager",
+                StringComparer.OrdinalIgnoreCase);
             _sites = await ProjectService.GetSitesAsync();
         }
         catch (HttpRequestException exception)

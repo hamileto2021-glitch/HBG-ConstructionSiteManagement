@@ -79,16 +79,19 @@
 
             @if (_canViewEquipment)
             {
-                <NavigationCard Href="/equipment/downtime-sites"
-                                Title="Downtime"
-                                Description="View equipment downtime and resolutions."
-                                IconClass="bi bi-exclamation-octagon"
-                                Tone="NavigationCardTone.Red" />
-                <NavigationCard Href="/equipment/maintenance-sites"
-                                Title="Maintenance"
-                                Description="View preventive and corrective maintenance."
-                                IconClass="bi bi-tools"
-                                Tone="NavigationCardTone.Teal" />
+                @if (!_isAccountant)
+                {
+                    <NavigationCard Href="/equipment/downtime-sites"
+                                    Title="Downtime"
+                                    Description="View equipment downtime and resolutions."
+                                    IconClass="bi bi-exclamation-octagon"
+                                    Tone="NavigationCardTone.Red" />
+                    <NavigationCard Href="/equipment/maintenance-sites"
+                                    Title="Maintenance"
+                                    Description="View preventive and corrective maintenance."
+                                    IconClass="bi bi-tools"
+                                    Tone="NavigationCardTone.Teal" />
+                }
 
                 <NavigationCard Href="/equipment/fuel-sites"
                                 Title="Fuel Consumption"
@@ -130,6 +133,7 @@
     private bool _canViewEquipment;
     private bool _canManageEquipment;
     private bool _canViewInventory;
+    private bool _isAccountant;
     private bool _isLoading = true;
     private string? _loadError;
 
@@ -148,6 +152,10 @@
             _canViewInventory = permissions.Contains(
                 "Procurement_Inventory_View",
                 StringComparer.Ordinal);
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+            _isAccountant = userScope.Roles.Contains(
+                "Accountant",
+                StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception exception)
         {

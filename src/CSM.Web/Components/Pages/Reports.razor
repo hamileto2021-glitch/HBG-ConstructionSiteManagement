@@ -67,14 +67,17 @@
                     <select class="form-select"
                             @bind="_scope"
                             @bind:after="ScopeChangedAsync">
-                        <option value="All">@AllScopeOption</option>
-                        @if (_canViewFinancialReports)
+                        @if (!_isSiteScopedAccountant)
                         {
-                            <option value="Company">Company level (not tied to a site)</option>
+                            <option value="All">@AllScopeOption</option>
+                            @if (_canViewFinancialReports)
+                            {
+                                <option value="Company">Company level (not tied to a site)</option>
+                            }
                         }
                         @if (_canSelectSites)
                         {
-                            <option value="Site">Site</option>
+                            <option value="Site">@(_isSiteScopedAccountant ? "Assigned site" : "Site")</option>
                         }
                     </select>
                 </div>
@@ -126,7 +129,9 @@
     else if (_scope == "Site" && !HasSelectedSite)
     {
         <div class="alert alert-info">
-            Select a construction site to see its reports.
+            @(_isSiteScopedAccountant
+                ? "No assigned construction site is available for your account."
+                : "Select a construction site to see its reports.")
         </div>
     }
     else
@@ -589,12 +594,14 @@
     private bool _permissionLoadFailed;
     private IReadOnlyCollection<string> _permissions = [];
     private bool _hasReportAccess;
+    private bool _isSiteScopedAccountant;
     private bool _canViewExecutiveReports =>
         HasPermission("Reports_View");
     private bool _canViewFinancialReports =>
         HasPermission("Reports_FinancialSummary_View");
     private bool _canViewSites => HasPermission("Sites_View");
-    private bool _canSelectSites => _canViewSites;
+    private bool _canSelectSites =>
+        _canViewSites || _isSiteScopedAccountant;
     private bool _canViewProjects => HasPermission("Projects_View");
     private bool _canViewHrReports =>
         HasAnyPermission(
@@ -722,6 +729,12 @@
         try
         {
             _permissions = await AuthService.GetPermissionsAsync();
+            var userScope = await AuthService.GetCurrentUserScopeAsync();
+            _isSiteScopedAccountant =
+                userScope.HasActiveSiteAccess &&
+                userScope.Roles.Contains(
+                    "Accountant",
+                    StringComparer.OrdinalIgnoreCase);
             _hasReportAccess =
                 _canViewExecutiveReports || _canViewFinancialReports;
 
@@ -744,7 +757,19 @@
                 }
             }
 
-            await LoadAllAsync();
+            if (_isSiteScopedAccountant)
+            {
+                _scope = "Site";
+                if (_sites.Count > 0)
+                {
+                    _selectedSiteId = _sites[0].Id.ToString();
+                    await LoadSiteAsync(_sites[0].Id);
+                }
+            }
+            else
+            {
+                await LoadAllAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -761,6 +786,11 @@
     private async Task ScopeChangedAsync()
     {
         ClearErrors();
+
+        if (_isSiteScopedAccountant)
+        {
+            _scope = "Site";
+        }
 
         if (_scope == "Company" && !_canViewFinancialReports ||
             _scope == "Site" && !_canSelectSites)
@@ -796,7 +826,8 @@
         ClearErrors();
 
         if (!_canSelectSites ||
-            !Guid.TryParse(_selectedSiteId, out var siteId))
+            !Guid.TryParse(_selectedSiteId, out var siteId) ||
+            !VisibleSites.Any(site => site.Id == siteId))
         {
             _siteExecutive = null;
             _siteSummary = null;
@@ -810,6 +841,17 @@
     {
         if (!_hasReportAccess)
         {
+            return;
+        }
+
+        if (_isSiteScopedAccountant)
+        {
+            if (Guid.TryParse(_selectedSiteId, out var assignedSiteId) &&
+                VisibleSites.Any(site => site.Id == assignedSiteId))
+            {
+                await LoadSiteAsync(assignedSiteId);
+            }
+
             return;
         }
 
@@ -829,7 +871,7 @@
 
     private async Task LoadCompanyLevelAsync()
     {
-        if (!_canViewFinancialReports)
+        if (!_canViewFinancialReports || _isSiteScopedAccountant)
         {
             return;
         }
@@ -860,6 +902,11 @@
 
     private async Task LoadAllAsync()
     {
+        if (_isSiteScopedAccountant)
+        {
+            return;
+        }
+
         _busy = true;
         ClearErrors();
 
@@ -899,7 +946,8 @@
     private async Task LoadSiteAsync(Guid siteId)
     {
         if (!_canSelectSites ||
-            (!_canViewExecutiveReports && !_canViewFinancialReports))
+            (!_canViewExecutiveReports && !_canViewFinancialReports) ||
+            !VisibleSites.Any(site => site.Id == siteId))
         {
             return;
         }
