@@ -6,6 +6,7 @@ using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Procurement;
 using CSM.Domain.Enums;
 using CSM.Infrastructure.Persistence;
+using CSM.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
@@ -13,11 +14,14 @@ namespace CSM.Infrastructure.Services;
 public sealed class PurchaseOrderService : IPurchaseOrderService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public PurchaseOrderService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<PurchaseOrderResponse>> GetAllAsync(
@@ -31,7 +35,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_View,
+            "You are not authorized to view purchase orders.",
+            cancellationToken);
 
         var query = BuildQuery()
             .AsSplitQuery();
@@ -82,7 +90,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_View,
+            "You are not authorized to view purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -104,7 +116,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Manage,
+            "You are not authorized to manage purchase orders.",
+            cancellationToken);
 
         ValidateHeader(
             request.PurchaseOrderNumber,
@@ -232,7 +248,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Manage,
+            "You are not authorized to manage purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -418,7 +438,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Manage,
+            "You are not authorized to manage purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -460,7 +484,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanApprove(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Approve,
+            "You are not authorized to approve purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -501,7 +529,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Manage,
+            "You are not authorized to manage purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -559,7 +591,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             currentUserId,
             cancellationToken);
 
-        EnsureCanManage(actor);
+        await EnsurePermissionAsync(
+            currentUserId,
+            GranularPermission.Procurement_PurchaseOrder_Manage,
+            "You are not authorized to manage purchase orders.",
+            cancellationToken);
 
         var record = await GetPurchaseOrderAsync(
             purchaseOrderId,
@@ -1063,31 +1099,19 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                 "Authenticated user was not found.");
     }
 
-    private static void EnsureCanManage(
-        User actor)
+    private async Task EnsurePermissionAsync(
+        Guid currentUserId,
+        GranularPermission permission,
+        string errorMessage,
+        CancellationToken cancellationToken)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (!await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                permission.ToString(),
+                cancellationToken))
         {
-            return;
+            throw new PurchaseOrderManagementException(errorMessage);
         }
-
-        throw new PurchaseOrderManagementException(
-            "You are not authorized to manage purchase orders.");
-    }
-
-    private static void EnsureCanApprove(
-        User actor)
-    {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin))
-        {
-            return;
-        }
-
-        throw new PurchaseOrderManagementException(
-            "You are not authorized to approve purchase orders.");
     }
 
     private static void EnsureCompanyAccess(
@@ -1241,4 +1265,3 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             : value.Trim();
     }
 }
-
