@@ -330,7 +330,6 @@ public static class DatabaseInitializer
             GranularPermission.Finance_CostCode_View,
             GranularPermission.Finance_Expense_View,
             GranularPermission.Finance_Expense_Submit,
-            GranularPermission.Finance_Expense_Approve,
             GranularPermission.Procurement_Vendor_View,
             GranularPermission.Finance_Invoice_View,
             GranularPermission.Finance_Payment_View,
@@ -495,6 +494,17 @@ public static class DatabaseInitializer
             GranularPermission.HRM_Leave_View,
             GranularPermission.HRM_Leave_Submit,
             GranularPermission.Notifications_View);
+
+        if (roles.TryGetValue(AppRoles.SiteManager, out var siteManagerRole))
+        {
+            var expenseApprovalGrants = await dbContext.RoleGranularPermissions
+                .Where(x =>
+                    x.RoleId == siteManagerRole.Id &&
+                    x.Permission == GranularPermission.Finance_Expense_Approve)
+                .ToListAsync(cancellationToken);
+
+            dbContext.RoleGranularPermissions.RemoveRange(expenseApprovalGrants);
+        }
 
         var reportingPermissions = new[]
         {
