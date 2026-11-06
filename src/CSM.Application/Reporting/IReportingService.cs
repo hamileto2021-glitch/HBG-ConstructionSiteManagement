@@ -25,4 +25,9 @@ public interface IReportingService
     Task<AllFinancialSummaryResponse> GetAllFinancialSummariesAsync(
         Guid currentUserId,
         CancellationToken cancellationToken = default);
+
+    Task<ManagementReportsResponse> GetManagementReportsAsync(
+        Guid currentUserId,
+        Guid? constructionSiteId,
+        CancellationToken cancellationToken = default);
 }

@@ -319,6 +319,817 @@ public sealed class ReportingService : IReportingService
             totalSummary);
     }
 
+    public async Task<ManagementReportsResponse> GetManagementReportsAsync(
+        Guid currentUserId,
+        Guid? constructionSiteId,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await GetActorAsync(currentUserId, cancellationToken);
+        EnsureHasPermission(actor, GranularPermission.Reports_View);
+
+        var companyId = GetCompanyId(actor);
+        var scope = await GetScopeAsync(actor, companyId, cancellationToken);
+        if (HasRole(actor, AppRoles.Accountant))
+        {
+            var assignedSiteIds = await _dbContext.UserSiteAccesses
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == actor.Id &&
+                    x.CompanyId == companyId &&
+                    x.IsActive &&
+                    !x.IsDeleted)
+                .Select(x => x.SiteId)
+                .Distinct()
+                .ToArrayAsync(cancellationToken);
+
+            if (assignedSiteIds.Length > 0)
+            {
+                scope = new Scope
+                {
+                    SiteIds = assignedSiteIds.ToHashSet()
+                };
+            }
+        }
+
+        if (constructionSiteId.HasValue)
+        {
+            await EnsureSiteExistsAsync(
+                companyId,
+                constructionSiteId.Value,
+                cancellationToken);
+            EnsureSiteInScope(scope, constructionSiteId.Value);
+        }
+
+        var sites = constructionSiteId.HasValue
+            ? new[] { constructionSiteId.Value }
+            : scope.SiteIds.ToArray();
+        var siteScoped = constructionSiteId.HasValue || !scope.All;
+
+        return new ManagementReportsResponse(
+            HasPermission(actor, GranularPermission.Projects_View)
+                ? await BuildProjectProgressReportAsync(
+                    companyId,
+                    sites,
+                    siteScoped,
+                    cancellationToken)
+                : null,
+            CanViewSiteOperations(actor)
+                ? await BuildSiteOperationsReportAsync(
+                    companyId,
+                    sites,
+                    siteScoped,
+                    actor,
+                    cancellationToken)
+                : null,
+            CanViewHrReports(actor)
+                ? await BuildHrReportAsync(
+                    companyId,
+                    sites,
+                    siteScoped,
+                    actor,
+                    cancellationToken)
+                : null,
+            CanViewProcurementReports(actor)
+                ? await BuildProcurementReportAsync(
+                    companyId,
+                    sites,
+                    siteScoped,
+                    actor,
+                    cancellationToken)
+                : null,
+            HasPermission(actor, GranularPermission.Compliance_View)
+                ? await BuildSafetyComplianceReportAsync(
+                    companyId,
+                    sites,
+                    siteScoped,
+                    cancellationToken)
+                : null);
+    }
+
+    private async Task<ManagementReportSectionResponse>
+        BuildProjectProgressReportAsync(
+            Guid companyId,
+            Guid[] sites,
+            bool siteScoped,
+            CancellationToken cancellationToken)
+    {
+        var projects = _dbContext.Projects
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        if (siteScoped)
+        {
+            projects = projects.Where(x => sites.Contains(x.ConstructionSiteId));
+        }
+
+        var projectRows = await projects
+            .Select(x => new
+            {
+                x.Id,
+                x.Status,
+                x.ProgressPercentage,
+                x.PlannedEndDate
+            })
+            .ToListAsync(cancellationToken);
+        var projectIds = projectRows.Select(x => x.Id).ToArray();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var metrics = new List<ManagementReportMetricResponse>
+        {
+            Metric("Projects", projectRows.Count),
+            Metric(
+                "Average progress",
+                projectRows.Count == 0
+                    ? 0m
+                    : projectRows.Average(x => x.ProgressPercentage),
+                "percent"),
+            Metric(
+                "Overdue projects",
+                projectRows.Count(x =>
+                    x.PlannedEndDate < today &&
+                    x.Status is not (ProjectStatus.Completed or
+                        ProjectStatus.Closed or ProjectStatus.Cancelled)),
+                hint: "Past planned end date and not completed")
+        };
+        var statuses = new List<ManagementReportStatusResponse>();
+
+        AddStatusCounts(
+            statuses,
+            "Projects",
+            projectRows.Select(x => x.Status));
+
+        var phases = _dbContext.ProjectPhases
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId &&
+                        !x.IsDeleted &&
+                        projectIds.Contains(x.ProjectId));
+        await AddStatusCountsAsync(
+            statuses,
+            "Phases",
+            phases.Select(x => x.Status),
+            cancellationToken);
+
+        var milestones = _dbContext.Milestones
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId &&
+                        !x.IsDeleted &&
+                        projectIds.Contains(x.ProjectId));
+        await AddStatusCountsAsync(
+            statuses,
+            "Milestones",
+            milestones.Select(x => x.Status),
+            cancellationToken);
+        metrics.Add(Metric(
+            "Overdue milestones",
+            await milestones.CountAsync(
+                x => x.PlannedDate < today &&
+                     x.Status != MilestoneStatus.Completed,
+                cancellationToken),
+            hint: "Past planned date and not completed"));
+
+        var tasks = _dbContext.WorkTasks
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId &&
+                        !x.IsDeleted &&
+                        projectIds.Contains(x.ProjectId));
+        await AddStatusCountsAsync(
+            statuses,
+            "Tasks",
+            tasks.Select(x => x.Status),
+            cancellationToken);
+        metrics.Add(Metric(
+            "Overdue tasks",
+            await tasks.CountAsync(
+                x => x.PlannedEndDate < today &&
+                     x.Status != WorkTaskStatus.Completed &&
+                     x.Status != WorkTaskStatus.Cancelled,
+                cancellationToken),
+            hint: "Past planned end date and not completed"));
+
+        var delays = _dbContext.ProjectDelays
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId &&
+                        !x.IsDeleted &&
+                        projectIds.Contains(x.ProjectId));
+        var openDelayDays = await delays
+            .Where(x => !x.IsResolved)
+            .SumAsync(x => (int?)x.DelayDays, cancellationToken) ?? 0;
+        metrics.Add(Metric(
+            "Open delays",
+            await delays.CountAsync(x => !x.IsResolved, cancellationToken)));
+        metrics.Add(Metric("Open delay days", openDelayDays, "days"));
+
+        return new ManagementReportSectionResponse(metrics, statuses);
+    }
+
+    private async Task<ManagementReportSectionResponse>
+        BuildSiteOperationsReportAsync(
+            Guid companyId,
+            Guid[] sites,
+            bool siteScoped,
+            User actor,
+            CancellationToken cancellationToken)
+    {
+        var metrics = new List<ManagementReportMetricResponse>();
+        var statuses = new List<ManagementReportStatusResponse>();
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+
+        if (HasPermission(actor, GranularPermission.Sites_View))
+        {
+            var sitesQuery = _dbContext.ConstructionSites
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                sitesQuery = sitesQuery.Where(x => sites.Contains(x.Id));
+            }
+
+            var siteRows = await sitesQuery
+                .Select(x => x.IsActive)
+                .ToListAsync(cancellationToken);
+            metrics.Add(Metric("Construction sites", siteRows.Count));
+            metrics.Add(Metric("Active sites", siteRows.Count(x => x)));
+        }
+
+        if (HasPermission(actor, GranularPermission.Projects_View))
+        {
+            var projects = _dbContext.Projects
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                projects = projects.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Active projects",
+                await projects.CountAsync(
+                    x => x.Status == ProjectStatus.Active,
+                    cancellationToken)));
+        }
+
+        if (HasPermission(actor, GranularPermission.Projects_DailyProgress_View))
+        {
+            var diaries = _dbContext.DailySiteDiaries
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            x.DiaryDate >= fromDate);
+            if (siteScoped)
+            {
+                diaries = diaries.Where(x => sites.Contains(x.SiteId));
+            }
+
+            var diaryRows = await diaries
+                .Select(x => new { x.WorkforceCount, x.DelayReason })
+                .ToListAsync(cancellationToken);
+            metrics.Add(Metric("Daily diaries (30 days)", diaryRows.Count));
+            metrics.Add(Metric(
+                "Average daily workforce",
+                diaryRows.Count == 0
+                    ? 0m
+                    : diaryRows.Average(x => (decimal)x.WorkforceCount)));
+            metrics.Add(Metric(
+                "Diaries reporting delays",
+                diaryRows.Count(x => !string.IsNullOrWhiteSpace(x.DelayReason))));
+        }
+
+        if (HasPermission(actor, GranularPermission.Equipment_View))
+        {
+            var assignments = _dbContext.EquipmentAssignments
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            !x.ReleasedAtUtc.HasValue);
+            if (siteScoped)
+            {
+                assignments = assignments.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Equipment currently assigned",
+                await assignments.Select(x => x.EquipmentId)
+                    .Distinct()
+                    .CountAsync(cancellationToken)));
+        }
+
+        if (HasPermission(actor, GranularPermission.Procurement_Inventory_View))
+        {
+            var usage = _dbContext.DailyMaterialUsages
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            x.Date >= fromDate);
+            var stock = _dbContext.StockItems
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                usage = usage.Where(x => sites.Contains(x.ConstructionSiteId));
+                stock = stock.Where(x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            var usageRows = await usage
+                .Select(x => new
+                {
+                    x.Unit,
+                    x.QuantityIssued,
+                    x.QuantityUsed,
+                    x.QuantityReturned,
+                    x.QuantityVariance
+                })
+                .ToListAsync(cancellationToken);
+            foreach (var group in usageRows.GroupBy(x => x.Unit))
+            {
+                metrics.Add(Metric(
+                    $"Issued ({group.Key}) - 30 days",
+                    group.Sum(x => x.QuantityIssued),
+                    "quantity"));
+                metrics.Add(Metric(
+                    $"Used ({group.Key}) - 30 days",
+                    group.Sum(x => x.QuantityUsed),
+                    "quantity"));
+                metrics.Add(Metric(
+                    $"Returned ({group.Key}) - 30 days",
+                    group.Sum(x => x.QuantityReturned),
+                    "quantity"));
+                metrics.Add(Metric(
+                    $"Variance ({group.Key}) - 30 days",
+                    group.Sum(x => x.QuantityVariance),
+                    "quantity"));
+            }
+            metrics.Add(Metric(
+                "Low-stock items",
+                await stock.CountAsync(
+                    x => x.QuantityOnHand <= x.ReorderLevel,
+                    cancellationToken)));
+        }
+
+        return new ManagementReportSectionResponse(metrics, statuses);
+    }
+
+    private async Task<ManagementReportSectionResponse>
+        BuildHrReportAsync(
+            Guid companyId,
+            Guid[] sites,
+            bool siteScoped,
+            User actor,
+            CancellationToken cancellationToken)
+    {
+        var metrics = new List<ManagementReportMetricResponse>();
+        var statuses = new List<ManagementReportStatusResponse>();
+        var employees = _dbContext.Employees
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        var siteEmployeeIds = _dbContext.SiteAssignments
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId &&
+                        !x.IsDeleted &&
+                        (!siteScoped || sites.Contains(x.ConstructionSiteId)))
+            .Select(x => x.EmployeeId)
+            .Distinct();
+
+        if (HasPermission(actor, GranularPermission.HRM_SiteAssignment_View))
+        {
+            var assignments = _dbContext.SiteAssignments
+                .AsNoTracking()
+                .Where(x =>
+                    x.CompanyId == companyId &&
+                    !x.IsDeleted &&
+                    x.StartDate <= DateOnly.FromDateTime(DateTime.UtcNow) &&
+                    (!x.EndDate.HasValue ||
+                     x.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow)));
+            if (siteScoped)
+            {
+                assignments = assignments.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Current site assignments",
+                await assignments.CountAsync(cancellationToken)));
+        }
+
+        if (siteScoped)
+        {
+            employees = employees.Where(
+                x => siteEmployeeIds.Contains(x.Id));
+        }
+
+        var employeeIds = await employees
+            .Select(x => x.Id)
+            .ToArrayAsync(cancellationToken);
+
+        if (HasPermission(actor, GranularPermission.HRM_Employee_View))
+        {
+            metrics.Add(Metric(
+                "Employees",
+                await employees.CountAsync(cancellationToken)));
+            await AddStatusCountsAsync(
+                statuses,
+                "Employees",
+                employees.Select(x => x.Status),
+                cancellationToken);
+        }
+
+        if (!siteScoped &&
+            HasPermission(actor, GranularPermission.HRM_Contractor_View))
+        {
+            metrics.Add(Metric(
+                "Active contractors",
+                await _dbContext.Contractors
+                    .CountAsync(
+                        x => x.CompanyId == companyId &&
+                             !x.IsDeleted &&
+                             x.IsActive,
+                        cancellationToken)));
+        }
+
+        if (!siteScoped &&
+            HasPermission(actor, GranularPermission.HRM_Shift_View))
+        {
+            metrics.Add(Metric(
+                "Active shifts",
+                await _dbContext.Shifts
+                    .CountAsync(
+                        x => x.CompanyId == companyId &&
+                             !x.IsDeleted &&
+                             x.IsActive,
+                        cancellationToken)));
+        }
+
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+        if (HasPermission(actor, GranularPermission.HRM_Attendance_View))
+        {
+            var attendance = _dbContext.Attendances
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            x.AttendanceDate >= fromDate);
+            if (siteScoped)
+            {
+                attendance = attendance.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            var rows = await attendance
+                .Select(x => new { x.Status, x.RegularHours, x.OvertimeHours })
+                .ToListAsync(cancellationToken);
+            metrics.Add(Metric("Attendance records (30 days)", rows.Count));
+            metrics.Add(Metric(
+                "Regular hours (30 days)",
+                rows.Sum(x => x.RegularHours),
+                "hours"));
+            metrics.Add(Metric(
+                "Overtime hours (30 days)",
+                rows.Sum(x => x.OvertimeHours),
+                "hours"));
+            AddStatusCounts(statuses, "Attendance (30 days)", rows.Select(x => x.Status));
+        }
+
+        if (HasPermission(actor, GranularPermission.HRM_Timesheet_View))
+        {
+            var timesheets = _dbContext.Timesheets
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            employeeIds.Contains(x.EmployeeId));
+            metrics.Add(Metric(
+                "Timesheets",
+                await timesheets.CountAsync(cancellationToken)));
+            metrics.Add(Metric(
+                "Timesheet hours",
+                await timesheets.SumAsync(
+                    x => (decimal?)x.TotalHours,
+                    cancellationToken) ?? 0m,
+                "hours"));
+            await AddStatusCountsAsync(
+                statuses,
+                "Timesheets",
+                timesheets.Select(x => x.Status),
+                cancellationToken);
+        }
+
+        if (HasPermission(actor, GranularPermission.HRM_Leave_View))
+        {
+            var leaveRequests = _dbContext.LeaveRequests
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            employeeIds.Contains(x.EmployeeId));
+            metrics.Add(Metric(
+                "Leave requests",
+                await leaveRequests.CountAsync(cancellationToken)));
+            await AddStatusCountsAsync(
+                statuses,
+                "Leave requests",
+                leaveRequests.Select(x => x.Status),
+                cancellationToken);
+        }
+
+        if (HasPermission(actor, GranularPermission.HRM_Payroll_View))
+        {
+            var payrollRecords = _dbContext.PayrollRecords
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId &&
+                            !x.IsDeleted &&
+                            employeeIds.Contains(x.EmployeeId));
+            metrics.Add(Metric(
+                "Payroll records",
+                await payrollRecords.CountAsync(cancellationToken)));
+            await AddStatusCountsAsync(
+                statuses,
+                "Payroll",
+                payrollRecords.Select(x => x.Status),
+                cancellationToken);
+        }
+
+        return new ManagementReportSectionResponse(metrics, statuses);
+    }
+
+    private async Task<ManagementReportSectionResponse>
+        BuildProcurementReportAsync(
+            Guid companyId,
+            Guid[] sites,
+            bool siteScoped,
+            User actor,
+            CancellationToken cancellationToken)
+    {
+        var metrics = new List<ManagementReportMetricResponse>();
+        var statuses = new List<ManagementReportStatusResponse>();
+
+        if (HasPermission(actor, GranularPermission.Procurement_MaterialRequest_View))
+        {
+            var requests = _dbContext.MaterialRequests
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                requests = requests.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Material requests",
+                await requests.CountAsync(cancellationToken)));
+            await AddStatusCountsAsync(
+                statuses,
+                "Material requests",
+                requests.Select(x => x.Status),
+                cancellationToken);
+        }
+
+        if (HasPermission(actor, GranularPermission.Procurement_PurchaseOrder_View))
+        {
+            var orders = _dbContext.PurchaseOrders
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            var receipts = _dbContext.GoodsReceipts
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                orders = orders.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+                receipts = receipts.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Purchase orders",
+                await orders.CountAsync(cancellationToken)));
+            await AddStatusCountsAsync(
+                statuses,
+                "Purchase orders",
+                orders.Select(x => x.Status),
+                cancellationToken);
+            metrics.Add(Metric(
+                "Goods receipts",
+                await receipts.CountAsync(cancellationToken)));
+        }
+
+        if (HasPermission(actor, GranularPermission.Procurement_Vendor_View))
+        {
+            var vendorIds = _dbContext.PurchaseOrders
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                vendorIds = vendorIds.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Suppliers used",
+                await vendorIds.Select(x => x.VendorId)
+                    .Distinct()
+                    .CountAsync(cancellationToken),
+                hint: "Suppliers referenced by purchase orders in this scope"));
+        }
+
+        if (HasPermission(actor, GranularPermission.Procurement_Inventory_View))
+        {
+            var stock = _dbContext.StockItems
+                .AsNoTracking()
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+            if (siteScoped)
+            {
+                stock = stock.Where(
+                    x => sites.Contains(x.ConstructionSiteId));
+            }
+
+            metrics.Add(Metric(
+                "Stock lines",
+                await stock.CountAsync(cancellationToken)));
+            metrics.Add(Metric(
+                "Materials in stock",
+                await stock.Select(x => x.MaterialId)
+                    .Distinct()
+                    .CountAsync(cancellationToken)));
+            metrics.Add(Metric(
+                "Low-stock items",
+                await stock.CountAsync(
+                    x => x.QuantityOnHand <= x.ReorderLevel,
+                    cancellationToken)));
+        }
+
+        return new ManagementReportSectionResponse(metrics, statuses);
+    }
+
+    private async Task<ManagementReportSectionResponse>
+        BuildSafetyComplianceReportAsync(
+            Guid companyId,
+            Guid[] sites,
+            bool siteScoped,
+            CancellationToken cancellationToken)
+    {
+        var metrics = new List<ManagementReportMetricResponse>();
+        var statuses = new List<ManagementReportStatusResponse>();
+        var incidents = _dbContext.SafetyIncidents
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        var observations = _dbContext.SafetyObservations
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        var inspections = _dbContext.Inspections
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        var permits = _dbContext.Permits
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        var ncrs = _dbContext.NonConformanceReports
+            .AsNoTracking()
+            .Where(x => x.CompanyId == companyId && !x.IsDeleted);
+        if (siteScoped)
+        {
+            incidents = incidents.Where(x => sites.Contains(x.ConstructionSiteId));
+            observations = observations.Where(x => sites.Contains(x.ConstructionSiteId));
+            inspections = inspections.Where(x => sites.Contains(x.ConstructionSiteId));
+            permits = permits.Where(x => sites.Contains(x.ConstructionSiteId));
+            ncrs = ncrs.Where(x => sites.Contains(x.ConstructionSiteId));
+        }
+
+        metrics.Add(Metric(
+            "Safety incidents",
+            await incidents.CountAsync(cancellationToken)));
+        await AddStatusCountsAsync(
+            statuses,
+            "Incidents",
+            incidents.Select(x => x.Status),
+            cancellationToken);
+        await AddStatusCountsAsync(
+            statuses,
+            "Incident severity",
+            incidents.Select(x => x.Severity),
+            cancellationToken);
+        metrics.Add(Metric(
+            "Lost-time incidents",
+            await incidents.CountAsync(x => x.LostTimeIncident, cancellationToken)));
+
+        metrics.Add(Metric(
+            "Safety observations",
+            await observations.CountAsync(cancellationToken)));
+        await AddStatusCountsAsync(
+            statuses,
+            "Observations",
+            observations.Select(x => x.Status),
+            cancellationToken);
+
+        metrics.Add(Metric(
+            "Inspections",
+            await inspections.CountAsync(cancellationToken)));
+        await AddStatusCountsAsync(
+            statuses,
+            "Inspections",
+            inspections.Select(x => x.Status),
+            cancellationToken);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        metrics.Add(Metric(
+            "Permits",
+            await permits.CountAsync(cancellationToken)));
+        metrics.Add(Metric(
+            "Expired permits",
+            await permits.CountAsync(
+                x => x.ExpiryDate < today &&
+                     x.Status != PermitStatus.Revoked &&
+                     x.Status != PermitStatus.Closed,
+                cancellationToken)));
+        await AddStatusCountsAsync(
+            statuses,
+            "Permits",
+            permits.Select(x => x.Status),
+            cancellationToken);
+
+        metrics.Add(Metric(
+            "Non-conformance reports",
+            await ncrs.CountAsync(cancellationToken)));
+        metrics.Add(Metric(
+            "Overdue corrective actions",
+            await ncrs.CountAsync(
+                x => x.DueDate < DateTime.UtcNow &&
+                     x.Status != NcrStatus.Closed,
+                cancellationToken)));
+        await AddStatusCountsAsync(
+            statuses,
+            "Non-conformance",
+            ncrs.Select(x => x.Status),
+            cancellationToken);
+
+        return new ManagementReportSectionResponse(metrics, statuses);
+    }
+
+    private static bool CanViewSiteOperations(User actor) =>
+        HasPermission(actor, GranularPermission.Sites_View) ||
+        HasPermission(actor, GranularPermission.Projects_View) ||
+        HasPermission(actor, GranularPermission.Projects_DailyProgress_View) ||
+        HasPermission(actor, GranularPermission.Equipment_View) ||
+        HasPermission(actor, GranularPermission.Procurement_Inventory_View);
+
+    private static bool CanViewHrReports(User actor) =>
+        HasPermission(actor, GranularPermission.HRM_Employee_View) ||
+        HasPermission(actor, GranularPermission.HRM_Contractor_View) ||
+        HasPermission(actor, GranularPermission.HRM_Shift_View) ||
+        HasPermission(actor, GranularPermission.HRM_Payroll_View) ||
+        HasPermission(actor, GranularPermission.HRM_SiteAssignment_View) ||
+        HasPermission(actor, GranularPermission.HRM_Attendance_View) ||
+        HasPermission(actor, GranularPermission.HRM_Leave_View) ||
+        HasPermission(actor, GranularPermission.HRM_Timesheet_View);
+
+    private static bool CanViewProcurementReports(User actor) =>
+        HasPermission(actor, GranularPermission.Procurement_MaterialRequest_View) ||
+        HasPermission(actor, GranularPermission.Procurement_PurchaseOrder_View) ||
+        HasPermission(actor, GranularPermission.Procurement_Inventory_View) ||
+        HasPermission(actor, GranularPermission.Procurement_Vendor_View);
+
+    private static ManagementReportMetricResponse Metric(
+        string label,
+        decimal value,
+        string unit = "count",
+        string? hint = null) =>
+        new(label, value, unit, hint);
+
+    private static async Task AddStatusCountsAsync<TStatus>(
+        ICollection<ManagementReportStatusResponse> target,
+        string category,
+        IQueryable<TStatus> statuses,
+        CancellationToken cancellationToken)
+        where TStatus : struct, Enum
+    {
+        var groupedStatuses = await statuses
+            .GroupBy(x => x)
+            .Select(group => new
+            {
+                Status = group.Key,
+                Count = group.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var group in groupedStatuses)
+        {
+            target.Add(new ManagementReportStatusResponse(
+                category,
+                group.Status.ToString(),
+                group.Count));
+        }
+    }
+
+    private static void AddStatusCounts<TStatus>(
+        ICollection<ManagementReportStatusResponse> target,
+        string category,
+        IEnumerable<TStatus> statuses)
+        where TStatus : struct, Enum
+    {
+        foreach (var group in statuses.GroupBy(x => x).OrderBy(x => x.Key))
+        {
+            target.Add(new ManagementReportStatusResponse(
+                category,
+                group.Key.ToString(),
+                group.Count()));
+        }
+    }
+
     // The only place the response is built. Named arguments, so a value can
     // never land in the wrong field.
     private static FinancialSummaryResponse ToResponse(Raw r)

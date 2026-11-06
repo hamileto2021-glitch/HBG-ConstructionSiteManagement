@@ -140,6 +140,28 @@ public sealed class ReportsController : ControllerBase
         }
     }
 
+    [HttpGet("management")]
+    [Authorize(Policy = "Reports.View")]
+    public async Task<ActionResult<ManagementReportsResponse>>
+        GetManagementReports(
+            [FromQuery] Guid? constructionSiteId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _reportingService.GetManagementReportsAsync(
+                GetCurrentUserId(),
+                constructionSiteId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ReportingManagementException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private Guid GetCurrentUserId()
     {
         var value = User.FindFirstValue(

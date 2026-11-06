@@ -523,50 +523,52 @@
             </div>
         }
 
-        <!-- Future report modules -->
-        @if (_hasUpcomingReports)
+        @if (_scope != "Company" && !string.IsNullOrWhiteSpace(_managementError))
         {
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="mb-0">Additional Management Reports</h5>
-            </div>
+            <div class="alert alert-danger" role="alert">@_managementError</div>
+        }
 
-            <div class="card-body">
-                <div class="row g-3">
+        @if (_scope != "Company")
+        {
+            @if (_managementReports?.ProjectProgress is { } projectProgress)
+            {
+                <ManagementReportSection Title="Project Progress Report"
+                                         Icon="bi-kanban"
+                                         Description="Planned versus actual progress, milestones and delays."
+                                         Report="projectProgress" />
+            }
 
-                    @if (_canViewProjects)
-                    {
-                        @Upcoming("bi-kanban", "Project Progress Report",
-                            "Planned versus actual progress, milestones and delays.")
-                    }
+            @if (_managementReports?.SiteOperations is { } siteOperations)
+            {
+                <ManagementReportSection Title="Site Operations Report"
+                                         Icon="bi-building"
+                                         Description="Recent site activity, workforce, equipment and material usage."
+                                         Report="siteOperations" />
+            }
 
-                    @if (_canViewSiteOperations)
-                    {
-                        @Upcoming("bi-building", "Site Operations Report",
-                            "Site activity, materials, equipment and progress.")
-                    }
+            @if (_managementReports?.HumanResources is { } humanResources)
+            {
+                <ManagementReportSection Title="HR Report"
+                                         Icon="bi-people"
+                                         Description="Employee, attendance, timesheet, leave and payroll summaries."
+                                         Report="humanResources" />
+            }
 
-                    @if (_canViewHrReports)
-                    {
-                        @Upcoming("bi-people", "HR Report",
-                            "Employees, attendance, timesheets, leave and payroll.")
-                    }
+            @if (_managementReports?.ProcurementInventory is { } procurementInventory)
+            {
+                <ManagementReportSection Title="Procurement & Inventory"
+                                         Icon="bi-box-seam"
+                                         Description="Material requests, purchase orders, receipts and stock levels."
+                                         Report="procurementInventory" />
+            }
 
-                    @if (_canViewProcurementReports)
-                    {
-                        @Upcoming("bi-box-seam", "Procurement & Inventory",
-                            "Requests, purchase orders, receipts and stock.")
-                    }
-
-                    @if (_canViewComplianceReports)
-                    {
-                        @Upcoming("bi-shield-check", "Safety & Compliance",
-                            "Incidents, inspections, permits and corrective actions.")
-                    }
-
-                </div>
-            </div>
-        </div>
+            @if (_managementReports?.SafetyCompliance is { } safetyCompliance)
+            {
+                <ManagementReportSection Title="Safety & Compliance"
+                                         Icon="bi-shield-check"
+                                         Description="Incidents, inspections, permits and corrective actions."
+                                         Report="safetyCompliance" />
+            }
         }
     }
 
@@ -579,6 +581,7 @@
     private ExecutiveDashboardResponse? _allExecutive;
     private AllFinancialSummaryResponse? _all;
     private FinancialSummaryResponse? _companyLevelSummary;
+    private ManagementReportsResponse? _managementReports;
 
     // Site scope data.
     private ExecutiveDashboardResponse? _siteExecutive;
@@ -616,6 +619,7 @@
     private bool _canViewSiteOperations =>
         _canViewSites ||
         _canViewProjects ||
+        HasPermission("Projects_DailyProgress_View") ||
         HasPermission("Equipment_View") ||
         HasPermission("Procurement_Inventory_View");
     private bool _canViewProcurementReports =>
@@ -630,7 +634,7 @@
         _canViewExecutiveReports &&
         _scope != "Company" &&
         (_canViewSites || _canViewProjects || _canViewFinancialReports);
-    private bool _hasUpcomingReports =>
+    private bool _hasManagementReports =>
         _canViewProjects ||
         _canViewSiteOperations ||
         _canViewHrReports ||
@@ -654,6 +658,7 @@
     private string? _sitesError;
     private string? _executiveError;
     private string? _financialError;
+    private string? _managementError;
 
     // What the two main sections show, for the current scope. For the company
     // scope this is the company-wide total (head office + all sites), not the
@@ -802,6 +807,7 @@
         {
             _siteExecutive = null;
             _siteSummary = null;
+            _managementReports = null;
             return;
         }
 
@@ -831,6 +837,7 @@
         {
             _siteExecutive = null;
             _siteSummary = null;
+            _managementReports = null;
             return;
         }
 
@@ -880,6 +887,7 @@
         ClearErrors();
 
         _companyLevelSummary = null;
+        _managementReports = null;
 
         try
         {
@@ -912,6 +920,7 @@
 
         _allExecutive = null;
         _all = null;
+        _managementReports = null;
 
         if (_canViewExecutiveReports)
         {
@@ -940,13 +949,20 @@
             }
         }
 
+        if (_hasManagementReports)
+        {
+            await LoadManagementReportsAsync(null);
+        }
+
         _busy = false;
     }
 
     private async Task LoadSiteAsync(Guid siteId)
     {
         if (!_canSelectSites ||
-            (!_canViewExecutiveReports && !_canViewFinancialReports) ||
+            (!_canViewExecutiveReports &&
+             !_canViewFinancialReports &&
+             !_hasManagementReports) ||
             !VisibleSites.Any(site => site.Id == siteId))
         {
             return;
@@ -957,6 +973,7 @@
 
         _siteExecutive = null;
         _siteSummary = null;
+        _managementReports = null;
 
         if (_canViewExecutiveReports)
         {
@@ -984,6 +1001,11 @@
             }
         }
 
+        if (_hasManagementReports)
+        {
+            await LoadManagementReportsAsync(siteId);
+        }
+
         _busy = false;
     }
 
@@ -991,6 +1013,21 @@
     {
         _executiveError = null;
         _financialError = null;
+        _managementError = null;
+    }
+
+    private async Task LoadManagementReportsAsync(Guid? siteId)
+    {
+        try
+        {
+            _managementReports =
+                await ReportingService.GetManagementReportsAsync(siteId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load additional management reports.");
+            _managementError = FriendlyError(ex);
+        }
     }
 
     private static string FriendlyError(Exception ex)
@@ -1212,19 +1249,4 @@
         </tr>;
     }
 
-    private RenderFragment Upcoming(string icon, string title, string text) =>
-        @<div class="col-md-6 col-lg-4">
-            <div class="card h-100 border">
-                <div class="card-body">
-                    <h6>
-                        <i class="bi @icon me-2"></i>
-                        @title
-                    </h6>
-                    <p class="text-muted small">@text</p>
-                    <button class="btn btn-outline-primary" disabled>
-                        Coming Next
-                    </button>
-                </div>
-            </div>
-        </div>;
 }

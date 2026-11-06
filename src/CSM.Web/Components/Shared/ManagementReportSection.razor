@@ -1,0 +1,86 @@
+@using CSM.Web.Models.Reporting
+
+<section class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi @Icon me-2" aria-hidden="true"></i>
+            @Title
+        </h5>
+        <small class="text-muted">@Description</small>
+    </div>
+    <div class="card-body">
+        @if (Report.Metrics.Count > 0)
+        {
+            <div class="row g-3 mb-4">
+                @foreach (var metric in Report.Metrics)
+                {
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small">@metric.Label</div>
+                            <div class="fs-5 fw-semibold">@Format(metric)</div>
+                            @if (!string.IsNullOrWhiteSpace(metric.Hint))
+                            {
+                                <div class="text-muted small">@metric.Hint</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Report.Statuses.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th class="text-end">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Report.Statuses)
+                        {
+                            <tr>
+                                <td>@item.Category</td>
+                                <td>@item.Status</td>
+                                <td class="text-end">@item.Count.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (Report.Metrics.Count == 0 && Report.Statuses.Count == 0)
+        {
+            <p class="text-muted mb-0">No report data is available for this scope.</p>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Description { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public ManagementReportSectionResponse Report { get; set; } = default!;
+
+    private static string Format(ManagementReportMetricResponse metric) =>
+        metric.Unit switch
+        {
+            "percent" => $"{metric.Value:N1}%",
+            "currency" => metric.Value.ToString("N2"),
+            "quantity" => metric.Value.ToString("N2"),
+            "hours" => $"{metric.Value:N1} hours",
+            "days" => $"{metric.Value:N0} days",
+            _ => metric.Value.ToString("N0")
+        };
+}

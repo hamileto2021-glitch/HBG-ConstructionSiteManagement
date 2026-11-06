@@ -16,4 +16,7 @@ public interface IReportingService
 
     Task<FinancialSummaryResponse>
         GetSiteFinancialSummaryAsync(Guid constructionSiteId);
+
+    Task<ManagementReportsResponse> GetManagementReportsAsync(
+        Guid? constructionSiteId = null);
 }

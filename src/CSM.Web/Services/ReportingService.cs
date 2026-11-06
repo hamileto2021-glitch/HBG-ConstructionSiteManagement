@@ -172,4 +172,29 @@ public sealed class ReportingService : IReportingService
                ?? throw new InvalidOperationException(
                    "The API returned an empty site financial summary response.");
     }
+
+    public async Task<ManagementReportsResponse> GetManagementReportsAsync(
+        Guid? constructionSiteId = null)
+    {
+        var client = await ClientAsync();
+        var url = constructionSiteId.HasValue
+            ? $"Reports/management?constructionSiteId={constructionSiteId.Value}"
+            : "Reports/management";
+
+        using var response = await client.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException(
+                $"Failed to load management reports. " +
+                $"Status: {(int)response.StatusCode}. {error}",
+                null,
+                response.StatusCode);
+        }
+
+        return await response.Content
+               .ReadFromJsonAsync<ManagementReportsResponse>()
+               ?? throw new InvalidOperationException(
+               "The API returned an empty management reports response.");
+    }
 }
