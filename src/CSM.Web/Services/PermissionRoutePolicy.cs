@@ -249,14 +249,15 @@ public static class PermissionRoutePolicy
 
             if (path.Contains("payroll", StringComparison.Ordinal))
             {
-                if (path.Contains("/edit/", StringComparison.Ordinal))
+                if (path.Contains("/approve", StringComparison.Ordinal) ||
+                    path.Contains("/paid", StringComparison.Ordinal))
                 {
-                    return ["HRM_Payroll_View", "HRM_Payroll_Approve"];
+                    return ["HRM_Payroll_Approve"];
                 }
 
                 return IsMutationRoute(path)
-                    ? ["HRM_Payroll_Approve"]
-                    : ["HRM_Payroll_View", "HRM_Payroll_Approve"];
+                    ? ["HRM_Payroll_Manage", "HRM_Payroll_Approve"]
+                    : ["HRM_Payroll_View", "HRM_Payroll_Manage", "HRM_Payroll_Approve"];
             }
 
             if (path.Contains("employee", StringComparison.Ordinal))

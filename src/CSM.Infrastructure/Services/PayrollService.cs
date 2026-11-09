@@ -1017,10 +1017,18 @@ case WageType.Daily:
         Guid currentUserId,
         CancellationToken cancellationToken)
     {
-        if (await _permissionEvaluator.HasPermissionAsync(
+        var canManage =
+            await _permissionEvaluator.HasPermissionAsync(
+                currentUserId,
+                GranularPermission.HRM_Payroll_Manage.ToString(),
+                cancellationToken);
+        var canApprove =
+            await _permissionEvaluator.HasPermissionAsync(
                 currentUserId,
                 GranularPermission.HRM_Payroll_Approve.ToString(),
-                cancellationToken))
+                cancellationToken);
+
+        if (canManage || canApprove)
         {
             return;
         }

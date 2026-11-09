@@ -155,9 +155,13 @@
             _isEmployee = userScope.Roles.Any(role =>
                 string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
             var permissions = await AuthService.GetPermissionsAsync();
-            _canManagePayroll = permissions.Contains(
-                "HRM_Payroll_Approve",
-                StringComparer.Ordinal);
+            _canManagePayroll =
+                permissions.Contains(
+                    "HRM_Payroll_Manage",
+                    StringComparer.Ordinal) ||
+                permissions.Contains(
+                    "HRM_Payroll_Approve",
+                    StringComparer.Ordinal);
         }
         catch (Exception ex)
         {

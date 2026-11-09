@@ -92,6 +92,8 @@ public enum GranularPermission
     Equipment_Manage,
 
     HRM_Attendance_Override,
-    Data_Export
+    Data_Export,
+
+    HRM_Payroll_Manage
 
 }

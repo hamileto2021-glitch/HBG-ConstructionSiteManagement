@@ -331,7 +331,7 @@
                         Payroll calculation is not available for the current status.
                     </div>
                 }
-                @if (_canManagePayroll && _payroll.Status == "Calculated")
+                @if (_canApprovePayroll && _payroll.Status == "Calculated")
                 {
                     <EditForm Model="_approveModel"
                               OnValidSubmit="ApprovePayrollAsync">
@@ -361,7 +361,7 @@
 
                     </EditForm>
                 }
-                @if (_canManagePayroll && _payroll.Status == "Approved")
+                @if (_canApprovePayroll && _payroll.Status == "Approved")
                 {
                     <EditForm Model="_paidModel"
                               OnValidSubmit="MarkPaidAsync">
@@ -423,6 +423,7 @@
     private bool _loading;
     private bool _isEmployee = true;
     private bool _canManagePayroll;
+    private bool _canApprovePayroll;
     private string? _error;
 
     private CalculatePayrollRequest _calculateModel = new()
@@ -549,7 +550,14 @@
             _isEmployee = userScope.Roles.Any(role =>
                 string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase));
             var permissions = await AuthService.GetPermissionsAsync();
-            _canManagePayroll = permissions.Contains(
+            _canManagePayroll =
+                permissions.Contains(
+                    "HRM_Payroll_Manage",
+                    StringComparer.Ordinal) ||
+                permissions.Contains(
+                    "HRM_Payroll_Approve",
+                    StringComparer.Ordinal);
+            _canApprovePayroll = permissions.Contains(
                 "HRM_Payroll_Approve",
                 StringComparer.Ordinal);
         }

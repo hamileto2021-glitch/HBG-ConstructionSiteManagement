@@ -5,20 +5,24 @@ using CSM.Domain.Constants;
 using CSM.Domain.Entities.Finance;
 using CSM.Domain.Entities.Identity;
 using CSM.Domain.Entities.Procurement;
-using CSM.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using CSM.Domain.Enums;
+using CSM.Infrastructure.Persistence;
+using CSM.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
 
 namespace CSM.Infrastructure.Services;
 
 public sealed class MaterialService : IMaterialService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionEvaluator _permissionEvaluator;
 
     public MaterialService(
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IPermissionEvaluator permissionEvaluator)
     {
         _dbContext = dbContext;
+        _permissionEvaluator = permissionEvaluator;
     }
 
     public async Task<IReadOnlyCollection<MaterialResponse>> GetAllAsync(
@@ -31,7 +35,9 @@ public sealed class MaterialService : IMaterialService
             currentUserId,
             cancellationToken);
 
-        EnsureCanAccess(actor);
+        await EnsureCanReadAsync(
+            actor.Id,
+            cancellationToken);
 
         var query = _dbContext.Materials
             .AsNoTracking()
@@ -78,7 +84,9 @@ public sealed class MaterialService : IMaterialService
             currentUserId,
             cancellationToken);
 
-        EnsureCanAccess(actor);
+        await EnsureCanReadAsync(
+            actor.Id,
+            cancellationToken);
 
         var material = await GetMaterialAsync(
             materialId,
@@ -100,7 +108,9 @@ public sealed class MaterialService : IMaterialService
             currentUserId,
             cancellationToken);
 
-        EnsureCanAccess(actor);
+        await EnsureCanManageAsync(
+            actor.Id,
+            cancellationToken);
 
         var companyId = GetActorCompanyId(actor);
 
@@ -179,7 +189,9 @@ public sealed class MaterialService : IMaterialService
             currentUserId,
             cancellationToken);
 
-        EnsureCanAccess(actor);
+        await EnsureCanManageAsync(
+            actor.Id,
+            cancellationToken);
 
         var material = await GetMaterialAsync(
             materialId,
@@ -449,18 +461,32 @@ public sealed class MaterialService : IMaterialService
         }
     }
 
-    private static void EnsureCanAccess(
-        User actor)
+    private async Task EnsureCanReadAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
     {
-        if (IsSuperAdmin(actor) ||
-            HasRole(actor, AppRoles.CompanyAdmin) ||
-            HasRole(actor, AppRoles.SiteManager))
+        if (!await _permissionEvaluator.HasPermissionAsync(
+                userId,
+                GranularPermission.Procurement_Inventory_View.ToString(),
+                cancellationToken))
         {
-            return;
+            throw new MaterialManagementException(
+                "You are not authorized to view materials.");
         }
+    }
 
-        throw new MaterialManagementException(
-            "You are not authorized to manage materials.");
+    private async Task EnsureCanManageAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (!await _permissionEvaluator.HasPermissionAsync(
+                userId,
+                GranularPermission.Procurement_Inventory_Adjust.ToString(),
+                cancellationToken))
+        {
+            throw new MaterialManagementException(
+                "You are not authorized to manage materials.");
+        }
     }
 
     private static Guid GetActorCompanyId(
@@ -547,7 +573,6 @@ public sealed class MaterialService : IMaterialService
         };
     }
 }
-
 
 
 
