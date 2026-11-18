@@ -6,7 +6,6 @@ using Microsoft.Extensions.Localization;
 using System.Globalization;
 using Microsoft.AspNetCore.Localization;
 
-
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddLocalization();
 
@@ -53,17 +52,13 @@ var supportedCultures = new[]
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
-    options.DefaultRequestCulture =
-        new RequestCulture("en");
-
+    options.DefaultRequestCulture = new RequestCulture("en");
     options.SupportedCultures = supportedCultures;
     options.SupportedUICultures = supportedCultures;
 });
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
@@ -85,8 +80,6 @@ builder.Services.AddScoped<AuditHistoryService>();
 builder.Services.AddScoped<PersonalDataExportService>();
 builder.Services.AddScoped<PrivacyDataRequestService>();
 builder.Services.AddScoped<PasswordChangeService>();
-
-
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<AuthService>(sp =>
     (AuthService)sp.GetRequiredService<IAuthService>());
@@ -94,30 +87,19 @@ builder.Services.AddScoped<ProtectedSessionStorage>();
 builder.Services.AddScoped<CurrentUserProfileService>();
 builder.Services.AddScoped<MyProfileService>();
 builder.Services.AddScoped<OrganizationMembershipService>();
-builder.Services.AddScoped<IExecutiveDashboardService,
-    ExecutiveDashboardService>();
-
-    builder.Services.AddScoped<IProjectService, ProjectService>();
-    builder.Services.AddScoped<IProcurementService, ProcurementService>();
-    builder.Services.AddScoped<IInventoryService, InventoryService>();
-
-    builder.Services.AddScoped<IVendorService, VendorService>();
-
-    builder.Services.AddScoped<IEquipmentService, EquipmentService>();
-
-    builder.Services.AddScoped<UserWebService>();
-
-    builder.Services.AddScoped<RoleWebService>();
-
+builder.Services.AddScoped<IExecutiveDashboardService, ExecutiveDashboardService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IProcurementService, ProcurementService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<IEquipmentService, EquipmentService>();
+builder.Services.AddScoped<UserWebService>();
+builder.Services.AddScoped<CompanyWebService>();
+builder.Services.AddScoped<RoleWebService>();
 builder.Services.AddScoped<IFinanceService, FinanceService>();
 builder.Services.AddScoped<INotificationApiService, NotificationApiService>();
-
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
-
-builder.Services.AddScoped<
-    IContractorService,
-    ContractorService>();
-
+builder.Services.AddScoped<IContractorService, ContractorService>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<ISiteAssignmentService, SiteAssignmentService>();
 builder.Services.AddScoped<IShiftService, ShiftService>();
@@ -125,20 +107,14 @@ builder.Services.AddScoped<ILeaveService, LeaveService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<ITimesheetService, TimesheetService>();
 builder.Services.AddScoped<IComplianceService, ComplianceService>();
-
 builder.Services.AddScoped<IReportingService, ReportingService>();
-
 builder.Services.AddScoped<IOfflineSyncStore, OfflineSyncStore>();
 builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
-builder.Services.AddScoped<
-    IOfflineSyncCoordinator,
-    OfflineSyncCoordinator>();
-
+builder.Services.AddScoped<IOfflineSyncCoordinator, OfflineSyncCoordinator>();
 builder.Services.AddScoped<IOfflineSyncApi, OfflineSyncApi>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -146,16 +122,10 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-
 app.UseHttpsRedirection();
-
 app.UseRequestLocalization();
-
 app.UseAntiforgery();
-
 app.MapStaticAssets();
-
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
 app.Run();
